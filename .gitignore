@@ -1,0 +1,26 @@
+# Bỏ qua các file Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Bỏ qua thư mục môi trường ảo
+venv/
+env/
+ENV/
+
+# Bỏ qua thư mục uploads (file tạm)
+uploads/*
+!uploads/.gitkeep
+
+# Bỏ qua file cấu hình IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Bỏ qua file hệ thống macOS
+.DS_Store
+
+# Bỏ qua file log
+*.log
