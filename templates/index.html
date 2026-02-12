@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Excel Translation Manager</title>
+    <title>Excel & PowerPoint Translation Manager</title>
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome cho icons -->
@@ -126,8 +126,8 @@
     <div class="main-container">
         <!-- Header -->
         <div class="header">
-            <h1><i class="fas fa-language"></i> Excel Translation Manager</h1>
-            <p>Công cụ quản lý trích xuất và nạp bản dịch cho file Excel</p>
+            <h1><i class="fas fa-language"></i> Excel & PowerPoint Translation Manager</h1>
+            <p>Công cụ quản lý trích xuất và nạp bản dịch cho file Excel (.xlsx) và PowerPoint (.pptx)</p>
             <div class="mt-3">
                 <button class="btn btn-outline-light btn-sm" onclick="clearUploads()" title="Xóa tất cả file trong thư mục uploads">
                     <i class="fas fa-trash-alt"></i> Xóa tất cả file uploads
@@ -141,18 +141,18 @@
                 <div class="function-card">
                     <div class="text-center">
                         <i class="fas fa-file-excel icon"></i>
-                        <h3>Bước 1: Upload file Excel gốc</h3>
+                        <h3>Bước 1: Upload file gốc (Excel hoặc PowerPoint)</h3>
                         <p class="text-muted">File này sẽ được dùng cho cả chức năng Extract và Inject</p>
                     </div>
                     
                     <form id="uploadExcelForm" enctype="multipart/form-data">
                         <div class="upload-area" id="mainUploadArea">
                             <i class="fas fa-cloud-upload-alt"></i>
-                            <p class="mb-2"><strong>Kéo thả file Excel vào đây</strong></p>
+                            <p class="mb-2"><strong>Kéo thả file Excel (.xlsx) hoặc PowerPoint (.pptx) vào đây</strong></p>
                             <p class="text-muted mb-3">hoặc</p>
-                            <input type="file" class="form-control" id="mainExcelFile" name="file" accept=".xlsx" style="display: none;">
+                            <input type="file" class="form-control" id="mainExcelFile" name="file" accept=".xlsx,.pptx" style="display: none;">
                             <label for="mainExcelFile" class="btn btn-custom">
-                                <i class="fas fa-folder-open"></i> Chọn file Excel
+                                <i class="fas fa-folder-open"></i> Chọn file Excel hoặc PowerPoint
                             </label>
                         </div>
                         
@@ -177,7 +177,7 @@
                     <div class="text-center">
                         <i class="fas fa-file-export icon"></i>
                         <h3>Bước 2: Trích xuất (Extract)</h3>
-                        <p class="text-muted">Trích xuất nội dung cần dịch từ file Excel đã upload</p>
+                        <p class="text-muted">Trích xuất nội dung cần dịch từ file đã upload</p>
                     </div>
                     
                     <form id="extractForm" enctype="multipart/form-data">
@@ -200,9 +200,10 @@
                     <div class="mt-4 p-3" style="background: #f8f9fa; border-radius: 10px;">
                         <h6><i class="fas fa-info-circle text-info"></i> Hướng dẫn:</h6>
                         <ul class="small mb-0">
-                            <li>Upload file Excel (.xlsx)</li>
+                            <li>Upload file Excel (.xlsx) hoặc PowerPoint (.pptx)</li>
                             <li>Hệ thống sẽ trích xuất tất cả nội dung text</li>
-                            <li>Bỏ qua số và công thức (bắt đầu với '=')</li>
+                            <li>Excel: Bỏ qua số và công thức (bắt đầu với '=')</li>
+                            <li>PowerPoint: Trích xuất text từ shapes, text boxes và tables</li>
                             <li>Tải về file <strong>ZIP chứa nhiều file JSON</strong> (mỗi file 400 cặp key-value)</li>
                             <li>Giải nén ZIP và dùng AI để dịch từng file JSON (xem hướng dẫn bên dưới)</li>
                         </ul>
@@ -269,7 +270,7 @@
                     <div class="text-center">
                         <i class="fas fa-file-import icon"></i>
                         <h3>Bước 3: Nạp bản dịch (Inject)</h3>
-                        <p class="text-muted">Upload file JSON đã dịch để nạp vào Excel</p>
+                        <p class="text-muted">Upload file JSON đã dịch để nạp vào file gốc</p>
                     </div>
                     
                     <form id="injectForm" enctype="multipart/form-data">
@@ -308,11 +309,11 @@
                     <div class="mt-4 p-3" style="background: #f8f9fa; border-radius: 10px;">
                         <h6><i class="fas fa-info-circle text-info"></i> Hướng dẫn:</h6>
                         <ul class="small mb-0">
-                            <li>File Excel đã được upload ở Bước 1</li>
+                            <li>File đã được upload ở Bước 1</li>
                             <li>Upload <strong>nhiều file JSON đã dịch</strong> hoặc file ZIP (chứa nhiều file đã dịch)</li>
-                            <li>Hệ thống sẽ tự động gộp và nạp bản dịch vào Excel</li>
+                            <li>Hệ thống sẽ tự động gộp và nạp bản dịch vào file gốc</li>
                             <li>Giữ nguyên định dạng và màu sắc</li>
-                            <li>Tải về file <strong>output_translated.xlsx</strong></li>
+                            <li>Tải về file <strong>output_translated.xlsx</strong> hoặc <strong>.pptx</strong></li>
                             <li>Tất cả file tạm sẽ tự động bị xóa sau khi tải về</li>
                         </ul>
                         <div class="alert alert-success mt-2 mb-0 small" style="padding: 8px 12px;">
@@ -355,7 +356,7 @@
                 injectBtn.disabled = false;
                 
                 // Hiển thị thông báo
-                showAlert(mainAlert, 'success', `File Excel "${file.name}" đã được chọn. Bạn có thể tiến hành Extract hoặc Inject.`);
+                showAlert(mainAlert, 'success', `File "${file.name}" đã được chọn. Bạn có thể tiến hành Extract hoặc Inject.`);
             }
         });
         
@@ -395,7 +396,7 @@
                 uploadedExcelFilename = files[0].name;
                 extractBtn.disabled = false;
                 injectBtn.disabled = false;
-                showAlert(mainAlert, 'success', `File Excel "${files[0].name}" đã được chọn.`);
+                showAlert(mainAlert, 'success', `File "${files[0].name}" đã được chọn.`);
             }
         });
         
@@ -409,9 +410,9 @@
         extractForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             
-            // Kiểm tra xem có file Excel được upload chưa
+            // Kiểm tra xem có file được upload chưa
             if (!uploadedExcelFilename || mainExcelFile.files.length === 0) {
-                showAlert(extractAlert, 'warning', 'Vui lòng upload file Excel ở Bước 1 trước!');
+                showAlert(extractAlert, 'warning', 'Vui lòng upload file (Excel hoặc PowerPoint) ở Bước 1 trước!');
                 return;
             }
             
@@ -507,9 +508,9 @@
         injectForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             
-            // Kiểm tra xem có file Excel được upload chưa
+            // Kiểm tra xem có file được upload chưa
             if (!uploadedExcelFilename || mainExcelFile.files.length === 0) {
-                showAlert(injectAlert, 'warning', 'Vui lòng upload file Excel ở Bước 1 trước!');
+                showAlert(injectAlert, 'warning', 'Vui lòng upload file (Excel hoặc PowerPoint) ở Bước 1 trước!');
                 return;
             }
             
@@ -543,18 +544,29 @@
                 injectLoading.style.display = 'none';
                 
                 if (response.ok) {
-                    // Tải file Excel
+                    // Lấy tên file từ header Content-Disposition
+                    const disposition = response.headers.get('Content-Disposition');
+                    let filename = `output_translated_${Date.now()}.xlsx`;
+                    
+                    if (disposition && disposition.includes('filename=')) {
+                        const filenameMatch = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                        if (filenameMatch && filenameMatch[1]) {
+                            filename = filenameMatch[1].replace(/['"]/g, '');
+                        }
+                    }
+                    
+                    // Tải file với tên đúng extension
                     const blob = await response.blob();
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = `output_translated_${Date.now()}.xlsx`;
+                    a.download = filename;
                     document.body.appendChild(a);
                     a.click();
                     document.body.removeChild(a);
                     window.URL.revokeObjectURL(url);
                     
-                    showAlert(injectAlert, 'success', 'Nạp bản dịch thành công! File Excel đang được tải về. Tất cả file tạm đã được xóa.');
+                    showAlert(injectAlert, 'success', 'Nạp bản dịch thành công! File đang được tải về. Tất cả file tạm đã được xóa.');
                     
                     // Reset form JSON
                     injectJsonFile.value = '';
