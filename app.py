@@ -319,6 +319,47 @@ def inject():
         # Xử lý lỗi
         return jsonify({'error': f'Lỗi khi xử lý file: {str(e)}'}), 500
 
+@app.route('/clear-uploads', methods=['POST'])
+def clear_uploads():
+    """
+    Xóa tất cả file và thư mục trong thư mục uploads
+    """
+    try:
+        upload_folder = app.config['UPLOAD_FOLDER']
+        
+        # Kiểm tra xem thư mục có tồn tại không
+        if not os.path.exists(upload_folder):
+            return jsonify({'message': 'Thư mục uploads không tồn tại'}), 200
+        
+        # Đếm số file và thư mục đã xóa
+        deleted_count = 0
+        
+        # Duyệt qua tất cả file và thư mục trong uploads
+        for item in os.listdir(upload_folder):
+            item_path = os.path.join(upload_folder, item)
+            
+            try:
+                if os.path.isfile(item_path):
+                    # Xóa file
+                    os.remove(item_path)
+                    deleted_count += 1
+                elif os.path.isdir(item_path):
+                    # Xóa thư mục và tất cả nội dung bên trong
+                    import shutil
+                    shutil.rmtree(item_path)
+                    deleted_count += 1
+            except Exception as e:
+                print(f"Không thể xóa {item_path}: {str(e)}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Đã xóa thành công {deleted_count} file/thư mục',
+            'deleted_count': deleted_count
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': f'Lỗi khi xóa file: {str(e)}'}), 500
+
 # Đảm bảo thư mục uploads tồn tại
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
     os.makedirs(app.config['UPLOAD_FOLDER'])

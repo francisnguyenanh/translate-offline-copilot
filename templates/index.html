@@ -128,6 +128,11 @@
         <div class="header">
             <h1><i class="fas fa-language"></i> Excel Translation Manager</h1>
             <p>Công cụ quản lý trích xuất và nạp bản dịch cho file Excel</p>
+            <div class="mt-3">
+                <button class="btn btn-outline-light btn-sm" onclick="clearUploads()" title="Xóa tất cả file trong thư mục uploads">
+                    <i class="fas fa-trash-alt"></i> Xóa tất cả file uploads
+                </button>
+            </div>
         </div>
         
         <!-- Upload Excel chung -->
@@ -345,8 +350,9 @@
                 mainFileInfo.style.display = 'block';
                 uploadedExcelFilename = file.name;
                 
-                // Kích hoạt nút Extract
+                // Kích hoạt cả 2 nút Extract và Inject
                 extractBtn.disabled = false;
+                injectBtn.disabled = false;
                 
                 // Hiển thị thông báo
                 showAlert(mainAlert, 'success', `File Excel "${file.name}" đã được chọn. Bạn có thể tiến hành Extract hoặc Inject.`);
@@ -388,6 +394,7 @@
                 mainFileInfo.style.display = 'block';
                 uploadedExcelFilename = files[0].name;
                 extractBtn.disabled = false;
+                injectBtn.disabled = false;
                 showAlert(mainAlert, 'success', `File Excel "${files[0].name}" đã được chọn.`);
             }
         });
@@ -450,9 +457,6 @@
                     window.URL.revokeObjectURL(url);
                     
                     showAlert(extractAlert, 'success', 'Trích xuất thành công! File ZIP đang được tải về. Giải nén file và dịch các file JSON bên trong, sau đó dùng chức năng Inject.');
-                    
-                    // Kích hoạt nút Inject
-                    injectBtn.disabled = false;
                 } else {
                     const error = await response.json();
                     showAlert(extractAlert, 'danger', error.error || 'Có lỗi xảy ra!');
@@ -566,6 +570,40 @@
         });
         
         // ==================== HÀM TRỢ GIÚP ====================
+        
+        // Hàm xóa tất cả file trong uploads
+        async function clearUploads() {
+            // Xác nhận trước khi xóa
+            if (!confirm('Bạn có chắc chắn muốn xóa TẤT CẢ file trong thư mục uploads?\n\nThao tác này không thể hoàn tác!')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/clear-uploads', {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.success) {
+                    alert(`✅ ${result.message}`);
+                    
+                    // Reset form và trạng thái
+                    mainExcelFile.value = '';
+                    mainFileInfo.style.display = 'none';
+                    uploadedExcelFilename = null;
+                    extractBtn.disabled = true;
+                    injectBtn.disabled = true;
+                    mainAlert.innerHTML = '';
+                    injectJsonFile.value = '';
+                    injectJsonFileInfo.style.display = 'none';
+                } else {
+                    alert('❌ Lỗi: ' + (result.error || result.message));
+                }
+            } catch (error) {
+                alert('❌ Lỗi kết nối: ' + error.message);
+            }
+        }
         
         // Hàm copy prompt AI
         function copyPrompt() {
