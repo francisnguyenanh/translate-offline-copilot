@@ -6,19 +6,99 @@
 import os
 import json
 import zipfile
-from flask import Flask, render_template, request, send_file, jsonify
+import uuid
+import shutil
+from datetime import datetime, timedelta
+from flask import Flask, render_template, request, send_file, jsonify, session, redirect, url_for
 from werkzeug.utils import secure_filename
 from openpyxl import load_workbook
 from pptx import Presentation
-from datetime import datetime
+from functools import wraps
 
 # Khởi tạo ứng dụng Flask
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # Giới hạn 16MB
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # Giới hạn 50MB
 app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['SECRET_KEY'] = os.urandom(24)  # Secret key cho session
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)  # Session timeout 24h
 
 # Các định dạng file được phép
 ALLOWED_EXTENSIONS = {'xlsx', 'pptx'}
+
+# Đọc password từ file
+PASSWORD_FILE = 'password.txt'
+
+def get_password():
+    """Đọc password từ file password.txt"""
+    try:
+        with open(PASSWORD_FILE, 'r', encoding='utf-8') as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        # Nếu file không tồn tại, tạo file với password mặc định
+        default_password = 'admin123'
+        with open(PASSWORD_FILE, 'w', encoding='utf-8') as f:
+            f.write(default_password)
+        return default_password
+
+def get_machine_id():
+    """Lấy ID máy (dựa trên UUID node)"""
+    return hex(uuid.getnode())
+
+def create_session_id():
+    """Tạo session ID dựa trên machine ID + timestamp"""
+    machine_id = get_machine_id()
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    return f"{machine_id}_{timestamp}"
+
+def get_session_folder():
+    """Lấy đường dẫn folder của session hiện tại"""
+    if 'session_id' not in session:
+        session['session_id'] = create_session_id()
+    
+    session_folder = os.path.join(app.config['UPLOAD_FOLDER'], session['session_id'])
+    os.makedirs(session_folder, exist_ok=True)
+    return session_folder
+
+def cleanup_old_sessions():
+    """Xóa tất cả folder của các phiên từ hôm qua trở về trước"""
+    try:
+        upload_folder = app.config['UPLOAD_FOLDER']
+        if not os.path.exists(upload_folder):
+            return
+        
+        # Lấy ngày hiện tại (không có giờ phút giây)
+        today = datetime.now().date()
+        
+        # Duyệt qua tất cả các folder trong uploads
+        for folder_name in os.listdir(upload_folder):
+            folder_path = os.path.join(upload_folder, folder_name)
+            
+            if os.path.isdir(folder_path):
+                try:
+                    # Parse timestamp từ tên folder (format: machine_YYYYMMDD_HHMMSS)
+                    parts = folder_name.split('_')
+                    if len(parts) >= 2:
+                        date_str = parts[-2]  # YYYYMMDD
+                        folder_date = datetime.strptime(date_str, '%Y%m%d').date()
+                        
+                        # Nếu folder từ hôm qua trở về trước, xóa đi
+                        if folder_date < today:
+                            shutil.rmtree(folder_path)
+                            print(f"Đã xóa folder cũ: {folder_name}")
+                except (ValueError, IndexError):
+                    # Nếu không parse được, bỏ qua
+                    continue
+    except Exception as e:
+        print(f"Lỗi khi cleanup old sessions: {e}")
+
+def login_required(f):
+    """Decorator để yêu cầu đăng nhập"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'logged_in' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
 
 def allowed_file(filename):
     """
@@ -207,14 +287,51 @@ def inject_text_to_pptx(filepath, json_data):
     
     return prs
 
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Trang đăng nhập"""
+    if request.method == 'POST':
+        password = request.form.get('password', '')
+        correct_password = get_password()
+        
+        if password == correct_password:
+            session.permanent = True
+            session['logged_in'] = True
+            session['session_id'] = create_session_id()
+            
+            # Cleanup old sessions khi đăng nhập
+            cleanup_old_sessions()
+            
+            return redirect(url_for('index'))
+        else:
+            return render_template('login.html', error='Mật khẩu không đúng!')
+    
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    """Đăng xuất"""
+    # Xóa folder của session hiện tại
+    if 'session_id' in session:
+        session_folder = os.path.join(app.config['UPLOAD_FOLDER'], session['session_id'])
+        if os.path.exists(session_folder):
+            shutil.rmtree(session_folder)
+    
+    session.clear()
+    return redirect(url_for('login'))
+
 @app.route('/')
+@login_required
 def index():
     """
     Trang chủ hiển thị dashboard với 2 chức năng Extract và Inject
     """
+    # Cleanup old sessions mỗi khi load trang
+    cleanup_old_sessions()
     return render_template('index.html')
 
 @app.route('/extract', methods=['POST'])
+@login_required
 def extract():
     """
     Chức năng 1: Trích xuất các cell chứa string từ file Excel hoặc PPTX
@@ -236,11 +353,14 @@ def extract():
         return jsonify({'error': 'Chỉ chấp nhận file .xlsx hoặc .pptx'}), 400
     
     try:
-        # Lưu file tạm thời
+        # Lấy session folder
+        session_folder = get_session_folder()
+        
+        # Lưu file tạm thời trong session folder
         filename = secure_filename(file.filename)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         temp_filename = f"temp_{timestamp}_{filename}"
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], temp_filename)
+        filepath = os.path.join(session_folder, temp_filename)
         file.save(filepath)
         
         # Xác định loại file và trích xuất
@@ -315,7 +435,7 @@ def extract():
         
         # Tạo file ZIP chứa folder và các file JSON
         zip_filename = f"to_translate_{timestamp}.zip"
-        zip_filepath = os.path.join(app.config['UPLOAD_FOLDER'], zip_filename)
+        zip_filepath = os.path.join(session_folder, zip_filename)
         
         # Dùng ZIP_STORED để không nén file JSON (giữ nguyên text có thể đọc được)
         with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_STORED) as zipf:
@@ -355,6 +475,7 @@ def extract():
         return jsonify({'error': f'Lỗi khi xử lý file: {str(e)}'}), 500
 
 @app.route('/inject', methods=['POST'])
+@login_required
 def inject():
     """
     Chức năng 2: Nạp dữ liệu từ file JSON đã dịch vào file Excel hoặc PPTX gốc
@@ -382,11 +503,14 @@ def inject():
         return jsonify({'error': 'File phải có định dạng .xlsx hoặc .pptx'}), 400
     
     try:
-        # Lưu file Excel tạm thời
+        # Lấy session folder
+        session_folder = get_session_folder()
+        
+        # Lưu file Excel tạm thời trong session folder
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         excel_filename = secure_filename(excel_file.filename)
         temp_excel_filename = f"temp_{timestamp}_{excel_filename}"
-        excel_filepath = os.path.join(app.config['UPLOAD_FOLDER'], temp_excel_filename)
+        excel_filepath = os.path.join(session_folder, temp_excel_filename)
         excel_file.save(excel_filepath)
         
         # Đọc và gộp dữ liệu JSON từ tất cả các file
@@ -407,7 +531,7 @@ def inject():
             if is_zip:
                 # Xử lý file ZIP
                 temp_zip_filename = f"temp_{timestamp}_{secure_filename(json_file.filename)}"
-                zip_filepath = os.path.join(app.config['UPLOAD_FOLDER'], temp_zip_filename)
+                zip_filepath = os.path.join(session_folder, temp_zip_filename)
                 json_file.save(zip_filepath)
                 temp_files.append(zip_filepath)
                 
@@ -468,9 +592,9 @@ def inject():
                 # openpyxl tự động giữ nguyên định dạng của cell
                 sheet[cell_coordinate] = translated_value
             
-            # Tạo tên file output
+            # Tạo tên file output trong session folder
             output_filename = f"output_translated_{timestamp}.xlsx"
-            output_filepath = os.path.join(app.config['UPLOAD_FOLDER'], output_filename)
+            output_filepath = os.path.join(session_folder, output_filename)
             
             # Lưu file Excel đã được nạp dữ liệu
             workbook.save(output_filepath)
@@ -482,9 +606,9 @@ def inject():
             # Nạp text vào PPTX
             prs = inject_text_to_pptx(excel_filepath, json_data)
             
-            # Tạo tên file output
+            # Tạo tên file output trong session folder
             output_filename = f"output_translated_{timestamp}.pptx"
-            output_filepath = os.path.join(app.config['UPLOAD_FOLDER'], output_filename)
+            output_filepath = os.path.join(session_folder, output_filename)
             
             # Lưu file PPTX đã được nạp dữ liệu
             prs.save(output_filepath)
@@ -523,23 +647,24 @@ def inject():
         return jsonify({'error': f'Lỗi khi xử lý file: {str(e)}'}), 500
 
 @app.route('/clear-uploads', methods=['POST'])
+@login_required
 def clear_uploads():
     """
-    Xóa tất cả file và thư mục trong thư mục uploads
+    Xóa tất cả file trong thư mục session hiện tại
     """
     try:
-        upload_folder = app.config['UPLOAD_FOLDER']
+        session_folder = get_session_folder()
         
         # Kiểm tra xem thư mục có tồn tại không
-        if not os.path.exists(upload_folder):
-            return jsonify({'message': 'Thư mục uploads không tồn tại'}), 200
+        if not os.path.exists(session_folder):
+            return jsonify({'success': True, 'message': 'Không có file nào để xóa'}), 200
         
-        # Đếm số file và thư mục đã xóa
+        # Đếm số file đã xóa
         deleted_count = 0
         
-        # Duyệt qua tất cả file và thư mục trong uploads
-        for item in os.listdir(upload_folder):
-            item_path = os.path.join(upload_folder, item)
+        # Duyệt qua tất cả file trong session folder
+        for item in os.listdir(session_folder):
+            item_path = os.path.join(session_folder, item)
             
             try:
                 if os.path.isfile(item_path):
@@ -547,8 +672,7 @@ def clear_uploads():
                     os.remove(item_path)
                     deleted_count += 1
                 elif os.path.isdir(item_path):
-                    # Xóa thư mục và tất cả nội dung bên trong
-                    import shutil
+                    # Xóa thư mục con và tất cả nội dung bên trong
                     shutil.rmtree(item_path)
                     deleted_count += 1
             except Exception as e:
@@ -556,7 +680,7 @@ def clear_uploads():
         
         return jsonify({
             'success': True,
-            'message': f'Đã xóa thành công {deleted_count} file/thư mục',
+            'message': f'Đã xóa thành công {deleted_count} file trong phiên của bạn',
             'deleted_count': deleted_count
         }), 200
         
