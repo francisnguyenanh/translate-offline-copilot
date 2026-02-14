@@ -9,6 +9,7 @@ import zipfile
 import uuid
 import shutil
 from datetime import datetime, timedelta
+from urllib.parse import quote
 from flask import Flask, render_template, request, send_file, jsonify, session, redirect, url_for
 from werkzeug.utils import secure_filename
 from openpyxl import load_workbook
@@ -356,15 +357,26 @@ def extract():
         # Lấy session folder
         session_folder = get_session_folder()
         
-        # Lưu file tạm thời trong session folder
-        filename = secure_filename(file.filename)
+        # Lưu tên file gốc (giữ nguyên tiếng Nhật, ký tự đặc biệt)
+        original_filename = file.filename
+        print(f"[DEBUG EXTRACT] Original filename: {original_filename}")
+        print(f"[DEBUG EXTRACT] Original filename type: {type(original_filename)}")
+        print(f"[DEBUG EXTRACT] Original filename repr: {repr(original_filename)}")
+        
+        # Lấy extension từ tên file gốc
+        if '.' in original_filename:
+            original_ext = original_filename.rsplit('.', 1)[1].lower()
+        else:
+            return jsonify({'error': 'Tên file phải có đuôi mở rộng (.xlsx hoặc .pptx)'}), 400
+        
+        # Tạo tên file tạm an toàn hoàn toàn từ timestamp (không dùng tên gốc)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        temp_filename = f"temp_{timestamp}_{filename}"
-        filepath = os.path.join(session_folder, temp_filename)
+        safe_temp_filename = f"temp_{timestamp}.{original_ext}"
+        filepath = os.path.join(session_folder, safe_temp_filename)
         file.save(filepath)
         
         # Xác định loại file và trích xuất
-        file_ext = filename.rsplit('.', 1)[1].lower()
+        file_ext = original_ext
         
         if file_ext == 'xlsx':
             # Mở file Excel bằng openpyxl
@@ -408,14 +420,30 @@ def extract():
         total_items = len(data_items)
         num_files = (total_items + CHUNK_SIZE - 1) // CHUNK_SIZE  # Làm tròn lên
         
-        # Tên folder trong ZIP
-        folder_name = f"to_translate_{timestamp}"
+        # Lấy tên file gốc không có extension (giữ nguyên tiếng Nhật)
+        base_filename = os.path.splitext(original_filename)[0]
+        print(f"[DEBUG EXTRACT] base_filename after splitext: {base_filename}")
+        print(f"[DEBUG EXTRACT] base_filename repr: {repr(base_filename)}")
         
-        # Tạo thư mục tạm để chứa các file JSON
-        temp_dir = os.path.join(app.config['UPLOAD_FOLDER'], folder_name)
+        # Nếu base_filename rỗng, dùng tên mặc định
+        if not base_filename or base_filename.strip() == '':
+            print(f"[DEBUG EXTRACT] base_filename is empty, using default")
+            base_filename = f"file_{timestamp}"
+        # Tên safe cho filesystem (dùng timestamp)
+        safe_base_filename = f"extracted_{timestamp}"
+        
+        # Tên folder trong ZIP (giữ nguyên tiếng Nhật)
+        folder_name = f"{base_filename}_json_to_translate"
+        print(f"[DEBUG EXTRACT] folder_name: {folder_name}")
+        # Tên folder tạm trong filesystem (dùng safe filename)
+        safe_folder_name = f"{safe_base_filename}_temp_{timestamp}"
+        
+        # Tạo thư mục tạm để chứa các file JSON (dùng tên safe cho filesystem)
+        temp_dir = os.path.join(session_folder, safe_folder_name)
         os.makedirs(temp_dir, exist_ok=True)
         
         json_files = []
+        json_display_names = []  # Lưu tên hiển thị với tiếng Nhật
         
         # Tạo các file JSON nhỏ
         for i in range(num_files):
@@ -423,9 +451,13 @@ def extract():
             end_idx = min((i + 1) * CHUNK_SIZE, total_items)
             chunk_data = dict(data_items[start_idx:end_idx])
             
-            # Tên file với số thứ tự
-            json_filename = f"to_translate_{timestamp}_part{i+1:02d}_of_{num_files:02d}.json"
-            json_filepath = os.path.join(temp_dir, json_filename)
+            # Tên file hiển thị (giữ nguyên tiếng Nhật)
+            json_display_name = f"{base_filename}_part{i+1:02d}_of_{num_files:02d}.json"
+            json_display_names.append(json_display_name)
+            
+            # Tên file an toàn cho filesystem
+            safe_json_filename = f"{safe_base_filename}_part{i+1:02d}.json"
+            json_filepath = os.path.join(temp_dir, safe_json_filename)
             
             # Lưu dữ liệu vào file JSON với encoding UTF-8
             with open(json_filepath, 'w', encoding='utf-8') as json_file:
@@ -434,14 +466,18 @@ def extract():
             json_files.append(json_filepath)
         
         # Tạo file ZIP chứa folder và các file JSON
-        zip_filename = f"to_translate_{timestamp}.zip"
-        zip_filepath = os.path.join(session_folder, zip_filename)
+        zip_display_name = f"{base_filename}_json_to_translate.zip"  # Tên hiển thị
+        print(f"[DEBUG EXTRACT] zip_display_name: {zip_display_name}")
+        print(f"[DEBUG EXTRACT] zip_display_name repr: {repr(zip_display_name)}")
+        
+        safe_zip_filename = f"{safe_base_filename}_json_{timestamp}.zip"  # Tên file trong filesystem
+        zip_filepath = os.path.join(session_folder, safe_zip_filename)
         
         # Dùng ZIP_STORED để không nén file JSON (giữ nguyên text có thể đọc được)
         with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_STORED) as zipf:
-            for json_filepath in json_files:
-                # Thêm file vào ZIP với đường dẫn folder/filename
-                arcname = os.path.join(folder_name, os.path.basename(json_filepath))
+            for idx, json_filepath in enumerate(json_files):
+                # Thêm file vào ZIP với đường dẫn folder/filename (dùng tên tiếng Nhật)
+                arcname = os.path.join(folder_name, json_display_names[idx])
                 zipf.write(json_filepath, arcname)
         
         # Xóa các file JSON tạm và thư mục tạm
@@ -451,13 +487,24 @@ def extract():
         if os.path.exists(temp_dir):
             os.rmdir(temp_dir)
         
-        # Trả về file ZIP và xóa sau khi gửi
+        # Trả về file ZIP và xóa sau khi gửi (dùng tên hiển thị với tiếng Nhật)
+        print(f"[DEBUG EXTRACT] Sending file with download_name: {zip_display_name}")
+        
+        # Tạo response với send_file, không dùng as_attachment mặc định của Flask để tránh conflict
         response = send_file(
             zip_filepath,
-            as_attachment=True,
-            download_name=zip_filename,
             mimetype='application/zip'
         )
+        
+        # Set header Content-Disposition với encoding chuẩn RFC 5987 cho Unicode
+        # Encode tất cả ký tự (safe='') để đảm bảo tính tương thích
+        encoded_filename = quote(zip_display_name, safe='')
+        ascii_filename = secure_filename(zip_display_name) or 'download.zip'
+        
+        # Header string chuẩn
+        header_value = f"attachment; filename=\"{ascii_filename}\"; filename*=UTF-8''{encoded_filename}"
+        response.headers['Content-Disposition'] = header_value
+        print(f"[DEBUG EXTRACT] Content-Disposition header: {header_value}")
         
         # Xóa file JSON sau khi gửi (sử dụng after_request để đảm bảo file đã được gửi)
         @response.call_on_close
@@ -506,11 +553,19 @@ def inject():
         # Lấy session folder
         session_folder = get_session_folder()
         
-        # Lưu file Excel tạm thời trong session folder
+        # Lưu tên file gốc (giữ nguyên tiếng Nhật, ký tự đặc biệt)
+        original_excel_filename = excel_file.filename
+        
+        # Lấy extension từ tên file gốc
+        if '.' in original_excel_filename:
+            original_ext = original_excel_filename.rsplit('.', 1)[1].lower()
+        else:
+            return jsonify({'error': 'Tên file phải có đuôi mở rộng (.xlsx hoặc .pptx)'}), 400
+        
+        # Tạo tên file tạm an toàn hoàn toàn từ timestamp
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        excel_filename = secure_filename(excel_file.filename)
-        temp_excel_filename = f"temp_{timestamp}_{excel_filename}"
-        excel_filepath = os.path.join(session_folder, temp_excel_filename)
+        safe_temp_filename = f"temp_{timestamp}.{original_ext}"
+        excel_filepath = os.path.join(session_folder, safe_temp_filename)
         excel_file.save(excel_filepath)
         
         # Đọc và gộp dữ liệu JSON từ tất cả các file
@@ -566,8 +621,8 @@ def inject():
                     return jsonify({'error': f'File JSON "{json_file.filename}" không hợp lệ: {str(e)}'}), 400
         
         
-        # Xác định loại file và nạp dữ liệu
-        file_ext = excel_filename.rsplit('.', 1)[1].lower()
+        # Xác định loại file và nạp dữ liệu (dùng tên file gốc)
+        file_ext = original_excel_filename.rsplit('.', 1)[1].lower()
         
         if file_ext == 'xlsx':
             # Mở file Excel bằng openpyxl
@@ -592,9 +647,12 @@ def inject():
                 # openpyxl tự động giữ nguyên định dạng của cell
                 sheet[cell_coordinate] = translated_value
             
-            # Tạo tên file output trong session folder
-            output_filename = f"output_translated_{timestamp}.xlsx"
-            output_filepath = os.path.join(session_folder, output_filename)
+            # Tạo tên file output
+            base_filename = os.path.splitext(original_excel_filename)[0]  # Tên gốc với tiếng Nhật
+            
+            output_display_name = f"{base_filename}_translated.xlsx"  # Tên hiển thị
+            safe_output_filename = f"output_{timestamp}.xlsx"  # Tên file trong filesystem
+            output_filepath = os.path.join(session_folder, safe_output_filename)
             
             # Lưu file Excel đã được nạp dữ liệu
             workbook.save(output_filepath)
@@ -606,9 +664,12 @@ def inject():
             # Nạp text vào PPTX
             prs = inject_text_to_pptx(excel_filepath, json_data)
             
-            # Tạo tên file output trong session folder
-            output_filename = f"output_translated_{timestamp}.pptx"
-            output_filepath = os.path.join(session_folder, output_filename)
+            # Tạo tên file output
+            base_filename = os.path.splitext(original_excel_filename)[0]  # Tên gốc với tiếng Nhật
+            
+            output_display_name = f"{base_filename}_translated.pptx"  # Tên hiển thị
+            safe_output_filename = f"output_{timestamp}.pptx"  # Tên file trong filesystem
+            output_filepath = os.path.join(session_folder, safe_output_filename)
             
             # Lưu file PPTX đã được nạp dữ liệu
             prs.save(output_filepath)
@@ -623,13 +684,19 @@ def inject():
             if os.path.exists(temp_file):
                 os.remove(temp_file)
         
-        # Trả về file đã được nạp dữ liệu và xóa tất cả file tạm sau khi gửi
+        # Trả về file đã được nạp dữ liệu và xóa tất cả file tạm sau khi gửi (dùng tên hiển thị)
         response = send_file(
             output_filepath,
-            as_attachment=True,
-            download_name=output_filename,
             mimetype=output_mimetype
         )
+        
+        # Set header Content-Disposition với encoding chuẩn RFC 5987 cho Unicode
+        encoded_filename = quote(output_display_name, safe='')
+        ascii_filename = secure_filename(output_display_name) or 'download.xlsx'
+        
+        # Header string chuẩn
+        header_value = f"attachment; filename=\"{ascii_filename}\"; filename*=UTF-8''{encoded_filename}"
+        response.headers['Content-Disposition'] = header_value
         
         # Xóa file output sau khi gửi
         @response.call_on_close
