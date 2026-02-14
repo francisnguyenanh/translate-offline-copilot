@@ -12,6 +12,9 @@ ENV/
 uploads/*
 !uploads/.gitkeep
 
+# Bỏ qua file password
+password.txt
+
 # Bỏ qua file cấu hình IDE
 .vscode/
 .idea/
