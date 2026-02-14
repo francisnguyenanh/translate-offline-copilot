@@ -14,7 +14,7 @@ from datetime import datetime
 
 # Khởi tạo ứng dụng Flask
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # Giới hạn 16MB
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # Giới hạn 16MB
 app.config['UPLOAD_FOLDER'] = 'uploads'
 
 # Các định dạng file được phép
