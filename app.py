@@ -9,6 +9,7 @@ import zipfile
 from flask import Flask, render_template, request, send_file, jsonify
 from werkzeug.utils import secure_filename
 from openpyxl import load_workbook
+from pptx import Presentation
 from datetime import datetime
 
 # Khởi tạo ứng dụng Flask
@@ -17,7 +18,7 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # Giới hạn 16MB
 app.config['UPLOAD_FOLDER'] = 'uploads'
 
 # Các định dạng file được phép
-ALLOWED_EXTENSIONS = {'xlsx'}
+ALLOWED_EXTENSIONS = {'xlsx', 'pptx'}
 
 def allowed_file(filename):
     """
@@ -31,6 +32,181 @@ def allowed_json_file(filename):
     """
     return '.' in filename and filename.rsplit('.', 1)[1].lower() == 'json'
 
+def extract_text_from_shape(shape, shape_path, extracted_data):
+    """
+    Hàm đệ quy để trích xuất text từ shape, bao gồm cả grouped shapes
+    shape_path: đường dẫn đến shape, ví dụ "Shape1" hoặc "Shape1_2_3"
+    """
+    # Trích xuất text từ text frame của shape hiện tại
+    if hasattr(shape, "text") and shape.text:
+        text_content = shape.text.strip()
+        if text_content:  # Chỉ lấy nội dung không rỗng
+            extracted_data[shape_path] = text_content
+    
+    # Trích xuất text từ table nếu có
+    if hasattr(shape, "has_table") and shape.has_table:
+        table = shape.table
+        for row_idx, row in enumerate(table.rows, start=1):
+            for col_idx, cell in enumerate(row.cells, start=1):
+                if cell.text.strip():
+                    key = f"{shape_path}!Table_R{row_idx}C{col_idx}"
+                    extracted_data[key] = cell.text.strip()
+    
+    # Kiểm tra xem shape có phải là GroupShape không (chứa các shape con)
+    if hasattr(shape, "shapes"):
+        # Đây là grouped shape, duyệt qua các shape con
+        for child_idx, child_shape in enumerate(shape.shapes, start=1):
+            child_path = f"{shape_path}_{child_idx}"
+            extract_text_from_shape(child_shape, child_path, extracted_data)
+
+def extract_text_from_pptx(filepath):
+    """
+    Trích xuất text từ file PPTX, bao gồm cả text trong grouped shapes
+    Trả về dictionary với format: {"SlideX!ShapeY": "Content"}
+    Với nested shapes: {"SlideX!ShapeY_Z": "Content"} (Z là shape con)
+    """
+    extracted_data = {}
+    prs = Presentation(filepath)
+    
+    for slide_idx, slide in enumerate(prs.slides, start=1):
+        for shape_idx, shape in enumerate(slide.shapes, start=1):
+            shape_path = f"Slide{slide_idx}!Shape{shape_idx}"
+            extract_text_from_shape(shape, shape_path, extracted_data)
+    
+    return extracted_data
+
+def inject_text_to_shape(shape, shape_indices, translated_value, is_table_cell=False, table_pos=None):
+    """
+    Hàm đệ quy để nạp text vào shape, bao gồm cả grouped shapes
+    shape_indices: list các index để navigate đến shape đúng, ví dụ [2, 3] cho Shape2_3
+    is_table_cell: có phải là table cell không
+    table_pos: tuple (row_idx, col_idx) nếu là table cell
+    """
+    # Nếu là shape cuối cùng trong path
+    if len(shape_indices) == 0:
+        if is_table_cell and table_pos:
+            # Nạp vào table cell - giữ nguyên định dạng
+            row_idx, col_idx = table_pos
+            if hasattr(shape, "has_table") and shape.has_table:
+                table = shape.table
+                if row_idx < len(table.rows) and col_idx < len(table.rows[row_idx].cells):
+                    cell = table.rows[row_idx].cells[col_idx]
+                    # Thay thế text trong từng paragraph/run để giữ định dạng
+                    if cell.text_frame:
+                        replace_text_keep_format(cell.text_frame, translated_value)
+        else:
+            # Nạp vào text frame của shape - giữ nguyên định dạng
+            if hasattr(shape, "text_frame") and shape.text_frame:
+                replace_text_keep_format(shape.text_frame, translated_value)
+        return True
+    
+    # Navigate đến shape con
+    if hasattr(shape, "shapes"):
+        next_idx = shape_indices[0]
+        if next_idx <= len(shape.shapes):
+            child_shape = shape.shapes[next_idx - 1]  # Chuyển từ 1-indexed sang 0-indexed
+            return inject_text_to_shape(child_shape, shape_indices[1:], translated_value, is_table_cell, table_pos)
+    
+    return False
+
+def replace_text_keep_format(text_frame, new_text):
+    """
+    Thay thế text trong text_frame nhưng giữ nguyên định dạng (font, màu, gạch chân, bold, italic...)
+    Chiến lược:
+    1. Nếu toàn bộ text frame chỉ có 1 paragraph và 1 run -> thay text của run đó
+    2. Nếu có nhiều runs/paragraphs -> xóa text của tất cả runs, gán text mới vào run đầu tiên với định dạng gốc
+    """
+    if not text_frame.paragraphs:
+        return
+    
+    # Thu thập tất cả runs từ tất cả paragraphs
+    all_runs = []
+    for paragraph in text_frame.paragraphs:
+        for run in paragraph.runs:
+            all_runs.append(run)
+    
+    if not all_runs:
+        # Không có run nào, tạo mới
+        if text_frame.paragraphs:
+            text_frame.paragraphs[0].text = new_text
+        return
+    
+    # Lưu định dạng của run đầu tiên
+    first_run = all_runs[0]
+    
+    # Xóa text của tất cả runs
+    for run in all_runs:
+        run.text = ""
+    
+    # Gán text mới vào run đầu tiên (giữ nguyên định dạng)
+    first_run.text = new_text
+
+def inject_text_to_pptx(filepath, json_data):
+    """
+    Nạp text đã dịch vào file PPTX, bao gồm cả grouped shapes
+    """
+    prs = Presentation(filepath)
+    
+    for key, translated_value in json_data.items():
+        try:
+            # Parse key format: 
+            # "SlideX!ShapeY" hoặc "SlideX!ShapeY_Z" (nested) 
+            # hoặc "SlideX!ShapeY!Table_RxCy" hoặc "SlideX!ShapeY_Z!Table_RxCy"
+            if '!' not in key:
+                continue
+            
+            parts = key.split('!')
+            if len(parts) < 2:
+                continue
+            
+            # Lấy slide index
+            slide_part = parts[0]
+            if not slide_part.startswith('Slide'):
+                continue
+            slide_idx = int(slide_part.replace('Slide', '')) - 1
+            
+            if slide_idx >= len(prs.slides):
+                continue
+            
+            slide = prs.slides[slide_idx]
+            
+            # Parse shape path: "Shape2" hoặc "Shape2_3_1" (nested)
+            shape_part = parts[1]
+            if not shape_part.startswith('Shape'):
+                continue
+            
+            # Tách các indices: "Shape2_3_1" -> [2, 3, 1]
+            shape_str = shape_part.replace('Shape', '')
+            shape_indices = [int(idx) for idx in shape_str.split('_')]
+            
+            # Lấy shape đầu tiên (top-level shape)
+            first_shape_idx = shape_indices[0] - 1  # Chuyển sang 0-indexed
+            if first_shape_idx >= len(slide.shapes):
+                continue
+            
+            shape = slide.shapes[first_shape_idx]
+            
+            # Kiểm tra xem có phải table cell không
+            is_table_cell = False
+            table_pos = None
+            
+            if len(parts) == 3 and parts[2].startswith('Table_R'):
+                # Parse table cell position
+                is_table_cell = True
+                table_part = parts[2].replace('Table_R', '').split('C')
+                row_idx = int(table_part[0]) - 1
+                col_idx = int(table_part[1]) - 1
+                table_pos = (row_idx, col_idx)
+            
+            # Navigate và nạp text (bỏ qua index đầu tiên vì đã lấy shape rồi)
+            inject_text_to_shape(shape, shape_indices[1:], translated_value, is_table_cell, table_pos)
+            
+        except (ValueError, IndexError, AttributeError) as e:
+            # Bỏ qua các key không hợp lệ
+            continue
+    
+    return prs
+
 @app.route('/')
 def index():
     """
@@ -41,9 +217,9 @@ def index():
 @app.route('/extract', methods=['POST'])
 def extract():
     """
-    Chức năng 1: Trích xuất các cell chứa string từ file Excel
-    Bỏ qua các cell chứa số và công thức (bắt đầu bằng '=')
-    Trả về file JSON với format: {"SheetName!CellCoordinate": "Content"}
+    Chức năng 1: Trích xuất các cell chứa string từ file Excel hoặc PPTX
+    Bỏ qua các cell chứa số và công thức (bắt đầu bằng '=') trong Excel
+    Trả về file JSON với format: {"SheetName!CellCoordinate": "Content"} hoặc {"SlideX!ShapeY": "Content"}
     """
     # Kiểm tra xem có file được upload không
     if 'file' not in request.files:
@@ -57,7 +233,7 @@ def extract():
     
     # Kiểm tra định dạng file
     if not allowed_file(file.filename):
-        return jsonify({'error': 'Chỉ chấp nhận file .xlsx'}), 400
+        return jsonify({'error': 'Chỉ chấp nhận file .xlsx hoặc .pptx'}), 400
     
     try:
         # Lưu file tạm thời
@@ -67,33 +243,41 @@ def extract():
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], temp_filename)
         file.save(filepath)
         
-        # Mở file Excel bằng openpyxl
-        workbook = load_workbook(filepath)
+        # Xác định loại file và trích xuất
+        file_ext = filename.rsplit('.', 1)[1].lower()
         
-        # Dictionary để lưu kết quả
-        extracted_data = {}
-        
-        # Duyệt qua tất cả các sheet
-        for sheet_name in workbook.sheetnames:
-            sheet = workbook[sheet_name]
+        if file_ext == 'xlsx':
+            # Mở file Excel bằng openpyxl
+            workbook = load_workbook(filepath)
             
-            # Duyệt qua tất cả các cell trong sheet
-            for row in sheet.iter_rows():
-                for cell in row:
-                    # Bỏ qua cell rỗng
-                    if cell.value is None:
-                        continue
-                    
-                    # Chỉ lấy cell chứa string
-                    if isinstance(cell.value, str):
-                        # Bỏ qua công thức (bắt đầu bằng '=')
-                        if not cell.value.startswith('='):
-                            # Tạo key theo format "SheetName!CellCoordinate"
-                            key = f"{sheet_name}!{cell.coordinate}"
-                            extracted_data[key] = cell.value
+            # Dictionary để lưu kết quả
+            extracted_data = {}
+            
+            # Duyệt qua tất cả các sheet
+            for sheet_name in workbook.sheetnames:
+                sheet = workbook[sheet_name]
+                
+                # Duyệt qua tất cả các cell trong sheet
+                for row in sheet.iter_rows():
+                    for cell in row:
+                        # Bỏ qua cell rỗng
+                        if cell.value is None:
+                            continue
+                        
+                        # Chỉ lấy cell chứa string
+                        if isinstance(cell.value, str):
+                            # Bỏ qua công thức (bắt đầu bằng '=')
+                            if not cell.value.startswith('='):
+                                # Tạo key theo format "SheetName!CellCoordinate"
+                                key = f"{sheet_name}!{cell.coordinate}"
+                                extracted_data[key] = cell.value
+            
+            # Đóng workbook
+            workbook.close()
         
-        # Đóng workbook
-        workbook.close()
+        elif file_ext == 'pptx':
+            # Trích xuất text từ PPTX
+            extracted_data = extract_text_from_pptx(filepath)
         
         # Xóa file tạm
         os.remove(filepath)
@@ -173,13 +357,13 @@ def extract():
 @app.route('/inject', methods=['POST'])
 def inject():
     """
-    Chức năng 2: Nạp dữ liệu từ file JSON đã dịch vào file Excel gốc
-    Giữ nguyên định dạng, màu sắc của file Excel gốc
+    Chức năng 2: Nạp dữ liệu từ file JSON đã dịch vào file Excel hoặc PPTX gốc
+    Giữ nguyên định dạng, màu sắc của file gốc
     Hỗ trợ nhiều file JSON riêng lẻ hoặc file ZIP chứa nhiều file JSON
     """
-    # Kiểm tra xem có file Excel được upload không
+    # Kiểm tra xem có file được upload không
     if 'excel_file' not in request.files:
-        return jsonify({'error': 'Cần upload file Excel'}), 400
+        return jsonify({'error': 'Cần upload file Excel hoặc PPTX'}), 400
     
     excel_file = request.files['excel_file']
     
@@ -191,11 +375,11 @@ def inject():
     
     # Kiểm tra xem các file có được chọn không
     if excel_file.filename == '' or len(json_files) == 0:
-        return jsonify({'error': 'Cần chọn đủ file Excel và JSON'}), 400
+        return jsonify({'error': 'Cần chọn đủ file và JSON'}), 400
     
-    # Kiểm tra định dạng file Excel
+    # Kiểm tra định dạng file
     if not allowed_file(excel_file.filename):
-        return jsonify({'error': 'File Excel phải có định dạng .xlsx'}), 400
+        return jsonify({'error': 'File phải có định dạng .xlsx hoặc .pptx'}), 400
     
     try:
         # Lưu file Excel tạm thời
@@ -258,35 +442,54 @@ def inject():
                     return jsonify({'error': f'File JSON "{json_file.filename}" không hợp lệ: {str(e)}'}), 400
         
         
-        # Mở file Excel bằng openpyxl
-        workbook = load_workbook(excel_filepath)
+        # Xác định loại file và nạp dữ liệu
+        file_ext = excel_filename.rsplit('.', 1)[1].lower()
         
-        # Duyệt qua từng entry trong JSON
-        for key, translated_value in json_data.items():
-            # Parse key theo format "SheetName!CellCoordinate"
-            if '!' not in key:
-                continue
+        if file_ext == 'xlsx':
+            # Mở file Excel bằng openpyxl
+            workbook = load_workbook(excel_filepath)
             
-            sheet_name, cell_coordinate = key.split('!', 1)
+            # Duyệt qua từng entry trong JSON
+            for key, translated_value in json_data.items():
+                # Parse key theo format "SheetName!CellCoordinate"
+                if '!' not in key:
+                    continue
+                
+                sheet_name, cell_coordinate = key.split('!', 1)
+                
+                # Kiểm tra xem sheet có tồn tại không
+                if sheet_name not in workbook.sheetnames:
+                    continue
+                
+                # Lấy sheet
+                sheet = workbook[sheet_name]
+                
+                # Nạp dữ liệu đã dịch vào cell
+                # openpyxl tự động giữ nguyên định dạng của cell
+                sheet[cell_coordinate] = translated_value
             
-            # Kiểm tra xem sheet có tồn tại không
-            if sheet_name not in workbook.sheetnames:
-                continue
+            # Tạo tên file output
+            output_filename = f"output_translated_{timestamp}.xlsx"
+            output_filepath = os.path.join(app.config['UPLOAD_FOLDER'], output_filename)
             
-            # Lấy sheet
-            sheet = workbook[sheet_name]
+            # Lưu file Excel đã được nạp dữ liệu
+            workbook.save(output_filepath)
+            workbook.close()
             
-            # Nạp dữ liệu đã dịch vào cell
-            # openpyxl tự động giữ nguyên định dạng của cell
-            sheet[cell_coordinate] = translated_value
+            output_mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         
-        # Tạo tên file output
-        output_filename = f"output_translated_{timestamp}.xlsx"
-        output_filepath = os.path.join(app.config['UPLOAD_FOLDER'], output_filename)
-        
-        # Lưu file Excel đã được nạp dữ liệu
-        workbook.save(output_filepath)
-        workbook.close()
+        elif file_ext == 'pptx':
+            # Nạp text vào PPTX
+            prs = inject_text_to_pptx(excel_filepath, json_data)
+            
+            # Tạo tên file output
+            output_filename = f"output_translated_{timestamp}.pptx"
+            output_filepath = os.path.join(app.config['UPLOAD_FOLDER'], output_filename)
+            
+            # Lưu file PPTX đã được nạp dữ liệu
+            prs.save(output_filepath)
+            
+            output_mimetype = 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
         
         # Xóa file Excel tạm
         os.remove(excel_filepath)
@@ -296,12 +499,12 @@ def inject():
             if os.path.exists(temp_file):
                 os.remove(temp_file)
         
-        # Trả về file Excel đã được nạp dữ liệu và xóa tất cả file tạm sau khi gửi
+        # Trả về file đã được nạp dữ liệu và xóa tất cả file tạm sau khi gửi
         response = send_file(
             output_filepath,
             as_attachment=True,
             download_name=output_filename,
-            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            mimetype=output_mimetype
         )
         
         # Xóa file output sau khi gửi

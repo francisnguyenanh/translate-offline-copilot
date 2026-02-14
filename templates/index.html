@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Excel Translation Manager</title>
+    <title>Excel & PowerPoint Translation Manager</title>
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome cho icons -->
@@ -39,7 +39,7 @@
         .function-card {
             background: white;
             border-radius: 15px;
-            padding: 30px;
+            padding: 20px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
             height: 100%;
             transition: transform 0.3s;
@@ -51,24 +51,43 @@
         
         .function-card h3 {
             color: #667eea;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             font-weight: bold;
+            font-size: 1.3rem;
         }
         
         .function-card .icon {
-            font-size: 3rem;
+            font-size: 2rem;
             color: #667eea;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
+        }
+        
+        .step-number {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 8px;
         }
         
         .upload-area {
             border: 2px dashed #667eea;
             border-radius: 10px;
-            padding: 30px;
+            padding: 20px;
             text-align: center;
             background: #f8f9fa;
-            margin: 20px 0;
+            margin: 15px 0;
             transition: all 0.3s;
+        }
+        
+        .upload-area.compact {
+            padding: 15px;
+            margin: 10px 0;
         }
         
         .upload-area:hover {
@@ -77,9 +96,18 @@
         }
         
         .upload-area i {
-            font-size: 2rem;
+            font-size: 1.5rem;
             color: #667eea;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
+        }
+        
+        .collapse-toggle {
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        .collapse-toggle:hover {
+            opacity: 0.8;
         }
         
         .btn-custom {
@@ -126,39 +154,33 @@
     <div class="main-container">
         <!-- Header -->
         <div class="header">
-            <h1><i class="fas fa-language"></i> Excel Translation Manager</h1>
-            <p>Công cụ quản lý trích xuất và nạp bản dịch cho file Excel</p>
-            <div class="mt-3">
-                <button class="btn btn-outline-light btn-sm" onclick="clearUploads()" title="Xóa tất cả file trong thư mục uploads">
-                    <i class="fas fa-trash-alt"></i> Xóa tất cả file uploads
-                </button>
-            </div>
+            <h1><i class="fas fa-language"></i> Excel & PowerPoint Translation Manager</h1>
         </div>
         
-        <!-- Upload Excel chung -->
-        <div class="row mb-4">
-            <div class="col-12">
+        <!-- 3 Bước theo hàng ngang -->
+        <div class="row g-3">
+            <!-- Bước 1: Upload file -->
+            <div class="col-lg-4">
                 <div class="function-card">
                     <div class="text-center">
-                        <i class="fas fa-file-excel icon"></i>
-                        <h3>Bước 1: Upload file Excel gốc</h3>
-                        <p class="text-muted">File này sẽ được dùng cho cả chức năng Extract và Inject</p>
+                        <span class="step-number">1</span>
+                        <h3 class="d-inline">Upload File</h3>
+                        <p class="text-muted small mt-2">File gốc (.xlsx hoặc .pptx)</p>
                     </div>
                     
                     <form id="uploadExcelForm" enctype="multipart/form-data">
-                        <div class="upload-area" id="mainUploadArea">
+                        <div class="upload-area compact" id="mainUploadArea">
                             <i class="fas fa-cloud-upload-alt"></i>
-                            <p class="mb-2"><strong>Kéo thả file Excel vào đây</strong></p>
-                            <p class="text-muted mb-3">hoặc</p>
-                            <input type="file" class="form-control" id="mainExcelFile" name="file" accept=".xlsx" style="display: none;">
-                            <label for="mainExcelFile" class="btn btn-custom">
-                                <i class="fas fa-folder-open"></i> Chọn file Excel
+                            <p class="mb-2 small"><strong>Kéo thả file vào đây</strong></p>
+                            <input type="file" class="form-control" id="mainExcelFile" name="file" accept=".xlsx,.pptx" style="display: none;">
+                            <label for="mainExcelFile" class="btn btn-custom btn-sm">
+                                <i class="fas fa-folder-open"></i> Chọn file
                             </label>
                         </div>
                         
                         <div id="mainFileInfo" class="file-info" style="display: none;">
                             <i class="fas fa-file-excel text-success"></i>
-                            <span id="mainFileName"></span>
+                            <span id="mainFileName" class="small"></span>
                             <button type="button" class="btn btn-sm btn-outline-danger float-end" id="mainFileRemove">
                                 <i class="fas fa-times"></i>
                             </button>
@@ -166,24 +188,41 @@
                         
                         <div id="mainAlert"></div>
                     </form>
+                    
+                    <!-- Hướng dẫn collapse -->
+                    <div class="mt-3">
+                        <div class="collapse-toggle p-2" style="background: #f8f9fa; border-radius: 5px;" data-bs-toggle="collapse" data-bs-target="#step1Guide">
+                            <i class="fas fa-info-circle text-info"></i>
+                            <small><strong>Hướng dẫn sử dụng</strong></small>
+                            <i class="fas fa-chevron-down float-end"></i>
+                        </div>
+                        <div class="collapse mt-2" id="step1Guide">
+                            <div class="p-2" style="background: #f8f9fa; border-radius: 5px;">
+                                <ul class="small mb-0" style="padding-left: 20px;">
+                                    <li>Hỗ trợ Excel (.xlsx) và PowerPoint (.pptx)</li>
+                                    <li>Kéo thả hoặc click để chọn file</li>
+                                    <li>File sẽ dùng cho cả Extract và Inject</li>
+                                    <li>Giới hạn: 16MB</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-        </div>
-        
-        <div class="row g-4">
-            <!-- Chức năng 1: Extract -->
-            <div class="col-lg-6">
+            
+            <!-- Bước 2: Extract -->
+            <div class="col-lg-4">
                 <div class="function-card">
                     <div class="text-center">
-                        <i class="fas fa-file-export icon"></i>
-                        <h3>Bước 2: Trích xuất (Extract)</h3>
-                        <p class="text-muted">Trích xuất nội dung cần dịch từ file Excel đã upload</p>
+                        <span class="step-number">2</span>
+                        <h3 class="d-inline">Trích xuất</h3>
+                        <p class="text-muted small mt-2">Extract nội dung cần dịch</p>
                     </div>
                     
                     <form id="extractForm" enctype="multipart/form-data">
-                        <div class="text-center">
-                            <button type="submit" class="btn btn-custom" id="extractBtn" disabled>
-                                <i class="fas fa-download"></i> Trích xuất và Tải về JSON
+                        <div class="text-center mt-3">
+                            <button type="submit" class="btn btn-custom btn-sm" id="extractBtn" disabled>
+                                <i class="fas fa-download"></i> Trích xuất JSON
                             </button>
                         </div>
                         
@@ -191,45 +230,28 @@
                             <div class="spinner-border text-primary" role="status">
                                 <span class="visually-hidden">Đang xử lý...</span>
                             </div>
-                            <p class="mt-2">Đang trích xuất dữ liệu...</p>
+                            <p class="mt-2 small">Đang trích xuất dữ liệu...</p>
                         </div>
                         
                         <div id="extractAlert"></div>
                     </form>
                     
-                    <div class="mt-4 p-3" style="background: #f8f9fa; border-radius: 10px;">
-                        <h6><i class="fas fa-info-circle text-info"></i> Hướng dẫn:</h6>
-                        <ul class="small mb-0">
-                            <li>Upload file Excel (.xlsx)</li>
-                            <li>Hệ thống sẽ trích xuất tất cả nội dung text</li>
-                            <li>Bỏ qua số và công thức (bắt đầu với '=')</li>
-                            <li>Tải về file <strong>ZIP chứa nhiều file JSON</strong> (mỗi file 400 cặp key-value)</li>
-                            <li>Giải nén ZIP và dùng AI để dịch từng file JSON (xem hướng dẫn bên dưới)</li>
-                        </ul>
-                        <div class="alert alert-info mt-2 mb-0 small" style="padding: 8px 12px;">
-                            <i class="fas fa-info-circle"></i>
-                            <strong>Lưu ý:</strong> File sẽ được tự động tách thành nhiều file nhỏ (mỗi file 400 cặp) để dễ dàng dịch với AI (tránh giới hạn request).
-                        </div>
+                    <!-- Prompt AI - Chỉ hiển thị nút Copy -->
+                    <div class="mt-3 text-center">
+                        <button class="btn btn-outline-primary btn-sm" onclick="copyPrompt()" title="Copy prompt AI để dịch">
+                            <i class="fas fa-robot"></i> Copy Prompt AI
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="collapse" data-bs-target="#promptDetail">
+                            <i class="fas fa-eye"></i> Xem
+                        </button>
                     </div>
                     
-                    <!-- Hướng dẫn Prompt AI -->
-                    <div class="mt-3 p-3" style="background: #e3f2fd; border-left: 4px solid #2196F3; border-radius: 5px;">
-                        <h6 class="mb-2">
-                            <i class="fas fa-robot text-primary"></i> 
-                            <strong>Cách dùng AI để dịch (Copilot Pro, ChatGPT, v.v.)</strong>
-                        </h6>
-                        <p class="small mb-2">Sau khi có file <code>to_translate.json</code>, mở file đó và dùng prompt sau:</p>
-                        
-                        <div style="background: white; padding: 15px; border-radius: 5px; border: 1px solid #90caf9;">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <span class="badge bg-primary">Prompt Template</span>
-                                <button class="btn btn-sm btn-outline-primary" onclick="copyPrompt()" title="Copy prompt">
-                                    <i class="fas fa-copy"></i> Copy
-                                </button>
-                            </div>
-                            <pre id="aiPrompt" style="margin: 0; font-size: 0.85rem; white-space: pre-wrap; word-wrap: break-word;">Hãy dịch các giá trị (values) trong file JSON này sang <strong>tiếng Nhật</strong>.
+                    <!-- Nội dung prompt collapse -->
+                    <div class="collapse mt-2" id="promptDetail">
+                        <div style="background: #e3f2fd; padding: 10px; border-radius: 5px; border: 1px solid #90caf9;">
+                            <pre id="aiPrompt" style="margin: 0; font-size: 0.7rem; white-space: pre-wrap; word-wrap: break-word; max-height: 200px; overflow-y: auto;">Hãy dịch các giá trị (values) trong file JSON này sang tiếng Nhật.
 
-<strong>Quy tắc bắt buộc:</strong>
+Quy tắc bắt buộc:
 1. Giữ nguyên 100% các keys (tọa độ cell như "Sheet1!A1")
 2. CHỈ dịch nội dung bên trong values
 3. KHÔNG dịch các từ/cụm từ đã là ngôn ngữ đích - GIỮ NGUYÊN chúng
@@ -237,60 +259,74 @@
 5. KHÔNG dịch số, ngày tháng, ký hiệu đặc biệt
 6. Giữ nguyên format JSON chuẩn
 
-<strong>⚠️ QUY TẮC QUAN TRỌNG về dấu ngoặc kép:</strong>
+⚠️ QUY TẮC QUAN TRỌNG về dấu ngoặc kép:
 - CHỈ sử dụng dấu ngoặc kép THẲNG chuẩn JSON: " (U+0022)
 - TUYỆT ĐỐI KHÔNG dùng dấu ngoặc kép đặc biệt: " " „ ‟ « »
 - Nếu cần trích dẫn trong nội dung dịch: dùng 「 」hoặc 'đơn'
 - Ví dụ ĐÚNG: "App 「Order Printer Pro」 の使用"
 - Ví dụ SAI: "App "Order Printer Pro" の使用" ❌
 
-<strong>Output yêu cầu:</strong>
+Output yêu cầu:
 - Trả về ĐÚNG cấu trúc JSON gốc
 - KHÔNG thêm giải thích hay văn bản nào khác
 - Đảm bảo encoding UTF-8
-- Kiểm tra kỹ KHÔNG có dấu ngoặc kép đặc biệt trong output
-
+- Kiểm tra kỹ KHÔNG có dấu ngoặc kép đặc biệt trong output</pre>
                         </div>
-                        
-                        <div class="alert alert-warning mt-2 mb-0 small" style="padding: 8px 12px;">
-                            <i class="fas fa-lightbulb"></i>
-                            <strong>Mẹo:</strong> Thay <code>[Ngôn ngữ đích]</code> bằng ngôn ngữ bạn muốn dịch (ví dụ: Vietnamese, Japanese).
-                            Sau khi AI trả về JSON đã dịch cho từng file, lưu lại với tên gốc hoặc nén lại thành ZIP để dùng cho chức năng Inject.
-                            Bạn có thể upload từng file JSON hoặc upload cả file ZIP chứa tất cả các file đã dịch.
+                    </div>
+                    
+                    <!-- Hướng dẫn collapse -->
+                    <div class="mt-3">
+                        <div class="collapse-toggle p-2" style="background: #f8f9fa; border-radius: 5px;" data-bs-toggle="collapse" data-bs-target="#step2Guide">
+                            <i class="fas fa-info-circle text-info"></i>
+                            <small><strong>Hướng dẫn sử dụng</strong></small>
+                            <i class="fas fa-chevron-down float-end"></i>
+                        </div>
+                        <div class="collapse mt-2" id="step2Guide">
+                            <div class="p-2" style="background: #f8f9fa; border-radius: 5px;">
+                                <ul class="small mb-0" style="padding-left: 20px;">
+                                    <li>Click "Trích xuất JSON" → tải về ZIP</li>
+                                    <li>Giải nén ZIP → có nhiều file JSON nhỏ</li>
+                                    <li>Excel: Bỏ qua số và công thức</li>
+                                    <li>PowerPoint: Trích xuất text từ shapes</li>
+                                    <li>Mỗi file JSON chứa 400 cặp key-value</li>
+                                    <li>Dùng AI (ChatGPT/Copilot) để dịch</li>
+                                    <li>Copy prompt AI bằng nút bên trên</li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
             
-            <!-- Chức năng 2: Inject -->
-            <div class="col-lg-6">
+            <!-- Bước 3: Inject -->
+            <div class="col-lg-4">
                 <div class="function-card">
                     <div class="text-center">
-                        <i class="fas fa-file-import icon"></i>
-                        <h3>Bước 3: Nạp bản dịch (Inject)</h3>
-                        <p class="text-muted">Upload file JSON đã dịch để nạp vào Excel</p>
+                        <span class="step-number">3</span>
+                        <h3 class="d-inline">Nạp bản dịch</h3>
+                        <p class="text-muted small mt-2">Inject JSON đã dịch vào file</p>
                     </div>
                     
                     <form id="injectForm" enctype="multipart/form-data">
-                        <div class="upload-area" id="injectJsonUploadArea">
+                        <div class="upload-area compact" id="injectJsonUploadArea">
                             <i class="fas fa-file-code"></i>
-                            <p class="mb-2"><strong>File JSON (nhiều file), hoặc ZIP đã dịch</strong></p>
+                            <p class="mb-2 small"><strong>Kéo thả JSON/ZIP</strong></p>
                             <input type="file" class="form-control" id="injectJsonFile" name="json_files" accept=".json,.zip" multiple style="display: none;">
                             <label for="injectJsonFile" class="btn btn-custom btn-sm">
-                                <i class="fas fa-folder-open"></i> Chọn JSON/ZIP
+                                <i class="fas fa-folder-open"></i> Chọn file
                             </label>
                         </div>
                         
                         <div id="injectJsonFileInfo" class="file-info" style="display: none;">
                             <div id="injectJsonFileList"></div>
                             <button type="button" class="btn btn-sm btn-outline-danger float-end mt-2" id="injectJsonFileRemove">
-                                <i class="fas fa-times"></i> Xóa tất cả
+                                <i class="fas fa-times"></i> Xóa
                             </button>
                         </div>
                         
-                        <div class="text-center mt-3">
-                            <button type="submit" class="btn btn-custom" id="injectBtn" disabled>
-                                <i class="fas fa-download"></i> Nạp bản dịch và Tải về Excel
+                        <div class="text-center mt-2">
+                            <button type="submit" class="btn btn-custom btn-sm" id="injectBtn" disabled>
+                                <i class="fas fa-download"></i> Nạp & Tải về
                             </button>
                         </div>
                         
@@ -298,25 +334,30 @@
                             <div class="spinner-border text-primary" role="status">
                                 <span class="visually-hidden">Đang xử lý...</span>
                             </div>
-                            <p class="mt-2">Đang nạp bản dịch...</p>
+                            <p class="mt-2 small">Đang nạp bản dịch...</p>
                         </div>
                         
                         <div id="injectAlert"></div>
                     </form>
                     
-                    <div class="mt-4 p-3" style="background: #f8f9fa; border-radius: 10px;">
-                        <h6><i class="fas fa-info-circle text-info"></i> Hướng dẫn:</h6>
-                        <ul class="small mb-0">
-                            <li>File Excel đã được upload ở Bước 1</li>
-                            <li>Upload <strong>nhiều file JSON đã dịch</strong> hoặc file ZIP (chứa nhiều file đã dịch)</li>
-                            <li>Hệ thống sẽ tự động gộp và nạp bản dịch vào Excel</li>
-                            <li>Giữ nguyên định dạng và màu sắc</li>
-                            <li>Tải về file <strong>output_translated.xlsx</strong></li>
-                            <li>Tất cả file tạm sẽ tự động bị xóa sau khi tải về</li>
-                        </ul>
-                        <div class="alert alert-success mt-2 mb-0 small" style="padding: 8px 12px;">
-                            <i class="fas fa-check-circle"></i>
-                            <strong>Tiện lợi:</strong> Bạn có thể chọn nhiều file JSON cùng lúc (Ctrl/Cmd + Click) hoặc upload file ZIP gốc mà không cần giải nén!
+                    <!-- Hướng dẫn collapse -->
+                    <div class="mt-3">
+                        <div class="collapse-toggle p-2" style="background: #f8f9fa; border-radius: 5px;" data-bs-toggle="collapse" data-bs-target="#step3Guide">
+                            <i class="fas fa-info-circle text-info"></i>
+                            <small><strong>Hướng dẫn sử dụng</strong></small>
+                            <i class="fas fa-chevron-down float-end"></i>
+                        </div>
+                        <div class="collapse mt-2" id="step3Guide">
+                            <div class="p-2" style="background: #f8f9fa; border-radius: 5px;">
+                                <ul class="small mb-0" style="padding-left: 20px;">
+                                    <li>Upload file JSON đã dịch (hoặc ZIP)</li>
+                                    <li>Hỗ trợ nhiều file JSON cùng lúc</li>
+                                    <li>Tự động gộp và nạp vào file gốc</li>
+                                    <li>Giữ nguyên định dạng, màu sắc</li>
+                                    <li>Tải về file output_translated</li>
+                                    <li>File tạm tự động xóa sau khi tải</li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -354,7 +395,7 @@
                 injectBtn.disabled = false;
                 
                 // Hiển thị thông báo
-                showAlert(mainAlert, 'success', `File Excel "${file.name}" đã được chọn. Bạn có thể tiến hành Extract hoặc Inject.`);
+                showAlert(mainAlert, 'success', `File "${file.name}" đã được chọn. Bạn có thể tiến hành Extract hoặc Inject.`);
             }
         });
         
@@ -394,7 +435,7 @@
                 uploadedExcelFilename = files[0].name;
                 extractBtn.disabled = false;
                 injectBtn.disabled = false;
-                showAlert(mainAlert, 'success', `File Excel "${files[0].name}" đã được chọn.`);
+                showAlert(mainAlert, 'success', `File "${files[0].name}" đã được chọn.`);
             }
         });
         
@@ -408,9 +449,9 @@
         extractForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             
-            // Kiểm tra xem có file Excel được upload chưa
+            // Kiểm tra xem có file được upload chưa
             if (!uploadedExcelFilename || mainExcelFile.files.length === 0) {
-                showAlert(extractAlert, 'warning', 'Vui lòng upload file Excel ở Bước 1 trước!');
+                showAlert(extractAlert, 'warning', 'Vui lòng upload file (Excel hoặc PowerPoint) ở Bước 1 trước!');
                 return;
             }
             
@@ -502,13 +543,67 @@
             injectJsonFileInfo.style.display = 'none';
         });
         
+        // Xử lý drag and drop cho JSON files
+        const injectJsonUploadArea = document.getElementById('injectJsonUploadArea');
+        
+        injectJsonUploadArea.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            injectJsonUploadArea.style.borderColor = '#764ba2';
+            injectJsonUploadArea.style.background = '#e9ecef';
+        });
+        
+        injectJsonUploadArea.addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            injectJsonUploadArea.style.borderColor = '#667eea';
+            injectJsonUploadArea.style.background = '#f8f9fa';
+        });
+        
+        injectJsonUploadArea.addEventListener('drop', function(e) {
+            e.preventDefault();
+            injectJsonUploadArea.style.borderColor = '#667eea';
+            injectJsonUploadArea.style.background = '#f8f9fa';
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                // Sử dụng DataTransfer để gán files vào input
+                const dataTransfer = new DataTransfer();
+                Array.from(files).forEach(file => {
+                    // Chỉ chấp nhận file .json hoặc .zip
+                    if (file.name.endsWith('.json') || file.name.endsWith('.zip')) {
+                        dataTransfer.items.add(file);
+                    }
+                });
+                
+                if (dataTransfer.files.length > 0) {
+                    injectJsonFile.files = dataTransfer.files;
+                    
+                    // Hiển thị danh sách files
+                    const fileList = document.getElementById('injectJsonFileList');
+                    fileList.innerHTML = '';
+                    
+                    Array.from(dataTransfer.files).forEach((file, index) => {
+                        const fileItem = document.createElement('div');
+                        fileItem.className = 'mb-1';
+                        const icon = file.name.endsWith('.zip') ? 'fa-file-archive' : 'fa-file-code';
+                        const color = file.name.endsWith('.zip') ? 'text-warning' : 'text-primary';
+                        fileItem.innerHTML = `<i class="fas ${icon} ${color}"></i> <small>${file.name}</small>`;
+                        fileList.appendChild(fileItem);
+                    });
+                    
+                    injectJsonFileInfo.style.display = 'block';
+                } else {
+                    showAlert(injectAlert, 'warning', 'Chỉ chấp nhận file .json hoặc .zip!');
+                }
+            }
+        });
+        
         // Xử lý submit form Inject
         injectForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             
-            // Kiểm tra xem có file Excel được upload chưa
+            // Kiểm tra xem có file được upload chưa
             if (!uploadedExcelFilename || mainExcelFile.files.length === 0) {
-                showAlert(injectAlert, 'warning', 'Vui lòng upload file Excel ở Bước 1 trước!');
+                showAlert(injectAlert, 'warning', 'Vui lòng upload file (Excel hoặc PowerPoint) ở Bước 1 trước!');
                 return;
             }
             
@@ -542,22 +637,36 @@
                 injectLoading.style.display = 'none';
                 
                 if (response.ok) {
-                    // Tải file Excel
+                    // Lấy tên file từ header Content-Disposition
+                    const disposition = response.headers.get('Content-Disposition');
+                    let filename = `output_translated_${Date.now()}.xlsx`;
+                    
+                    if (disposition && disposition.includes('filename=')) {
+                        const filenameMatch = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                        if (filenameMatch && filenameMatch[1]) {
+                            filename = filenameMatch[1].replace(/['"]/g, '');
+                        }
+                    }
+                    
+                    // Tải file với tên đúng extension
                     const blob = await response.blob();
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = `output_translated_${Date.now()}.xlsx`;
+                    a.download = filename;
                     document.body.appendChild(a);
                     a.click();
                     document.body.removeChild(a);
                     window.URL.revokeObjectURL(url);
                     
-                    showAlert(injectAlert, 'success', 'Nạp bản dịch thành công! File Excel đang được tải về. Tất cả file tạm đã được xóa.');
+                    showAlert(injectAlert, 'success', 'Nạp bản dịch thành công! File đang được tải về. Tất cả file tạm đã được xóa.');
                     
                     // Reset form JSON
                     injectJsonFile.value = '';
                     injectJsonFileInfo.style.display = 'none';
+                    
+                    // Tự động xóa tất cả file trong thư mục uploads sau khi thành công
+                    await clearUploads(true);
                 } else {
                     const error = await response.json();
                     showAlert(injectAlert, 'danger', error.error || 'Có lỗi xảy ra!');
@@ -571,9 +680,9 @@
         // ==================== HÀM TRỢ GIÚP ====================
         
         // Hàm xóa tất cả file trong uploads
-        async function clearUploads() {
-            // Xác nhận trước khi xóa
-            if (!confirm('Bạn có chắc chắn muốn xóa TẤT CẢ file trong thư mục uploads?\n\nThao tác này không thể hoàn tác!')) {
+        async function clearUploads(skipConfirm = false) {
+            // Xác nhận trước khi xóa (trừ khi skipConfirm = true)
+            if (!skipConfirm && !confirm('Bạn có chắc chắn muốn xóa TẤT CẢ file trong thư mục uploads?\n\nThao tác này không thể hoàn tác!')) {
                 return;
             }
             
@@ -585,7 +694,9 @@
                 const result = await response.json();
                 
                 if (response.ok && result.success) {
-                    alert(`✅ ${result.message}`);
+                    if (!skipConfirm) {
+                        alert(`✅ ${result.message}`);
+                    }
                     
                     // Reset form và trạng thái
                     mainExcelFile.value = '';
@@ -597,10 +708,14 @@
                     injectJsonFile.value = '';
                     injectJsonFileInfo.style.display = 'none';
                 } else {
-                    alert('❌ Lỗi: ' + (result.error || result.message));
+                    if (!skipConfirm) {
+                        alert('❌ Lỗi: ' + (result.error || result.message));
+                    }
                 }
             } catch (error) {
-                alert('❌ Lỗi kết nối: ' + error.message);
+                if (!skipConfirm) {
+                    alert('❌ Lỗi kết nối: ' + error.message);
+                }
             }
         }
         
