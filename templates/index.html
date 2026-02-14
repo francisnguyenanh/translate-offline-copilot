@@ -670,6 +670,9 @@ Output yêu cầu:
                     // Reset form JSON
                     injectJsonFile.value = '';
                     injectJsonFileInfo.style.display = 'none';
+                    
+                    // Tự động xóa tất cả file trong thư mục uploads sau khi thành công
+                    await clearUploads(true);
                 } else {
                     const error = await response.json();
                     showAlert(injectAlert, 'danger', error.error || 'Có lỗi xảy ra!');
@@ -683,9 +686,9 @@ Output yêu cầu:
         // ==================== HÀM TRỢ GIÚP ====================
         
         // Hàm xóa tất cả file trong uploads
-        async function clearUploads() {
-            // Xác nhận trước khi xóa
-            if (!confirm('Bạn có chắc chắn muốn xóa TẤT CẢ file trong thư mục uploads?\n\nThao tác này không thể hoàn tác!')) {
+        async function clearUploads(skipConfirm = false) {
+            // Xác nhận trước khi xóa (trừ khi skipConfirm = true)
+            if (!skipConfirm && !confirm('Bạn có chắc chắn muốn xóa TẤT CẢ file trong thư mục uploads?\n\nThao tác này không thể hoàn tác!')) {
                 return;
             }
             
@@ -697,7 +700,9 @@ Output yêu cầu:
                 const result = await response.json();
                 
                 if (response.ok && result.success) {
-                    alert(`✅ ${result.message}`);
+                    if (!skipConfirm) {
+                        alert(`✅ ${result.message}`);
+                    }
                     
                     // Reset form và trạng thái
                     mainExcelFile.value = '';
@@ -709,10 +714,14 @@ Output yêu cầu:
                     injectJsonFile.value = '';
                     injectJsonFileInfo.style.display = 'none';
                 } else {
-                    alert('❌ Lỗi: ' + (result.error || result.message));
+                    if (!skipConfirm) {
+                        alert('❌ Lỗi: ' + (result.error || result.message));
+                    }
                 }
             } catch (error) {
-                alert('❌ Lỗi kết nối: ' + error.message);
+                if (!skipConfirm) {
+                    alert('❌ Lỗi kết nối: ' + error.message);
+                }
             }
         }
         
