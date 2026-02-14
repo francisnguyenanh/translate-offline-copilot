@@ -21,7 +21,7 @@ app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # Giới hạn 50MB
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['SECRET_KEY'] = os.urandom(24)  # Secret key cho session
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)  # Session timeout 24h
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)  # Session timeout 8h
 
 # Các định dạng file được phép
 ALLOWED_EXTENSIONS = {'xlsx', 'pptx'}
@@ -107,11 +107,14 @@ def allowed_file(filename):
     """
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-def allowed_json_file(filename):
-    """
-    Kiểm tra xem file có phải định dạng JSON không
-    """
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() == 'json'
+def set_download_headers(response, display_name, default_ascii_name):
+    """Set Content-Disposition hỗ trợ tên file Unicode (RFC 5987)."""
+    encoded_filename = quote(display_name, safe='')
+    ascii_filename = secure_filename(display_name) or default_ascii_name
+    response.headers['Content-Disposition'] = (
+        f"attachment; filename=\"{ascii_filename}\"; filename*=UTF-8''{encoded_filename}"
+    )
+    return response
 
 def extract_text_from_shape(shape, shape_path, extracted_data):
     """
@@ -359,9 +362,6 @@ def extract():
         
         # Lưu tên file gốc (giữ nguyên tiếng Nhật, ký tự đặc biệt)
         original_filename = file.filename
-        print(f"[DEBUG EXTRACT] Original filename: {original_filename}")
-        print(f"[DEBUG EXTRACT] Original filename type: {type(original_filename)}")
-        print(f"[DEBUG EXTRACT] Original filename repr: {repr(original_filename)}")
         
         # Lấy extension từ tên file gốc
         if '.' in original_filename:
@@ -422,19 +422,15 @@ def extract():
         
         # Lấy tên file gốc không có extension (giữ nguyên tiếng Nhật)
         base_filename = os.path.splitext(original_filename)[0]
-        print(f"[DEBUG EXTRACT] base_filename after splitext: {base_filename}")
-        print(f"[DEBUG EXTRACT] base_filename repr: {repr(base_filename)}")
         
         # Nếu base_filename rỗng, dùng tên mặc định
         if not base_filename or base_filename.strip() == '':
-            print(f"[DEBUG EXTRACT] base_filename is empty, using default")
             base_filename = f"file_{timestamp}"
         # Tên safe cho filesystem (dùng timestamp)
         safe_base_filename = f"extracted_{timestamp}"
         
         # Tên folder trong ZIP (giữ nguyên tiếng Nhật)
         folder_name = f"{base_filename}_json_to_translate"
-        print(f"[DEBUG EXTRACT] folder_name: {folder_name}")
         # Tên folder tạm trong filesystem (dùng safe filename)
         safe_folder_name = f"{safe_base_filename}_temp_{timestamp}"
         
@@ -467,8 +463,6 @@ def extract():
         
         # Tạo file ZIP chứa folder và các file JSON
         zip_display_name = f"{base_filename}_json_to_translate.zip"  # Tên hiển thị
-        print(f"[DEBUG EXTRACT] zip_display_name: {zip_display_name}")
-        print(f"[DEBUG EXTRACT] zip_display_name repr: {repr(zip_display_name)}")
         
         safe_zip_filename = f"{safe_base_filename}_json_{timestamp}.zip"  # Tên file trong filesystem
         zip_filepath = os.path.join(session_folder, safe_zip_filename)
@@ -488,7 +482,6 @@ def extract():
             os.rmdir(temp_dir)
         
         # Trả về file ZIP và xóa sau khi gửi (dùng tên hiển thị với tiếng Nhật)
-        print(f"[DEBUG EXTRACT] Sending file with download_name: {zip_display_name}")
         
         # Tạo response với send_file, không dùng as_attachment mặc định của Flask để tránh conflict
         response = send_file(
@@ -496,15 +489,7 @@ def extract():
             mimetype='application/zip'
         )
         
-        # Set header Content-Disposition với encoding chuẩn RFC 5987 cho Unicode
-        # Encode tất cả ký tự (safe='') để đảm bảo tính tương thích
-        encoded_filename = quote(zip_display_name, safe='')
-        ascii_filename = secure_filename(zip_display_name) or 'download.zip'
-        
-        # Header string chuẩn
-        header_value = f"attachment; filename=\"{ascii_filename}\"; filename*=UTF-8''{encoded_filename}"
-        response.headers['Content-Disposition'] = header_value
-        print(f"[DEBUG EXTRACT] Content-Disposition header: {header_value}")
+        response = set_download_headers(response, zip_display_name, 'download.zip')
         
         # Xóa file JSON sau khi gửi (sử dụng after_request để đảm bảo file đã được gửi)
         @response.call_on_close
@@ -690,13 +675,8 @@ def inject():
             mimetype=output_mimetype
         )
         
-        # Set header Content-Disposition với encoding chuẩn RFC 5987 cho Unicode
-        encoded_filename = quote(output_display_name, safe='')
-        ascii_filename = secure_filename(output_display_name) or 'download.xlsx'
-        
-        # Header string chuẩn
-        header_value = f"attachment; filename=\"{ascii_filename}\"; filename*=UTF-8''{encoded_filename}"
-        response.headers['Content-Disposition'] = header_value
+        default_ascii_name = 'download.pptx' if file_ext == 'pptx' else 'download.xlsx'
+        response = set_download_headers(response, output_display_name, default_ascii_name)
         
         # Xóa file output sau khi gửi
         @response.call_on_close
