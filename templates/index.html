@@ -276,7 +276,8 @@
                     <form id="injectForm" enctype="multipart/form-data">
                         <div class="upload-area" id="injectJsonUploadArea">
                             <i class="fas fa-file-code"></i>
-                            <p class="mb-2"><strong>File JSON (nhiều file), hoặc ZIP đã dịch</strong></p>
+                            <p class="mb-2"><strong>Kéo thả file JSON/ZIP vào đây hoặc click để chọn</strong></p>
+                            <p class="small text-muted mb-2">Hỗ trợ nhiều file JSON hoặc file ZIP đã dịch</p>
                             <input type="file" class="form-control" id="injectJsonFile" name="json_files" accept=".json,.zip" multiple style="display: none;">
                             <label for="injectJsonFile" class="btn btn-custom btn-sm">
                                 <i class="fas fa-folder-open"></i> Chọn JSON/ZIP
@@ -292,7 +293,7 @@
                         
                         <div class="text-center mt-3">
                             <button type="submit" class="btn btn-custom" id="injectBtn" disabled>
-                                <i class="fas fa-download"></i> Nạp bản dịch và Tải về Excel
+                                <i class="fas fa-download"></i> Nạp bản dịch và Tải file
                             </button>
                         </div>
                         
@@ -502,6 +503,60 @@
         injectJsonFileRemove.addEventListener('click', function() {
             injectJsonFile.value = '';
             injectJsonFileInfo.style.display = 'none';
+        });
+        
+        // Xử lý drag and drop cho JSON files
+        const injectJsonUploadArea = document.getElementById('injectJsonUploadArea');
+        
+        injectJsonUploadArea.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            injectJsonUploadArea.style.borderColor = '#764ba2';
+            injectJsonUploadArea.style.background = '#e9ecef';
+        });
+        
+        injectJsonUploadArea.addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            injectJsonUploadArea.style.borderColor = '#667eea';
+            injectJsonUploadArea.style.background = '#f8f9fa';
+        });
+        
+        injectJsonUploadArea.addEventListener('drop', function(e) {
+            e.preventDefault();
+            injectJsonUploadArea.style.borderColor = '#667eea';
+            injectJsonUploadArea.style.background = '#f8f9fa';
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                // Sử dụng DataTransfer để gán files vào input
+                const dataTransfer = new DataTransfer();
+                Array.from(files).forEach(file => {
+                    // Chỉ chấp nhận file .json hoặc .zip
+                    if (file.name.endsWith('.json') || file.name.endsWith('.zip')) {
+                        dataTransfer.items.add(file);
+                    }
+                });
+                
+                if (dataTransfer.files.length > 0) {
+                    injectJsonFile.files = dataTransfer.files;
+                    
+                    // Hiển thị danh sách files
+                    const fileList = document.getElementById('injectJsonFileList');
+                    fileList.innerHTML = '';
+                    
+                    Array.from(dataTransfer.files).forEach((file, index) => {
+                        const fileItem = document.createElement('div');
+                        fileItem.className = 'mb-1';
+                        const icon = file.name.endsWith('.zip') ? 'fa-file-archive' : 'fa-file-code';
+                        const color = file.name.endsWith('.zip') ? 'text-warning' : 'text-primary';
+                        fileItem.innerHTML = `<i class="fas ${icon} ${color}"></i> <small>${file.name}</small>`;
+                        fileList.appendChild(fileItem);
+                    });
+                    
+                    injectJsonFileInfo.style.display = 'block';
+                } else {
+                    showAlert(injectAlert, 'warning', 'Chỉ chấp nhận file .json hoặc .zip!');
+                }
+            }
         });
         
         // Xử lý submit form Inject

@@ -85,19 +85,19 @@ def inject_text_to_shape(shape, shape_indices, translated_value, is_table_cell=F
     # Nếu là shape cuối cùng trong path
     if len(shape_indices) == 0:
         if is_table_cell and table_pos:
-            # Nạp vào table cell
+            # Nạp vào table cell - giữ nguyên định dạng
             row_idx, col_idx = table_pos
             if hasattr(shape, "has_table") and shape.has_table:
                 table = shape.table
                 if row_idx < len(table.rows) and col_idx < len(table.rows[row_idx].cells):
                     cell = table.rows[row_idx].cells[col_idx]
-                    cell.text = translated_value
+                    # Thay thế text trong từng paragraph/run để giữ định dạng
+                    if cell.text_frame:
+                        replace_text_keep_format(cell.text_frame, translated_value)
         else:
-            # Nạp vào text frame của shape
-            if hasattr(shape, "text_frame"):
-                shape.text_frame.clear()
-                p = shape.text_frame.paragraphs[0]
-                p.text = translated_value
+            # Nạp vào text frame của shape - giữ nguyên định dạng
+            if hasattr(shape, "text_frame") and shape.text_frame:
+                replace_text_keep_format(shape.text_frame, translated_value)
         return True
     
     # Navigate đến shape con
@@ -108,6 +108,38 @@ def inject_text_to_shape(shape, shape_indices, translated_value, is_table_cell=F
             return inject_text_to_shape(child_shape, shape_indices[1:], translated_value, is_table_cell, table_pos)
     
     return False
+
+def replace_text_keep_format(text_frame, new_text):
+    """
+    Thay thế text trong text_frame nhưng giữ nguyên định dạng (font, màu, gạch chân, bold, italic...)
+    Chiến lược:
+    1. Nếu toàn bộ text frame chỉ có 1 paragraph và 1 run -> thay text của run đó
+    2. Nếu có nhiều runs/paragraphs -> xóa text của tất cả runs, gán text mới vào run đầu tiên với định dạng gốc
+    """
+    if not text_frame.paragraphs:
+        return
+    
+    # Thu thập tất cả runs từ tất cả paragraphs
+    all_runs = []
+    for paragraph in text_frame.paragraphs:
+        for run in paragraph.runs:
+            all_runs.append(run)
+    
+    if not all_runs:
+        # Không có run nào, tạo mới
+        if text_frame.paragraphs:
+            text_frame.paragraphs[0].text = new_text
+        return
+    
+    # Lưu định dạng của run đầu tiên
+    first_run = all_runs[0]
+    
+    # Xóa text của tất cả runs
+    for run in all_runs:
+        run.text = ""
+    
+    # Gán text mới vào run đầu tiên (giữ nguyên định dạng)
+    first_run.text = new_text
 
 def inject_text_to_pptx(filepath, json_data):
     """
