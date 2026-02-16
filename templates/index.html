@@ -155,7 +155,7 @@
         <!-- Header -->
         <div class="header">
             <h1><i class="fas fa-language"></i> Tomo Translation</h1>
-            <p>Công cụ quản lý trích xuất và nạp bản dịch cho file Excel (.xlsx) và PowerPoint (.pptx)</p>
+            <p>Công cụ quản lý trích xuất và nạp bản dịch cho file Excel (.xlsx), PowerPoint (.pptx) và Word (.docx)</p>
             <div class="mt-3">
                 <button class="btn btn-outline-light btn-sm" onclick="clearUploads()" title="Xóa file trong phiên của bạn">
                     <i class="fas fa-trash-alt"></i> Xóa file của tôi
@@ -174,7 +174,7 @@
                     <div class="text-center">
                         <span class="step-number">1</span>
                         <h3 class="d-inline">Upload File</h3>
-                        <p class="text-muted small mt-2">File gốc (.xlsx hoặc .pptx)</p>
+                        <p class="text-muted small mt-2">File gốc (.xlsx/.pptx/.docx)</p>
                     </div>
                     
                     <form id="uploadExcelForm" enctype="multipart/form-data">
@@ -208,7 +208,7 @@
                         <div class="collapse mt-2" id="step1Guide">
                             <div class="p-2" style="background: #f8f9fa; border-radius: 5px;">
                                 <ul class="small mb-0" style="padding-left: 20px;">
-                                    <li>Hỗ trợ Excel (.xlsx) và PowerPoint (.pptx)</li>
+                                    <li>Hỗ trợ Excel (.xlsx), PowerPoint (.pptx) <b>và Word (.docx)</b></li>
                                     <li>Kéo thả hoặc click để chọn file</li>
                                     <li>File sẽ dùng cho cả Extract và Inject</li>
                                     <li>Giới hạn: 16MB</li>
@@ -297,6 +297,7 @@ Output yêu cầu:
                                     <li>Giải nén ZIP → có nhiều file JSON nhỏ</li>
                                     <li>Excel: Bỏ qua số và công thức</li>
                                     <li>PowerPoint: Trích xuất text từ shapes</li>
+                                    <li>Word: Trích xuất text từ paragraphs, bảng, header/footer</li>
                                     <li>Mỗi file JSON chứa 400 cặp key-value</li>
                                     <li>Dùng AI (ChatGPT/Copilot) để dịch</li>
                                     <li>Copy prompt AI bằng nút bên trên</li>
@@ -361,8 +362,8 @@ Output yêu cầu:
                                 <ul class="small mb-0" style="padding-left: 20px;">
                                     <li>Upload file JSON đã dịch (hoặc ZIP)</li>
                                     <li>Hỗ trợ nhiều file JSON cùng lúc</li>
-                                    <li>Tự động gộp và nạp vào file gốc</li>
-                                    <li>Giữ nguyên định dạng, màu sắc</li>
+                                    <li>Tự động gộp và nạp vào file gốc (Excel, PowerPoint <b>hoặc Word</b>)</li>
+                                    <li>Giữ nguyên định dạng, màu sắc, bảng, header/footer cho Word</li>
                                     <li>Tải về file output_translated</li>
                                     <li>File tạm tự động xóa sau khi tải</li>
                                 </ul>
