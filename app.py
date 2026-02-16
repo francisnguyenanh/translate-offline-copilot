@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Ứng dụng Flask quản lý trích xuất và nạp bản dịch cho file Excel
+Ứng dụng Flask quản lý trích xuất và nạp bản dịch cho file Excel, PowerPoint và Word
 """
 
 import os
@@ -14,6 +14,7 @@ from flask import Flask, render_template, request, send_file, jsonify, session, 
 from werkzeug.utils import secure_filename
 from openpyxl import load_workbook
 from pptx import Presentation
+from docx import Document
 from functools import wraps
 
 # Khởi tạo ứng dụng Flask
@@ -24,7 +25,7 @@ app.config['SECRET_KEY'] = os.urandom(24)  # Secret key cho session
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)  # Session timeout 8h
 
 # Các định dạng file được phép
-ALLOWED_EXTENSIONS = {'xlsx', 'pptx'}
+ALLOWED_EXTENSIONS = {'xlsx', 'pptx', 'docx'}
 
 # Đọc password từ file
 PASSWORD_FILE = 'password.txt'
@@ -291,6 +292,255 @@ def inject_text_to_pptx(filepath, json_data):
     
     return prs
 
+def extract_text_from_docx(filepath):
+    """
+    Trích xuất text từ file DOCX, bao gồm paragraphs, tables, headers, footers
+    Trả về dictionary với format:
+    - Paragraphs: {"ParagraphX": "Content"}
+    - Tables: {"TableX!RyC z": "Content"}
+    - Headers: {"Header_SectionX!ParagraphY": "Content"}
+    - Footers: {"Footer_SectionX!ParagraphY": "Content"}
+    """
+    extracted_data = {}
+    doc = Document(filepath)
+    
+    # 1. Trích xuất text từ các paragraph thông thường (không trong table)
+    paragraph_idx = 0
+    for para in doc.paragraphs:
+        text_content = para.text.strip()
+        if text_content:  # Chỉ lấy paragraph không rỗng
+            paragraph_idx += 1
+            key = f"Paragraph{paragraph_idx}"
+            extracted_data[key] = text_content
+    
+    # 2. Trích xuất text từ các bảng
+    for table_idx, table in enumerate(doc.tables, start=1):
+        for row_idx, row in enumerate(table.rows, start=1):
+            for col_idx, cell in enumerate(row.cells, start=1):
+                text_content = cell.text.strip()
+                if text_content:
+                    key = f"Table{table_idx}!R{row_idx}C{col_idx}"
+                    extracted_data[key] = text_content
+    
+    # 3. Trích xuất text từ headers
+    for section_idx, section in enumerate(doc.sections, start=1):
+        header = section.header
+        for para_idx, para in enumerate(header.paragraphs, start=1):
+            text_content = para.text.strip()
+            if text_content:
+                key = f"Header_Section{section_idx}!Paragraph{para_idx}"
+                extracted_data[key] = text_content
+        
+        # Trích xuất từ table trong header (nếu có)
+        for table_idx, table in enumerate(header.tables, start=1):
+            for row_idx, row in enumerate(table.rows, start=1):
+                for col_idx, cell in enumerate(row.cells, start=1):
+                    text_content = cell.text.strip()
+                    if text_content:
+                        key = f"Header_Section{section_idx}!Table{table_idx}!R{row_idx}C{col_idx}"
+                        extracted_data[key] = text_content
+    
+    # 4. Trích xuất text từ footers
+    for section_idx, section in enumerate(doc.sections, start=1):
+        footer = section.footer
+        for para_idx, para in enumerate(footer.paragraphs, start=1):
+            text_content = para.text.strip()
+            if text_content:
+                key = f"Footer_Section{section_idx}!Paragraph{para_idx}"
+                extracted_data[key] = text_content
+        
+        # Trích xuất từ table trong footer (nếu có)
+        for table_idx, table in enumerate(footer.tables, start=1):
+            for row_idx, row in enumerate(table.rows, start=1):
+                for col_idx, cell in enumerate(row.cells, start=1):
+                    text_content = cell.text.strip()
+                    if text_content:
+                        key = f"Footer_Section{section_idx}!Table{table_idx}!R{row_idx}C{col_idx}"
+                        extracted_data[key] = text_content
+    
+    return extracted_data
+
+def replace_text_keep_format_docx(paragraph, new_text):
+    """
+    Thay thế text trong paragraph của Word nhưng giữ nguyên định dạng (font, màu, bold, italic...)
+    Chiến lược:
+    1. Lưu định dạng của run đầu tiên
+    2. Xóa text của tất cả runs
+    3. Gán text mới vào run đầu tiên (giữ nguyên định dạng)
+    """
+    if not paragraph.runs:
+        # Không có run nào, tạo mới
+        paragraph.text = new_text
+        return
+    
+    # Lưu định dạng của run đầu tiên
+    first_run = paragraph.runs[0]
+    
+    # Xóa text của tất cả runs
+    for run in paragraph.runs:
+        run.text = ""
+    
+    # Gán text mới vào run đầu tiên (giữ nguyên định dạng)
+    first_run.text = new_text
+
+def inject_text_to_docx(filepath, json_data):
+    """
+    Nạp text đã dịch vào file DOCX
+    Giữ nguyên định dạng (font, màu, size, bold, italic...)
+    """
+    doc = Document(filepath)
+    
+    for key, translated_value in json_data.items():
+        try:
+            # 1. Xử lý Paragraph thông thường: "ParagraphX"
+            if key.startswith('Paragraph') and '!' not in key:
+                para_num = int(key.replace('Paragraph', ''))
+                # Đếm lại các paragraph không rỗng để map đúng index
+                current_para_idx = 0
+                for para in doc.paragraphs:
+                    if para.text.strip():  # Chỉ đếm paragraph không rỗng
+                        current_para_idx += 1
+                        if current_para_idx == para_num:
+                            replace_text_keep_format_docx(para, translated_value)
+                            break
+            
+            # 2. Xử lý Table: "TableX!RyCz"
+            elif key.startswith('Table') and '!' in key and not key.startswith('Header_') and not key.startswith('Footer_'):
+                parts = key.split('!')
+                if len(parts) != 2:
+                    continue
+                
+                # Parse table index
+                table_part = parts[0]
+                table_idx = int(table_part.replace('Table', '')) - 1
+                
+                if table_idx >= len(doc.tables):
+                    continue
+                
+                table = doc.tables[table_idx]
+                
+                # Parse cell position: "R2C3"
+                cell_part = parts[1]
+                if not cell_part.startswith('R'):
+                    continue
+                
+                cell_parts = cell_part.replace('R', '').split('C')
+                if len(cell_parts) != 2:
+                    continue
+                
+                row_idx = int(cell_parts[0]) - 1
+                col_idx = int(cell_parts[1]) - 1
+                
+                if row_idx < len(table.rows) and col_idx < len(table.rows[row_idx].cells):
+                    cell = table.rows[row_idx].cells[col_idx]
+                    # Thay thế text trong paragraph đầu tiên của cell
+                    if cell.paragraphs:
+                        replace_text_keep_format_docx(cell.paragraphs[0], translated_value)
+            
+            # 3. Xử lý Header: "Header_SectionX!ParagraphY" hoặc "Header_SectionX!TableY!RzCw"
+            elif key.startswith('Header_Section'):
+                parts = key.split('!')
+                if len(parts) < 2:
+                    continue
+                
+                # Parse section index
+                section_part = parts[0].replace('Header_Section', '')
+                section_idx = int(section_part) - 1
+                
+                if section_idx >= len(doc.sections):
+                    continue
+                
+                header = doc.sections[section_idx].header
+                
+                # Check if it's a paragraph or table
+                if parts[1].startswith('Paragraph'):
+                    para_num = int(parts[1].replace('Paragraph', ''))
+                    para_idx = 0
+                    for para in header.paragraphs:
+                        if para.text.strip():
+                            para_idx += 1
+                            if para_idx == para_num:
+                                replace_text_keep_format_docx(para, translated_value)
+                                break
+                
+                elif parts[1].startswith('Table') and len(parts) == 3:
+                    # Header table cell
+                    table_idx = int(parts[1].replace('Table', '')) - 1
+                    if table_idx >= len(header.tables):
+                        continue
+                    
+                    table = header.tables[table_idx]
+                    cell_part = parts[2]
+                    if not cell_part.startswith('R'):
+                        continue
+                    
+                    cell_parts = cell_part.replace('R', '').split('C')
+                    if len(cell_parts) != 2:
+                        continue
+                    
+                    row_idx = int(cell_parts[0]) - 1
+                    col_idx = int(cell_parts[1]) - 1
+                    
+                    if row_idx < len(table.rows) and col_idx < len(table.rows[row_idx].cells):
+                        cell = table.rows[row_idx].cells[col_idx]
+                        if cell.paragraphs:
+                            replace_text_keep_format_docx(cell.paragraphs[0], translated_value)
+            
+            # 4. Xử lý Footer: "Footer_SectionX!ParagraphY" hoặc "Footer_SectionX!TableY!RzCw"
+            elif key.startswith('Footer_Section'):
+                parts = key.split('!')
+                if len(parts) < 2:
+                    continue
+                
+                # Parse section index
+                section_part = parts[0].replace('Footer_Section', '')
+                section_idx = int(section_part) - 1
+                
+                if section_idx >= len(doc.sections):
+                    continue
+                
+                footer = doc.sections[section_idx].footer
+                
+                # Check if it's a paragraph or table
+                if parts[1].startswith('Paragraph'):
+                    para_num = int(parts[1].replace('Paragraph', ''))
+                    para_idx = 0
+                    for para in footer.paragraphs:
+                        if para.text.strip():
+                            para_idx += 1
+                            if para_idx == para_num:
+                                replace_text_keep_format_docx(para, translated_value)
+                                break
+                
+                elif parts[1].startswith('Table') and len(parts) == 3:
+                    # Footer table cell
+                    table_idx = int(parts[1].replace('Table', '')) - 1
+                    if table_idx >= len(footer.tables):
+                        continue
+                    
+                    table = footer.tables[table_idx]
+                    cell_part = parts[2]
+                    if not cell_part.startswith('R'):
+                        continue
+                    
+                    cell_parts = cell_part.replace('R', '').split('C')
+                    if len(cell_parts) != 2:
+                        continue
+                    
+                    row_idx = int(cell_parts[0]) - 1
+                    col_idx = int(cell_parts[1]) - 1
+                    
+                    if row_idx < len(table.rows) and col_idx < len(table.rows[row_idx].cells):
+                        cell = table.rows[row_idx].cells[col_idx]
+                        if cell.paragraphs:
+                            replace_text_keep_format_docx(cell.paragraphs[0], translated_value)
+        
+        except (ValueError, IndexError, AttributeError) as e:
+            # Bỏ qua các key không hợp lệ
+            continue
+    
+    return doc
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     """Trang đăng nhập"""
@@ -338,9 +588,9 @@ def index():
 @login_required
 def extract():
     """
-    Chức năng 1: Trích xuất các cell chứa string từ file Excel hoặc PPTX
+    Chức năng 1: Trích xuất các cell chứa string từ file Excel, PPTX hoặc DOCX
     Bỏ qua các cell chứa số và công thức (bắt đầu bằng '=') trong Excel
-    Trả về file JSON với format: {"SheetName!CellCoordinate": "Content"} hoặc {"SlideX!ShapeY": "Content"}
+    Trả về file JSON với format: {"SheetName!CellCoordinate": "Content"} hoặc {"SlideX!ShapeY": "Content"} hoặc {"ParagraphX": "Content"}
     """
     # Kiểm tra xem có file được upload không
     if 'file' not in request.files:
@@ -354,7 +604,7 @@ def extract():
     
     # Kiểm tra định dạng file
     if not allowed_file(file.filename):
-        return jsonify({'error': 'Chỉ chấp nhận file .xlsx hoặc .pptx'}), 400
+        return jsonify({'error': 'Chỉ chấp nhận file .xlsx, .pptx hoặc .docx'}), 400
     
     try:
         # Lấy session folder
@@ -410,6 +660,10 @@ def extract():
         elif file_ext == 'pptx':
             # Trích xuất text từ PPTX
             extracted_data = extract_text_from_pptx(filepath)
+        
+        elif file_ext == 'docx':
+            # Trích xuất text từ DOCX
+            extracted_data = extract_text_from_docx(filepath)
         
         # Xóa file tạm
         os.remove(filepath)
@@ -510,13 +764,13 @@ def extract():
 @login_required
 def inject():
     """
-    Chức năng 2: Nạp dữ liệu từ file JSON đã dịch vào file Excel hoặc PPTX gốc
+    Chức năng 2: Nạp dữ liệu từ file JSON đã dịch vào file Excel, PPTX hoặc DOCX gốc
     Giữ nguyên định dạng, màu sắc của file gốc
     Hỗ trợ nhiều file JSON riêng lẻ hoặc file ZIP chứa nhiều file JSON
     """
     # Kiểm tra xem có file được upload không
     if 'excel_file' not in request.files:
-        return jsonify({'error': 'Cần upload file Excel hoặc PPTX'}), 400
+        return jsonify({'error': 'Cần upload file Excel, PPTX hoặc DOCX'}), 400
     
     excel_file = request.files['excel_file']
     
@@ -532,7 +786,7 @@ def inject():
     
     # Kiểm tra định dạng file
     if not allowed_file(excel_file.filename):
-        return jsonify({'error': 'File phải có định dạng .xlsx hoặc .pptx'}), 400
+        return jsonify({'error': 'File phải có định dạng .xlsx, .pptx hoặc .docx'}), 400
     
     try:
         # Lấy session folder
@@ -661,6 +915,22 @@ def inject():
             
             output_mimetype = 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
         
+        elif file_ext == 'docx':
+            # Nạp text vào DOCX
+            doc = inject_text_to_docx(excel_filepath, json_data)
+            
+            # Tạo tên file output
+            base_filename = os.path.splitext(original_excel_filename)[0]  # Tên gốc với tiếng Nhật
+            
+            output_display_name = f"{base_filename}_translated.docx"  # Tên hiển thị
+            safe_output_filename = f"output_{timestamp}.docx"  # Tên file trong filesystem
+            output_filepath = os.path.join(session_folder, safe_output_filename)
+            
+            # Lưu file DOCX đã được nạp dữ liệu
+            doc.save(output_filepath)
+            
+            output_mimetype = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        
         # Xóa file Excel tạm
         os.remove(excel_filepath)
         
@@ -675,7 +945,7 @@ def inject():
             mimetype=output_mimetype
         )
         
-        default_ascii_name = 'download.pptx' if file_ext == 'pptx' else 'download.xlsx'
+        default_ascii_name = 'download.docx' if file_ext == 'docx' else ('download.pptx' if file_ext == 'pptx' else 'download.xlsx')
         response = set_download_headers(response, output_display_name, default_ascii_name)
         
         # Xóa file output sau khi gửi
