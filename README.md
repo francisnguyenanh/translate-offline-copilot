@@ -1,15 +1,14 @@
-# Excel, PowerPoint, Word & PDF Translation Manager
+# Excel, PowerPoint & Word Translation Manager
 
-Ứng dụng web Flask để quản lý việc trích xuất và nạp bản dịch cho file Excel (.xlsx), PowerPoint (.pptx), Word (.docx) và PDF (.pdf).
+Ứng dụng web Flask để quản lý việc trích xuất và nạp bản dịch cho file Excel (.xlsx), PowerPoint (.pptx) và Word (.docx).
 
 ## Tính năng
 
 ### 1. Trích xuất (Extract)
-- Upload file Excel, PowerPoint, Word hoặc PDF gốc
+- Upload file Excel, PowerPoint hoặc Word gốc
 - **Excel**: Tự động trích xuất tất cả các cell chứa text (bỏ qua số và công thức)
 - **PowerPoint**: Trích xuất text từ shapes, text boxes, tables, và cả **grouped shapes (shapes lồng nhau)**
 - **Word**: Trích xuất text từ paragraphs, tables, headers và footers
-- **PDF**: Tự động chuyển đổi sang Word rồi trích xuất (giữ được phần lớn format, màu sắc, bảng)
 - Tạo file JSON với format:
   - Excel: `{"SheetName!CellCoordinate": "Content"}`
   - PowerPoint: 
@@ -27,7 +26,6 @@
 - Upload file gốc và file JSON đã dịch (hoặc file ZIP chứa nhiều file JSON)
 - Tự động nạp bản dịch vào đúng vị trí
 - Giữ nguyên định dạng, màu sắc ban đầu
-- **PDF**: Sẽ được chuyển sang Word, nạp bản dịch, và trả về file Word đã dịch (không thể nạp lại vào PDF)
 - Tải về file `output_translated.xlsx`, `output_translated.pptx` hoặc `output_translated.docx`
 
 ## Cài đặt
@@ -65,7 +63,7 @@ translate-offline-copilot/
 
 ### Trích xuất nội dung cần dịch
 
-1. Ở "Bước 1": Upload file Excel (.xlsx), PowerPoint (.pptx), Word (.docx) hoặc PDF (.pdf) cần dịch
+1. Ở "Bước 1": Upload file Excel (.xlsx), PowerPoint (.pptx) hoặc Word (.docx) cần dịch
 2. Ở "Bước 2": Nhấn "Trích xuất và Tải về JSON"
 3. File ZIP chứa nhiều file JSON sẽ được tải về
 4. Giải nén ZIP và dịch từng file JSON (có thể dùng AI như ChatGPT, Copilot)
@@ -73,15 +71,14 @@ translate-offline-copilot/
 
 ### Nạp bản dịch vào file gốc
 
-1. Ở "Bước 1": Upload file gốc (Excel, PowerPoint, Word hoặc PDF)
+1. Ở "Bước 1": Upload file gốc (Excel, PowerPoint hoặc Word)
 2. Ở "Bước 3": Upload các file JSON đã dịch (hoặc file ZIP chứa các file đã dịch)
 3. Nhấn "Nạp bản dịch và Tải về"
 4. File đã dịch sẽ được tải về với nội dung đã được cập nhật
-5. **Lưu ý**: Nếu upload file PDF, bạn sẽ nhận lại file Word (.docx) đã dịch
 
 ## Lưu ý
 
-- Hỗ trợ định dạng file: `.xlsx` (Excel 2007+), `.pptx` (PowerPoint 2007+), `.docx` (Word 2007+) và `.pdf`
+- Hỗ trợ định dạng file: `.xlsx` (Excel 2007+), `.pptx` (PowerPoint 2007+) và `.docx` (Word 2007+)
 - Hỗ trợ encoding UTF-8 cho tiếng Việt và tiếng Nhật
 - Giữ nguyên định dạng, màu sắc, font chữ của file gốc
 - **Excel**: Chỉ trích xuất các cell chứa text, bỏ qua số và công thức (bắt đầu với '=')
@@ -93,11 +90,6 @@ translate-offline-copilot/
   - Trích xuất text từ paragraphs, tables, headers và footers
   - Giữ nguyên định dạng (font, size, bold, italic, color...)
   - Hỗ trợ nhiều section với headers/footers khác nhau
-- **PDF**:
-  - Tự động chuyển đổi sang Word bằng thư viện `pdf2docx` (miễn phí)
-  - Giữ được phần lớn format, màu sắc, bảng (không hoàn hảo 100% với PDF phức tạp)
-  - File đầu ra sẽ là Word (.docx), không thể nạp lại vào PDF
-  - Nên kiểm tra lại file Word sau khi chuyển đổi
 - File JSON được tách thành nhiều file nhỏ (400 cặp/file) để dễ dàng xử lý với AI
 
 ## Yêu cầu hệ thống
@@ -107,7 +99,6 @@ translate-offline-copilot/
 - openpyxl 3.1.2
 - python-pptx 0.6.23
 - python-docx 1.1.0
-- pdf2docx 0.5.8
 
 ## Tác giả
 , openpyxl, và python-pptx

@@ -188,7 +188,7 @@
                         </div>
                         
                         <div id="mainFileInfo" class="file-info" style="display: none;">
-                            <i class="fas fa-file-excel text-success"></i>
+                            <i id="mainFileIcon" class="fas fa-file text-secondary"></i>
                             <span id="mainFileName" class="small"></span>
                             <button type="button" class="btn btn-sm btn-outline-danger float-end" id="mainFileRemove">
                                 <i class="fas fa-times"></i>
@@ -408,6 +408,20 @@ Output yêu cầu:
                 mainFileName.textContent = file.name;
                 mainFileInfo.style.display = 'block';
                 uploadedExcelFilename = file.name;
+                
+                // Thay đổi icon phù hợp với loại file
+                const fileIcon = document.getElementById('mainFileIcon');
+                const fileName = file.name.toLowerCase();
+                
+                if (fileName.endsWith('.xlsx')) {
+                    fileIcon.className = 'fas fa-file-excel text-success';
+                } else if (fileName.endsWith('.pptx')) {
+                    fileIcon.className = 'fas fa-file-powerpoint text-danger';
+                } else if (fileName.endsWith('.docx')) {
+                    fileIcon.className = 'fas fa-file-word text-primary';
+                } else {
+                    fileIcon.className = 'fas fa-file text-secondary';
+                }
                 
                 // Kích hoạt cả 2 nút Extract và Inject
                 extractBtn.disabled = false;

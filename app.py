@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Ứng dụng Flask quản lý trích xuất và nạp bản dịch cho file Excel, PowerPoint, Word và PDF
+Ứng dụng Flask quản lý trích xuất và nạp bản dịch cho file Excel, PowerPoint và Word
 """
 
 import os
@@ -15,7 +15,6 @@ from werkzeug.utils import secure_filename
 from openpyxl import load_workbook
 from pptx import Presentation
 from docx import Document
-from pdf2docx import Converter
 from functools import wraps
 
 # Khởi tạo ứng dụng Flask
@@ -26,7 +25,7 @@ app.config['SECRET_KEY'] = os.urandom(24)  # Secret key cho session
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)  # Session timeout 8h
 
 # Các định dạng file được phép
-ALLOWED_EXTENSIONS = {'xlsx', 'pptx', 'docx', 'pdf'}
+ALLOWED_EXTENSIONS = {'xlsx', 'pptx', 'docx'}
 
 # Đọc password từ file
 PASSWORD_FILE = 'password.txt'
@@ -542,27 +541,6 @@ def inject_text_to_docx(filepath, json_data):
     
     return doc
 
-def convert_pdf_to_docx(pdf_filepath, docx_filepath):
-    """
-    Chuyển đổi file PDF sang DOCX sử dụng pdf2docx
-    Giữ được phần lớn format, màu sắc, bảng (không hoàn hảo 100%)
-    
-    Args:
-        pdf_filepath: Đường dẫn file PDF nguồn
-        docx_filepath: Đường dẫn file DOCX đích
-    
-    Returns:
-        True nếu thành công, False nếu thất bại
-    """
-    try:
-        cv = Converter(pdf_filepath)
-        cv.convert(docx_filepath, start=0, end=None)
-        cv.close()
-        return True
-    except Exception as e:
-        print(f"Lỗi khi chuyển đổi PDF sang DOCX: {e}")
-        return False
-
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     """Trang đăng nhập"""
@@ -610,9 +588,8 @@ def index():
 @login_required
 def extract():
     """
-    Chức năng 1: Trích xuất các cell chứa string từ file Excel, PPTX, DOCX hoặc PDF
+    Chức năng 1: Trích xuất các cell chứa string từ file Excel, PPTX hoặc DOCX
     Bỏ qua các cell chứa số và công thức (bắt đầu bằng '=') trong Excel
-    PDF sẽ được chuyển đổi sang DOCX trước khi trích xuất
     Trả về file JSON với format: {"SheetName!CellCoordinate": "Content"} hoặc {"SlideX!ShapeY": "Content"} hoặc {"ParagraphX": "Content"}
     """
     # Kiểm tra xem có file được upload không
@@ -627,7 +604,7 @@ def extract():
     
     # Kiểm tra định dạng file
     if not allowed_file(file.filename):
-        return jsonify({'error': 'Chỉ chấp nhận file .xlsx, .pptx, .docx hoặc .pdf'}), 400
+        return jsonify({'error': 'Chỉ chấp nhận file .xlsx, .pptx hoặc .docx'}), 400
     
     try:
         # Lấy session folder
@@ -687,27 +664,6 @@ def extract():
         elif file_ext == 'docx':
             # Trích xuất text từ DOCX
             extracted_data = extract_text_from_docx(filepath)
-        
-        elif file_ext == 'pdf':
-            # Chuyển đổi PDF sang DOCX tạm thời
-            temp_docx_filename = f"temp_converted_{timestamp}.docx"
-            temp_docx_filepath = os.path.join(session_folder, temp_docx_filename)
-            
-            # Thực hiện chuyển đổi
-            convert_success = convert_pdf_to_docx(filepath, temp_docx_filepath)
-            
-            if not convert_success or not os.path.exists(temp_docx_filepath):
-                # Xóa file PDF tạm
-                if os.path.exists(filepath):
-                    os.remove(filepath)
-                return jsonify({'error': 'Không thể chuyển đổi file PDF. Vui lòng thử file khác hoặc chuyển đổi thủ công sang Word.'}), 400
-            
-            # Trích xuất text từ file DOCX đã chuyển đổi
-            extracted_data = extract_text_from_docx(temp_docx_filepath)
-            
-            # Xóa file DOCX tạm
-            if os.path.exists(temp_docx_filepath):
-                os.remove(temp_docx_filepath)
         
         # Xóa file tạm
         os.remove(filepath)
@@ -808,14 +764,13 @@ def extract():
 @login_required
 def inject():
     """
-    Chức năng 2: Nạp dữ liệu từ file JSON đã dịch vào file Excel, PPTX, DOCX hoặc PDF gốc
+    Chức năng 2: Nạp dữ liệu từ file JSON đã dịch vào file Excel, PPTX hoặc DOCX gốc
     Giữ nguyên định dạng, màu sắc của file gốc
-    PDF sẽ được chuyển sang DOCX, nạp bản dịch, và trả về file DOCX (không thể nạp lại vào PDF)
     Hỗ trợ nhiều file JSON riêng lẻ hoặc file ZIP chứa nhiều file JSON
     """
     # Kiểm tra xem có file được upload không
     if 'excel_file' not in request.files:
-        return jsonify({'error': 'Cần upload file Excel, PPTX, DOCX hoặc PDF'}), 400
+        return jsonify({'error': 'Cần upload file Excel, PPTX hoặc DOCX'}), 400
     
     excel_file = request.files['excel_file']
     
@@ -831,7 +786,7 @@ def inject():
     
     # Kiểm tra định dạng file
     if not allowed_file(excel_file.filename):
-        return jsonify({'error': 'File phải có định dạng .xlsx, .pptx, .docx hoặc .pdf'}), 400
+        return jsonify({'error': 'File phải có định dạng .xlsx, .pptx hoặc .docx'}), 400
     
     try:
         # Lấy session folder
@@ -976,43 +931,6 @@ def inject():
             
             output_mimetype = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         
-        elif file_ext == 'pdf':
-            # Chuyển đổi PDF sang DOCX tạm thời
-            temp_docx_filename = f"temp_converted_{timestamp}.docx"
-            temp_docx_filepath = os.path.join(session_folder, temp_docx_filename)
-            
-            # Thực hiện chuyển đổi
-            convert_success = convert_pdf_to_docx(excel_filepath, temp_docx_filepath)
-            
-            if not convert_success or not os.path.exists(temp_docx_filepath):
-                # Xóa file PDF tạm
-                if os.path.exists(excel_filepath):
-                    os.remove(excel_filepath)
-                # Xóa file ZIP tạm
-                for temp_file in temp_files:
-                    if os.path.exists(temp_file):
-                        os.remove(temp_file)
-                return jsonify({'error': 'Không thể chuyển đổi file PDF. Vui lòng thử file khác hoặc chuyển đổi thủ công sang Word.'}), 400
-            
-            # Nạp text vào DOCX đã chuyển đổi
-            doc = inject_text_to_docx(temp_docx_filepath, json_data)
-            
-            # Tạo tên file output (đổi extension sang .docx)
-            base_filename = os.path.splitext(original_excel_filename)[0]  # Tên gốc với tiếng Nhật, bỏ .pdf
-            
-            output_display_name = f"{base_filename}_translated.docx"  # Tên hiển thị (PDF -> DOCX)
-            safe_output_filename = f"output_{timestamp}.docx"  # Tên file trong filesystem
-            output_filepath = os.path.join(session_folder, safe_output_filename)
-            
-            # Lưu file DOCX đã được nạp dữ liệu
-            doc.save(output_filepath)
-            
-            # Xóa file DOCX tạm
-            if os.path.exists(temp_docx_filepath):
-                os.remove(temp_docx_filepath)
-            
-            output_mimetype = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-        
         # Xóa file Excel tạm
         os.remove(excel_filepath)
         
@@ -1027,7 +945,7 @@ def inject():
             mimetype=output_mimetype
         )
         
-        default_ascii_name = 'download.docx' if file_ext in ['docx', 'pdf'] else ('download.pptx' if file_ext == 'pptx' else 'download.xlsx')
+        default_ascii_name = 'download.docx' if file_ext == 'docx' else ('download.pptx' if file_ext == 'pptx' else 'download.xlsx')
         response = set_download_headers(response, output_display_name, default_ascii_name)
         
         # Xóa file output sau khi gửi
