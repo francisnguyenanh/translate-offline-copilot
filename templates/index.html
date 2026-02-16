@@ -496,12 +496,9 @@ Output yêu cầu:
                     // Lấy tên file từ header Content-Disposition
                     const disposition = response.headers.get('Content-Disposition');
                     let filename = `to_translate_${Date.now()}.zip`;
-                    
-                    if (disposition && disposition.includes('filename=')) {
-                        const filenameMatch = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
-                        if (filenameMatch && filenameMatch[1]) {
-                            filename = filenameMatch[1].replace(/['"]/g, '');
-                        }
+                    const parsedFilename = parseDownloadFilename(disposition);
+                    if (parsedFilename) {
+                        filename = parsedFilename;
                     }
                     
                     // Tải file ZIP
@@ -659,12 +656,9 @@ Output yêu cầu:
                     // Lấy tên file từ header Content-Disposition
                     const disposition = response.headers.get('Content-Disposition');
                     let filename = `output_translated_${Date.now()}.xlsx`;
-                    
-                    if (disposition && disposition.includes('filename=')) {
-                        const filenameMatch = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
-                        if (filenameMatch && filenameMatch[1]) {
-                            filename = filenameMatch[1].replace(/['"]/g, '');
-                        }
+                    const parsedFilename = parseDownloadFilename(disposition);
+                    if (parsedFilename) {
+                        filename = parsedFilename;
                     }
                     
                     // Tải file với tên đúng extension
@@ -697,6 +691,28 @@ Output yêu cầu:
         });
         
         // ==================== HÀM TRỢ GIÚP ====================
+
+        function parseDownloadFilename(contentDisposition) {
+            if (!contentDisposition) return null;
+
+            // Ưu tiên RFC 5987: filename*=UTF-8''...
+            const filenameStarMatch = contentDisposition.match(/filename\*\s*=\s*UTF-8''([^;\n]+)/i);
+            if (filenameStarMatch && filenameStarMatch[1]) {
+                try {
+                    return decodeURIComponent(filenameStarMatch[1].trim());
+                } catch (e) {
+                    // fallback xuống filename thường
+                }
+            }
+
+            // Fallback: filename="..." hoặc filename=...
+            const filenameMatch = contentDisposition.match(/filename\s*=\s*(("([^"]+)")|([^;\n]+))/i);
+            if (filenameMatch) {
+                return (filenameMatch[3] || filenameMatch[4] || '').trim();
+            }
+
+            return null;
+        }
         
         // Hàm xóa tất cả file trong uploads
         async function clearUploads(skipConfirm = false) {
