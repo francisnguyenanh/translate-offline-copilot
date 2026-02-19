@@ -749,71 +749,110 @@ def extract():
             
             json_files.append(json_filepath)
         
+        # Đọc nội dung từng file JSON để trả về cho frontend
+        files_data = []
+        for idx, json_filepath in enumerate(json_files):
+            with open(json_filepath, 'r', encoding='utf-8') as f:
+                files_data.append({
+                    'name': json_display_names[idx],
+                    'content': f.read()
+                })
+        
         # Tạo file ZIP chứa folder và các file JSON
         zip_display_name = f"{base_filename}_json_to_translate.zip"  # Tên hiển thị
-        
         safe_zip_filename = f"{safe_base_filename}_json_{timestamp}.zip"  # Tên file trong filesystem
         zip_filepath = os.path.join(session_folder, safe_zip_filename)
         
-        # Dùng ZIP_STORED để không nén file JSON (giữ nguyên text có thể đọc được)
+        # Dùng ZIP_STORED để không nén file JSON
         with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_STORED) as zipf:
-            for idx, json_filepath in enumerate(json_files):
-                # Thêm file vào ZIP với đường dẫn folder/filename (dùng tên tiếng Nhật)
+            for idx, json_filepath_item in enumerate(json_files):
                 arcname = os.path.join(folder_name, json_display_names[idx])
-                zipf.write(json_filepath, arcname)
+                zipf.write(json_filepath_item, arcname)
         
-        # Tạo response với send_file, không dùng as_attachment mặc định của Flask để tránh conflict
-        response = send_file(
-            zip_filepath,
-            mimetype='application/zip'
-        )
+        # Lưu thông tin ZIP vào session để download sau
+        session['extract_zip'] = {
+            'path': zip_filepath,
+            'display_name': zip_display_name,
+            'input_path': filepath,
+            'json_files': json_files,
+            'temp_dir': temp_dir
+        }
         
-        response = set_download_headers(response, zip_display_name, 'download.zip')
-        
-        # Xóa tất cả file tạm sau khi gửi response
-        @response.call_on_close
-        def cleanup():
-            import time
-            import gc
-            
-            # Force garbage collection để giải phóng file handles
-            gc.collect()
-            time.sleep(0.1)  # Delay nhỏ để đảm bảo file được giải phóng
-            
-            # Xóa file ZIP
-            try:
-                if os.path.exists(zip_filepath):
-                    os.remove(zip_filepath)
-            except Exception as e:
-                print(f"Warning: Không thể xóa ZIP file: {e}")
-            
-            # Xóa file input tạm
-            try:
-                if os.path.exists(filepath):
-                    os.remove(filepath)
-            except Exception as e:
-                print(f"Warning: Không thể xóa input file: {e}")
-            
-            # Xóa các file JSON tạm
-            for json_filepath in json_files:
-                try:
-                    if os.path.exists(json_filepath):
-                        os.remove(json_filepath)
-                except Exception as e:
-                    print(f"Warning: Không thể xóa JSON file: {e}")
-            
-            # Xóa thư mục tạm
-            try:
-                if os.path.exists(temp_dir):
-                    os.rmdir(temp_dir)
-            except Exception as e:
-                print(f"Warning: Không thể xóa temp directory: {e}")
-        
-        return response
+        # Trả về JSON response với danh sách file để frontend hiển thị
+        return jsonify({
+            'success': True,
+            'total_files': num_files,
+            'total_items': total_items,
+            'files': files_data,
+            'zip_display_name': zip_display_name
+        })
         
     except Exception as e:
         # Xử lý lỗi
         return jsonify({'error': f'Lỗi khi xử lý file: {str(e)}'}), 500
+
+@app.route('/download-zip', methods=['GET'])
+@login_required
+def download_zip():
+    """
+    Serve file ZIP đã được tạo từ /extract.
+    Xóa tất cả file tạm sau khi gửi xong.
+    """
+    zip_info = session.get('extract_zip')
+    if not zip_info:
+        return jsonify({'error': 'Không tìm thấy file ZIP. Vui lòng trích xuất lại.'}), 404
+    
+    zip_filepath = zip_info.get('path')
+    zip_display_name = zip_info.get('display_name', 'download.zip')
+    
+    if not zip_filepath or not os.path.exists(zip_filepath):
+        return jsonify({'error': 'File ZIP không còn tồn tại. Vui lòng trích xuất lại.'}), 404
+    
+    # Xóa thông tin ZIP trong session
+    session.pop('extract_zip', None)
+    
+    # Trả về file ZIP
+    response = send_file(zip_filepath, mimetype='application/zip')
+    response = set_download_headers(response, zip_display_name, 'download.zip')
+    
+    # Xóa tất cả file tạm sau khi gửi
+    input_path = zip_info.get('input_path')
+    json_files = zip_info.get('json_files', [])
+    temp_dir = zip_info.get('temp_dir')
+    
+    @response.call_on_close
+    def cleanup():
+        import time
+        import gc
+        gc.collect()
+        time.sleep(0.1)
+        
+        try:
+            if zip_filepath and os.path.exists(zip_filepath):
+                os.remove(zip_filepath)
+        except Exception as e:
+            print(f"Warning: Không thể xóa ZIP: {e}")
+        
+        try:
+            if input_path and os.path.exists(input_path):
+                os.remove(input_path)
+        except Exception as e:
+            print(f"Warning: Không thể xóa input file: {e}")
+        
+        for jf in json_files:
+            try:
+                if os.path.exists(jf):
+                    os.remove(jf)
+            except Exception as e:
+                print(f"Warning: Không thể xóa JSON file: {e}")
+        
+        try:
+            if temp_dir and os.path.exists(temp_dir):
+                os.rmdir(temp_dir)
+        except Exception as e:
+            print(f"Warning: Không thể xóa temp dir: {e}")
+    
+    return response
 
 @app.route('/inject', methods=['POST'])
 @login_required
