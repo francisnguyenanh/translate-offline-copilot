@@ -318,20 +318,67 @@ Output yêu cầu:
                     </div>
                     
                     <form id="injectForm" enctype="multipart/form-data">
-                        <div class="upload-area compact" id="injectJsonUploadArea">
-                            <i class="fas fa-file-code"></i>
-                            <p class="mb-2 small"><strong>Kéo thả JSON/ZIP</strong></p>
-                            <input type="file" class="form-control" id="injectJsonFile" name="json_files" accept=".json,.zip" multiple style="display: none;">
-                            <label for="injectJsonFile" class="btn btn-custom btn-sm">
-                                <i class="fas fa-folder-open"></i> Chọn file
-                            </label>
-                        </div>
+                        <!-- Tab chọn giữa Upload file và Paste JSON -->
+                        <ul class="nav nav-tabs nav-fill mb-2" id="injectTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="upload-tab" data-bs-toggle="tab" data-bs-target="#uploadTab" type="button" role="tab">
+                                    <i class="fas fa-folder-open"></i> Upload File
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="paste-tab" data-bs-toggle="tab" data-bs-target="#pasteTab" type="button" role="tab">
+                                    <i class="fas fa-paste"></i> Paste JSON
+                                </button>
+                            </li>
+                        </ul>
                         
-                        <div id="injectJsonFileInfo" class="file-info" style="display: none;">
-                            <div id="injectJsonFileList"></div>
-                            <button type="button" class="btn btn-sm btn-outline-danger float-end mt-2" id="injectJsonFileRemove">
-                                <i class="fas fa-times"></i> Xóa
-                            </button>
+                        <div class="tab-content" id="injectTabContent">
+                            <!-- Tab Upload File -->
+                            <div class="tab-pane fade show active" id="uploadTab" role="tabpanel">
+                                <div class="upload-area compact" id="injectJsonUploadArea">
+                                    <i class="fas fa-file-code"></i>
+                                    <p class="mb-2 small"><strong>Kéo thả JSON/ZIP</strong></p>
+                                    <input type="file" class="form-control" id="injectJsonFile" name="json_files" accept=".json,.zip" multiple style="display: none;">
+                                    <label for="injectJsonFile" class="btn btn-custom btn-sm">
+                                        <i class="fas fa-folder-open"></i> Chọn file
+                                    </label>
+                                </div>
+                                
+                                <div id="injectJsonFileInfo" class="file-info" style="display: none;">
+                                    <div id="injectJsonFileList"></div>
+                                    <button type="button" class="btn btn-sm btn-outline-danger float-end mt-2" id="injectJsonFileRemove">
+                                        <i class="fas fa-times"></i> Xóa tất cả
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Tab Paste JSON -->
+                            <div class="tab-pane fade" id="pasteTab" role="tabpanel">
+                                <div class="mb-2">
+                                    <label class="form-label small mb-1"><strong>Paste nội dung JSON:</strong></label>
+                                    <textarea class="form-control" id="pasteJsonTextarea" rows="5" placeholder='Paste nội dung JSON vào đây, ví dụ:
+{
+  "Sheet1!A1": "Translated text 1",
+  "Sheet1!A2": "Translated text 2"
+}' style="font-family: monospace; font-size: 0.85rem;"></textarea>
+                                </div>
+                                <div class="text-center mb-2">
+                                    <button type="button" class="btn btn-outline-primary btn-sm" id="addPastedJsonBtn">
+                                        <i class="fas fa-plus-circle"></i> Thêm JSON này
+                                    </button>
+                                </div>
+                                
+                                <!-- Danh sách JSON đã paste -->
+                                <div id="pastedJsonList" style="display: none;">
+                                    <div class="file-info">
+                                        <label class="form-label small mb-1"><strong>Đã thêm:</strong></label>
+                                        <div id="pastedJsonItems"></div>
+                                        <button type="button" class="btn btn-sm btn-outline-danger mt-2" id="clearPastedJsonBtn">
+                                            <i class="fas fa-trash"></i> Xóa tất cả
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         
                         <div class="text-center mt-2">
@@ -360,8 +407,13 @@ Output yêu cầu:
                         <div class="collapse mt-2" id="step3Guide">
                             <div class="p-2" style="background: #f8f9fa; border-radius: 5px;">
                                 <ul class="small mb-0" style="padding-left: 20px;">
-                                    <li>Upload file JSON đã dịch (hoặc ZIP)</li>
-                                    <li>Hỗ trợ nhiều file JSON cùng lúc</li>
+                                    <li><strong>2 cách nạp JSON:</strong></li>
+                                    <li style="list-style: none; padding-left: 15px;">
+                                        • <strong>Upload file:</strong> Chọn file JSON/ZIP (hỗ trợ nhiều file cùng lúc)
+                                    </li>
+                                    <li style="list-style: none; padding-left: 15px;">
+                                        • <strong>Paste JSON:</strong> Paste trực tiếp nội dung JSON (có thể paste nhiều lần)
+                                    </li>
                                     <li>Tự động gộp và nạp vào file gốc (Excel, PowerPoint <b>hoặc Word</b>)</li>
                                     <li>Giữ nguyên định dạng, màu sắc, bảng, header/footer cho Word</li>
                                     <li>Tải về file output_translated</li>
@@ -529,8 +581,20 @@ Output yêu cầu:
                     
                     showAlert(extractAlert, 'success', 'Trích xuất thành công! File ZIP đang được tải về. Giải nén file và dịch các file JSON bên trong, sau đó dùng chức năng Inject.');
                 } else {
-                    const error = await response.json();
-                    showAlert(extractAlert, 'danger', error.error || 'Có lỗi xảy ra!');
+                    // Kiểm tra xem response có phải JSON không
+                    const contentType = response.headers.get('content-type');
+                    if (contentType && contentType.includes('application/json')) {
+                        const error = await response.json();
+                        showAlert(extractAlert, 'danger', error.error || 'Có lỗi xảy ra!');
+                    } else {
+                        // Nếu không phải JSON (có thể là HTML từ trang login hoặc lỗi server)
+                        const text = await response.text();
+                        if (text.includes('<html') || text.includes('<!DOCTYPE')) {
+                            showAlert(extractAlert, 'danger', 'Phiên đăng nhập đã hết hạn. Vui lòng <a href="/login">đăng nhập lại</a>.');
+                        } else {
+                            showAlert(extractAlert, 'danger', 'Lỗi: ' + (text || 'Không xác định'));
+                        }
+                    }
                 }
             } catch (error) {
                 extractLoading.style.display = 'none';
@@ -547,6 +611,94 @@ Output yêu cầu:
         const injectJsonFileRemove = document.getElementById('injectJsonFileRemove');
         const injectAlert = document.getElementById('injectAlert');
         const injectLoading = document.getElementById('injectLoading');
+        
+        // Paste JSON functionality
+        const pasteJsonTextarea = document.getElementById('pasteJsonTextarea');
+        const addPastedJsonBtn = document.getElementById('addPastedJsonBtn');
+        const pastedJsonList = document.getElementById('pastedJsonList');
+        const pastedJsonItems = document.getElementById('pastedJsonItems');
+        const clearPastedJsonBtn = document.getElementById('clearPastedJsonBtn');
+        
+        // Lưu danh sách JSON đã paste
+        let pastedJsonData = [];
+        
+        // Xử lý khi click "Thêm JSON này"
+        addPastedJsonBtn.addEventListener('click', function() {
+            const jsonText = pasteJsonTextarea.value.trim();
+            
+            if (!jsonText) {
+                showAlert(injectAlert, 'warning', 'Vui lòng paste nội dung JSON vào ô bên trên!');
+                return;
+            }
+            
+            // Validate JSON
+            try {
+                const parsedJson = JSON.parse(jsonText);
+                
+                // Kiểm tra xem có phải object không
+                if (typeof parsedJson !== 'object' || parsedJson === null) {
+                    showAlert(injectAlert, 'warning', 'JSON phải là một object (không phải array hoặc giá trị đơn)!');
+                    return;
+                }
+                
+                // Thêm vào danh sách
+                pastedJsonData.push(parsedJson);
+                
+                // Hiển thị trong danh sách
+                updatePastedJsonList();
+                
+                // Xóa textarea
+                pasteJsonTextarea.value = '';
+                
+                // Hiển thị thông báo
+                showAlert(injectAlert, 'success', `Đã thêm JSON #${pastedJsonData.length} với ${Object.keys(parsedJson).length} cặp key-value.`);
+                
+            } catch (e) {
+                showAlert(injectAlert, 'danger', 'JSON không hợp lệ: ' + e.message);
+            }
+        });
+        
+        // Cập nhật hiển thị danh sách JSON đã paste
+        function updatePastedJsonList() {
+            if (pastedJsonData.length === 0) {
+                pastedJsonList.style.display = 'none';
+                return;
+            }
+            
+            pastedJsonList.style.display = 'block';
+            pastedJsonItems.innerHTML = '';
+            
+            pastedJsonData.forEach((jsonObj, index) => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'mb-1 d-flex justify-content-between align-items-center';
+                itemDiv.innerHTML = `
+                    <div>
+                        <i class="fas fa-clipboard text-success"></i> 
+                        <small><strong>JSON #${index + 1}</strong> - ${Object.keys(jsonObj).length} keys</small>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="removePastedJson(${index})">
+                        <i class="fas fa-times"></i>
+                    </button>
+                `;
+                pastedJsonItems.appendChild(itemDiv);
+            });
+        }
+        
+        // Xóa một JSON đã paste
+        window.removePastedJson = function(index) {
+            pastedJsonData.splice(index, 1);
+            updatePastedJsonList();
+            showAlert(injectAlert, 'info', 'Đã xóa JSON.');
+        };
+        
+        // Xóa tất cả JSON đã paste
+        clearPastedJsonBtn.addEventListener('click', function() {
+            if (confirm('Xóa tất cả JSON đã paste?')) {
+                pastedJsonData = [];
+                updatePastedJsonList();
+                showAlert(injectAlert, 'info', 'Đã xóa tất cả JSON đã paste.');
+            }
+        });
         
         // Xử lý khi chọn file JSON (nhiều file)
         injectJsonFile.addEventListener('change', function(e) {
@@ -638,9 +790,9 @@ Output yêu cầu:
                 return;
             }
             
-            // Kiểm tra xem có file JSON được chọn không
-            if (injectJsonFile.files.length === 0) {
-                showAlert(injectAlert, 'warning', 'Vui lòng chọn file JSON đã dịch!');
+            // Kiểm tra xem có file JSON HOẶC pasted JSON không
+            if (injectJsonFile.files.length === 0 && pastedJsonData.length === 0) {
+                showAlert(injectAlert, 'warning', 'Vui lòng chọn file JSON đã dịch hoặc paste JSON!');
                 return;
             }
             
@@ -656,6 +808,11 @@ Output yêu cầu:
             Array.from(injectJsonFile.files).forEach(file => {
                 formData.append('json_files', file);
             });
+            
+            // Thêm tất cả JSON đã paste (gửi dưới dạng JSON string)
+            if (pastedJsonData.length > 0) {
+                formData.append('pasted_json_data', JSON.stringify(pastedJsonData));
+            }
             
             try {
                 // Gửi request
@@ -693,11 +850,28 @@ Output yêu cầu:
                     injectJsonFile.value = '';
                     injectJsonFileInfo.style.display = 'none';
                     
+                    // Reset pasted JSON
+                    pastedJsonData = [];
+                    updatePastedJsonList();
+                    pasteJsonTextarea.value = '';
+                    
                     // Tự động xóa tất cả file trong thư mục uploads sau khi thành công
                     await clearUploads(true);
                 } else {
-                    const error = await response.json();
-                    showAlert(injectAlert, 'danger', error.error || 'Có lỗi xảy ra!');
+                    // Kiểm tra xem response có phải JSON không
+                    const contentType = response.headers.get('content-type');
+                    if (contentType && contentType.includes('application/json')) {
+                        const error = await response.json();
+                        showAlert(injectAlert, 'danger', error.error || 'Có lỗi xảy ra!');
+                    } else {
+                        // Nếu không phải JSON (có thể là HTML từ trang login hoặc lỗi server)
+                        const text = await response.text();
+                        if (text.includes('<html') || text.includes('<!DOCTYPE')) {
+                            showAlert(injectAlert, 'danger', 'Phiên đăng nhập đã hết hạn. Vui lòng <a href="/login">đăng nhập lại</a>.');
+                        } else {
+                            showAlert(injectAlert, 'danger', 'Lỗi: ' + (text || 'Không xác định'));
+                        }
+                    }
                 }
             } catch (error) {
                 injectLoading.style.display = 'none';
@@ -741,7 +915,23 @@ Output yêu cầu:
                     method: 'POST'
                 });
                 
-                const result = await response.json();
+                // Kiểm tra xem response có phải JSON không
+                const contentType = response.headers.get('content-type');
+                let result;
+                
+                if (contentType && contentType.includes('application/json')) {
+                    result = await response.json();
+                } else {
+                    const text = await response.text();
+                    if (text.includes('<html') || text.includes('<!DOCTYPE')) {
+                        if (!skipConfirm) {
+                            alert('❌ Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+                            window.location.href = '/login';
+                        }
+                        return;
+                    }
+                    result = { error: text };
+                }
                 
                 if (response.ok && result.success) {
                     if (!skipConfirm) {
