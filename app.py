@@ -19,7 +19,7 @@ from functools import wraps
 
 # Khởi tạo ứng dụng Flask
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # Giới hạn 50MB
+app.config['MAX_CONTENT_LENGTH'] = 60 * 1024 * 1024  # Giới hạn 50MB
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['SECRET_KEY'] = os.urandom(24)  # Secret key cho session
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)  # Session timeout 8h
@@ -98,6 +98,9 @@ def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'logged_in' not in session:
+            # Nếu là request AJAX/JSON, trả về JSON thay vì redirect
+            if request.path.startswith('/api') or request.is_json or request.path in ['/extract', '/inject', '/clear-uploads']:
+                return jsonify({'error': 'Chưa đăng nhập hoặc phiên đã hết hạn'}), 401
             return redirect(url_for('login'))
         return f(*args, **kwargs)
     return decorated_function
@@ -116,6 +119,40 @@ def set_download_headers(response, display_name, default_ascii_name):
         f"attachment; filename=\"{ascii_filename}\"; filename*=UTF-8''{encoded_filename}"
     )
     return response
+
+# Error Handlers
+@app.errorhandler(400)
+def bad_request(error):
+    """Xử lý lỗi 400 Bad Request"""
+    if request.path.startswith('/api') or request.is_json or request.path in ['/extract', '/inject', '/clear-uploads']:
+        return jsonify({'error': str(error) or 'Yêu cầu không hợp lệ'}), 400
+    return str(error), 400
+
+@app.errorhandler(401)
+def unauthorized(error):
+    """Xử lý lỗi 401 Unauthorized"""
+    if request.path.startswith('/api') or request.is_json or request.path in ['/extract', '/inject', '/clear-uploads']:
+        return jsonify({'error': 'Chưa đăng nhập hoặc phiên đã hết hạn'}), 401
+    return redirect(url_for('login'))
+
+@app.errorhandler(404)
+def not_found(error):
+    """Xử lý lỗi 404 Not Found"""
+    if request.path.startswith('/api') or request.is_json:
+        return jsonify({'error': 'Không tìm thấy tài nguyên'}), 404
+    return str(error), 404
+
+@app.errorhandler(413)
+def request_entity_too_large(error):
+    """Xử lý lỗi 413 Request Entity Too Large"""
+    return jsonify({'error': 'File quá lớn. Giới hạn 50MB'}), 413
+
+@app.errorhandler(500)
+def internal_server_error(error):
+    """Xử lý lỗi 500 Internal Server Error"""
+    if request.path.startswith('/api') or request.is_json or request.path in ['/extract', '/inject', '/clear-uploads']:
+        return jsonify({'error': f'Lỗi máy chủ: {str(error)}'}), 500
+    return str(error), 500
 
 def extract_text_from_shape(shape, shape_path, extracted_data):
     """
@@ -665,9 +702,6 @@ def extract():
             # Trích xuất text từ DOCX
             extracted_data = extract_text_from_docx(filepath)
         
-        # Xóa file tạm
-        os.remove(filepath)
-        
         # Tách dữ liệu thành nhiều file, mỗi file 400 cặp key-value
         CHUNK_SIZE = 400
         data_items = list(extracted_data.items())
@@ -715,50 +749,110 @@ def extract():
             
             json_files.append(json_filepath)
         
+        # Đọc nội dung từng file JSON để trả về cho frontend
+        files_data = []
+        for idx, json_filepath in enumerate(json_files):
+            with open(json_filepath, 'r', encoding='utf-8') as f:
+                files_data.append({
+                    'name': json_display_names[idx],
+                    'content': f.read()
+                })
+        
         # Tạo file ZIP chứa folder và các file JSON
         zip_display_name = f"{base_filename}_json_to_translate.zip"  # Tên hiển thị
-        
         safe_zip_filename = f"{safe_base_filename}_json_{timestamp}.zip"  # Tên file trong filesystem
         zip_filepath = os.path.join(session_folder, safe_zip_filename)
         
-        # Dùng ZIP_STORED để không nén file JSON (giữ nguyên text có thể đọc được)
+        # Dùng ZIP_STORED để không nén file JSON
         with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_STORED) as zipf:
-            for idx, json_filepath in enumerate(json_files):
-                # Thêm file vào ZIP với đường dẫn folder/filename (dùng tên tiếng Nhật)
+            for idx, json_filepath_item in enumerate(json_files):
                 arcname = os.path.join(folder_name, json_display_names[idx])
-                zipf.write(json_filepath, arcname)
+                zipf.write(json_filepath_item, arcname)
         
-        # Xóa các file JSON tạm và thư mục tạm
-        for json_filepath in json_files:
-            if os.path.exists(json_filepath):
-                os.remove(json_filepath)
-        if os.path.exists(temp_dir):
-            os.rmdir(temp_dir)
+        # Lưu thông tin ZIP vào session để download sau
+        session['extract_zip'] = {
+            'path': zip_filepath,
+            'display_name': zip_display_name,
+            'input_path': filepath,
+            'json_files': json_files,
+            'temp_dir': temp_dir
+        }
         
-        # Trả về file ZIP và xóa sau khi gửi (dùng tên hiển thị với tiếng Nhật)
-        
-        # Tạo response với send_file, không dùng as_attachment mặc định của Flask để tránh conflict
-        response = send_file(
-            zip_filepath,
-            mimetype='application/zip'
-        )
-        
-        response = set_download_headers(response, zip_display_name, 'download.zip')
-        
-        # Xóa file JSON sau khi gửi (sử dụng after_request để đảm bảo file đã được gửi)
-        @response.call_on_close
-        def cleanup():
-            try:
-                if os.path.exists(zip_filepath):
-                    os.remove(zip_filepath)
-            except Exception:
-                pass
-        
-        return response
+        # Trả về JSON response với danh sách file để frontend hiển thị
+        return jsonify({
+            'success': True,
+            'total_files': num_files,
+            'total_items': total_items,
+            'files': files_data,
+            'zip_display_name': zip_display_name
+        })
         
     except Exception as e:
         # Xử lý lỗi
         return jsonify({'error': f'Lỗi khi xử lý file: {str(e)}'}), 500
+
+@app.route('/download-zip', methods=['GET'])
+@login_required
+def download_zip():
+    """
+    Serve file ZIP đã được tạo từ /extract.
+    Xóa tất cả file tạm sau khi gửi xong.
+    """
+    zip_info = session.get('extract_zip')
+    if not zip_info:
+        return jsonify({'error': 'Không tìm thấy file ZIP. Vui lòng trích xuất lại.'}), 404
+    
+    zip_filepath = zip_info.get('path')
+    zip_display_name = zip_info.get('display_name', 'download.zip')
+    
+    if not zip_filepath or not os.path.exists(zip_filepath):
+        return jsonify({'error': 'File ZIP không còn tồn tại. Vui lòng trích xuất lại.'}), 404
+    
+    # Xóa thông tin ZIP trong session
+    session.pop('extract_zip', None)
+    
+    # Trả về file ZIP
+    response = send_file(zip_filepath, mimetype='application/zip')
+    response = set_download_headers(response, zip_display_name, 'download.zip')
+    
+    # Xóa tất cả file tạm sau khi gửi
+    input_path = zip_info.get('input_path')
+    json_files = zip_info.get('json_files', [])
+    temp_dir = zip_info.get('temp_dir')
+    
+    @response.call_on_close
+    def cleanup():
+        import time
+        import gc
+        gc.collect()
+        time.sleep(0.1)
+        
+        try:
+            if zip_filepath and os.path.exists(zip_filepath):
+                os.remove(zip_filepath)
+        except Exception as e:
+            print(f"Warning: Không thể xóa ZIP: {e}")
+        
+        try:
+            if input_path and os.path.exists(input_path):
+                os.remove(input_path)
+        except Exception as e:
+            print(f"Warning: Không thể xóa input file: {e}")
+        
+        for jf in json_files:
+            try:
+                if os.path.exists(jf):
+                    os.remove(jf)
+            except Exception as e:
+                print(f"Warning: Không thể xóa JSON file: {e}")
+        
+        try:
+            if temp_dir and os.path.exists(temp_dir):
+                os.rmdir(temp_dir)
+        except Exception as e:
+            print(f"Warning: Không thể xóa temp dir: {e}")
+    
+    return response
 
 @app.route('/inject', methods=['POST'])
 @login_required
@@ -774,15 +868,22 @@ def inject():
     
     excel_file = request.files['excel_file']
     
-    # Kiểm tra xem có file JSON được upload không
-    if 'json_files' not in request.files:
-        return jsonify({'error': 'Cần upload ít nhất 1 file JSON hoặc ZIP'}), 400
+    # Lấy pasted JSON data nếu có
+    pasted_json_data = request.form.get('pasted_json_data', None)
     
-    json_files = request.files.getlist('json_files')
+    # Kiểm tra xem có file JSON được upload hoặc có pasted JSON không
+    json_files = request.files.getlist('json_files') if 'json_files' in request.files else []
     
-    # Kiểm tra xem các file có được chọn không
-    if excel_file.filename == '' or len(json_files) == 0:
-        return jsonify({'error': 'Cần chọn đủ file và JSON'}), 400
+    # Kiểm tra xem có ít nhất một nguồn JSON
+    has_json_files = len(json_files) > 0 and any(f.filename != '' for f in json_files)
+    has_pasted_json = pasted_json_data is not None and pasted_json_data.strip() != ''
+    
+    if not has_json_files and not has_pasted_json:
+        return jsonify({'error': 'Cần upload ít nhất 1 file JSON/ZIP hoặc paste JSON'}), 400
+    
+    # Kiểm tra xem file excel có được chọn không
+    if excel_file.filename == '':
+        return jsonify({'error': 'Cần chọn file Excel/PowerPoint/Word'}), 400
     
     # Kiểm tra định dạng file
     if not allowed_file(excel_file.filename):
@@ -859,6 +960,24 @@ def inject():
                 except json.JSONDecodeError as e:
                     return jsonify({'error': f'File JSON "{json_file.filename}" không hợp lệ: {str(e)}'}), 400
         
+        # Xử lý pasted JSON data
+        if pasted_json_data:
+            try:
+                pasted_data_list = json.loads(pasted_json_data)
+                
+                # pasted_data_list là danh sách các JSON objects
+                if isinstance(pasted_data_list, list):
+                    for idx, pasted_obj in enumerate(pasted_data_list):
+                        if isinstance(pasted_obj, dict):
+                            json_data.update(pasted_obj)
+                        else:
+                            return jsonify({'error': f'Pasted JSON #{idx + 1} không phải là object'}), 400
+                else:
+                    return jsonify({'error': 'Pasted JSON data phải là danh sách các objects'}), 400
+                    
+            except json.JSONDecodeError as e:
+                return jsonify({'error': f'Pasted JSON không hợp lệ: {str(e)}'}), 400
+        
         
         # Xác định loại file và nạp dữ liệu (dùng tên file gốc)
         file_ext = original_excel_filename.rsplit('.', 1)[1].lower()
@@ -896,6 +1015,7 @@ def inject():
             # Lưu file Excel đã được nạp dữ liệu
             workbook.save(output_filepath)
             workbook.close()
+            del workbook  # Giải phóng memory
             
             output_mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         
@@ -912,6 +1032,7 @@ def inject():
             
             # Lưu file PPTX đã được nạp dữ liệu
             prs.save(output_filepath)
+            del prs  # Giải phóng memory
             
             output_mimetype = 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
         
@@ -928,18 +1049,11 @@ def inject():
             
             # Lưu file DOCX đã được nạp dữ liệu
             doc.save(output_filepath)
+            del doc  # Giải phóng memory
             
             output_mimetype = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         
-        # Xóa file Excel tạm
-        os.remove(excel_filepath)
-        
-        # Xóa tất cả file ZIP tạm
-        for temp_file in temp_files:
-            if os.path.exists(temp_file):
-                os.remove(temp_file)
-        
-        # Trả về file đã được nạp dữ liệu và xóa tất cả file tạm sau khi gửi (dùng tên hiển thị)
+        # Trả về file đã được nạp dữ liệu (dùng tên hiển thị)
         response = send_file(
             output_filepath,
             mimetype=output_mimetype
@@ -948,14 +1062,37 @@ def inject():
         default_ascii_name = 'download.docx' if file_ext == 'docx' else ('download.pptx' if file_ext == 'pptx' else 'download.xlsx')
         response = set_download_headers(response, output_display_name, default_ascii_name)
         
-        # Xóa file output sau khi gửi
+        # Xóa tất cả file tạm sau khi gửi response
         @response.call_on_close
         def cleanup():
+            import time
+            import gc
+            
+            # Force garbage collection để giải phóng file handles
+            gc.collect()
+            time.sleep(0.1)  # Delay nhỏ để đảm bảo file được giải phóng
+            
+            # Xóa file output
             try:
                 if os.path.exists(output_filepath):
                     os.remove(output_filepath)
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"Warning: Không thể xóa output file: {e}")
+            
+            # Xóa file Excel/PPTX/DOCX tạm
+            try:
+                if os.path.exists(excel_filepath):
+                    os.remove(excel_filepath)
+            except Exception as e:
+                print(f"Warning: Không thể xóa file tạm: {e}")
+            
+            # Xóa tất cả file ZIP tạm
+            for temp_file in temp_files:
+                try:
+                    if os.path.exists(temp_file):
+                        os.remove(temp_file)
+                except Exception as e:
+                    print(f"Warning: Không thể xóa file ZIP tạm: {e}")
         
         return response
         

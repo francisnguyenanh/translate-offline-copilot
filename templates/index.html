@@ -148,6 +148,39 @@
             width: 2rem;
             height: 2rem;
         }
+        
+        .json-file-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 10px;
+            background: #f0f7ff;
+            border: 1px solid #cce0ff;
+            border-radius: 6px;
+            margin-bottom: 6px;
+            gap: 8px;
+        }
+        
+        .json-file-row .file-name {
+            font-size: 0.78rem;
+            color: #333;
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .json-file-row .btn-copy-json {
+            flex-shrink: 0;
+            font-size: 0.75rem;
+            padding: 3px 10px;
+        }
+        
+        .btn-copy-json.copied {
+            background-color: #28a745 !important;
+            border-color: #28a745 !important;
+            color: white !important;
+        }
     </style>
 </head>
 <body>
@@ -231,7 +264,7 @@
                     <form id="extractForm" enctype="multipart/form-data">
                         <div class="text-center mt-3">
                             <button type="submit" class="btn btn-custom btn-sm" id="extractBtn" disabled>
-                                <i class="fas fa-download"></i> Trích xuất JSON
+                                <i class="fas fa-cog"></i> Trích xuất JSON
                             </button>
                         </div>
                         
@@ -245,13 +278,26 @@
                         <div id="extractAlert"></div>
                     </form>
                     
-                    <!-- Prompt AI - Chỉ hiển thị nút Copy -->
+                    <!-- Kết quả sau khi trích xuất -->
+                    <div id="extractResult" style="display: none;">
+                        <hr class="my-2">
+                        
+                        <!-- Btn download ZIP -->
+                        <div class="text-center mb-2">
+                            <a id="downloadZipBtn" href="/download-zip" class="btn btn-success btn-sm">
+                                <i class="fas fa-file-archive"></i> Tải ZIP
+                            </a>
+                            <span id="extractSummary" class="text-muted small ms-2"></span>
+                        </div>
+                        
+                        <!-- Danh sách file JSON -->
+                        <div id="jsonFileList"></div>
+                    </div>
+                    
+                    <!-- Prompt AI -->
                     <div class="mt-3 text-center">
-                        <button class="btn btn-outline-primary btn-sm" onclick="copyPrompt()" title="Copy prompt AI để dịch">
-                            <i class="fas fa-robot"></i> Copy Prompt AI
-                        </button>
                         <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="collapse" data-bs-target="#promptDetail">
-                            <i class="fas fa-eye"></i> Xem
+                            <i class="fas fa-eye"></i> Xem Prompt AI
                         </button>
                     </div>
                     
@@ -293,14 +339,14 @@ Output yêu cầu:
                         <div class="collapse mt-2" id="step2Guide">
                             <div class="p-2" style="background: #f8f9fa; border-radius: 5px;">
                                 <ul class="small mb-0" style="padding-left: 20px;">
-                                    <li>Click "Trích xuất JSON" → tải về ZIP</li>
-                                    <li>Giải nén ZIP → có nhiều file JSON nhỏ</li>
+                                    <li>Click "Trích xuất JSON" để xử lý</li>
+                                    <li>Sau khi xong: hiển thị từng file JSON</li>
+                                    <li>Click <strong>Copy</strong> để copy prompt + JSON → paste vào AI</li>
+                                    <li>Click <strong>Tải ZIP</strong> để tải tất cả file</li>
                                     <li>Excel: Bỏ qua số và công thức</li>
                                     <li>PowerPoint: Trích xuất text từ shapes</li>
                                     <li>Word: Trích xuất text từ paragraphs, bảng, header/footer</li>
                                     <li>Mỗi file JSON chứa 400 cặp key-value</li>
-                                    <li>Dùng AI (ChatGPT/Copilot) để dịch</li>
-                                    <li>Copy prompt AI bằng nút bên trên</li>
                                 </ul>
                             </div>
                         </div>
@@ -318,20 +364,67 @@ Output yêu cầu:
                     </div>
                     
                     <form id="injectForm" enctype="multipart/form-data">
-                        <div class="upload-area compact" id="injectJsonUploadArea">
-                            <i class="fas fa-file-code"></i>
-                            <p class="mb-2 small"><strong>Kéo thả JSON/ZIP</strong></p>
-                            <input type="file" class="form-control" id="injectJsonFile" name="json_files" accept=".json,.zip" multiple style="display: none;">
-                            <label for="injectJsonFile" class="btn btn-custom btn-sm">
-                                <i class="fas fa-folder-open"></i> Chọn file
-                            </label>
-                        </div>
+                        <!-- Tab chọn giữa Upload file và Paste JSON -->
+                        <ul class="nav nav-tabs nav-fill mb-2" id="injectTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="upload-tab" data-bs-toggle="tab" data-bs-target="#uploadTab" type="button" role="tab">
+                                    <i class="fas fa-folder-open"></i> Upload File
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="paste-tab" data-bs-toggle="tab" data-bs-target="#pasteTab" type="button" role="tab">
+                                    <i class="fas fa-paste"></i> Paste JSON
+                                </button>
+                            </li>
+                        </ul>
                         
-                        <div id="injectJsonFileInfo" class="file-info" style="display: none;">
-                            <div id="injectJsonFileList"></div>
-                            <button type="button" class="btn btn-sm btn-outline-danger float-end mt-2" id="injectJsonFileRemove">
-                                <i class="fas fa-times"></i> Xóa
-                            </button>
+                        <div class="tab-content" id="injectTabContent">
+                            <!-- Tab Upload File -->
+                            <div class="tab-pane fade" id="uploadTab" role="tabpanel">
+                                <div class="upload-area compact" id="injectJsonUploadArea">
+                                    <i class="fas fa-file-code"></i>
+                                    <p class="mb-2 small"><strong>Kéo thả JSON/ZIP</strong></p>
+                                    <input type="file" class="form-control" id="injectJsonFile" name="json_files" accept=".json,.zip" multiple style="display: none;">
+                                    <label for="injectJsonFile" class="btn btn-custom btn-sm">
+                                        <i class="fas fa-folder-open"></i> Chọn file
+                                    </label>
+                                </div>
+                                
+                                <div id="injectJsonFileInfo" class="file-info" style="display: none;">
+                                    <div id="injectJsonFileList"></div>
+                                    <button type="button" class="btn btn-sm btn-outline-danger float-end mt-2" id="injectJsonFileRemove">
+                                        <i class="fas fa-times"></i> Xóa tất cả
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Tab Paste JSON -->
+                            <div class="tab-pane fade show active" id="pasteTab" role="tabpanel">
+                                <div class="mb-2">
+                                    <label class="form-label small mb-1"><strong>Paste nội dung JSON:</strong></label>
+                                    <textarea class="form-control" id="pasteJsonTextarea" rows="5" placeholder='Paste nội dung JSON vào đây, ví dụ:
+{
+  "Sheet1!A1": "Translated text 1",
+  "Sheet1!A2": "Translated text 2"
+}' style="font-family: monospace; font-size: 0.85rem;"></textarea>
+                                </div>
+                                <div class="text-center mb-2">
+                                    <button type="button" class="btn btn-outline-primary btn-sm" id="addPastedJsonBtn">
+                                        <i class="fas fa-plus-circle"></i> Thêm JSON này
+                                    </button>
+                                </div>
+                                
+                                <!-- Danh sách JSON đã paste -->
+                                <div id="pastedJsonList" style="display: none;">
+                                    <div class="file-info">
+                                        <label class="form-label small mb-1"><strong>Đã thêm:</strong></label>
+                                        <div id="pastedJsonItems"></div>
+                                        <button type="button" class="btn btn-sm btn-outline-danger mt-2" id="clearPastedJsonBtn">
+                                            <i class="fas fa-trash"></i> Xóa tất cả
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         
                         <div class="text-center mt-2">
@@ -360,8 +453,13 @@ Output yêu cầu:
                         <div class="collapse mt-2" id="step3Guide">
                             <div class="p-2" style="background: #f8f9fa; border-radius: 5px;">
                                 <ul class="small mb-0" style="padding-left: 20px;">
-                                    <li>Upload file JSON đã dịch (hoặc ZIP)</li>
-                                    <li>Hỗ trợ nhiều file JSON cùng lúc</li>
+                                    <li><strong>2 cách nạp JSON:</strong></li>
+                                    <li style="list-style: none; padding-left: 15px;">
+                                        • <strong>Upload file:</strong> Chọn file JSON/ZIP (hỗ trợ nhiều file cùng lúc)
+                                    </li>
+                                    <li style="list-style: none; padding-left: 15px;">
+                                        • <strong>Paste JSON:</strong> Paste trực tiếp nội dung JSON (có thể paste nhiều lần)
+                                    </li>
                                     <li>Tự động gộp và nạp vào file gốc (Excel, PowerPoint <b>hoặc Word</b>)</li>
                                     <li>Giữ nguyên định dạng, màu sắc, bảng, header/footer cho Word</li>
                                     <li>Tải về file output_translated</li>
@@ -478,6 +576,9 @@ Output yêu cầu:
         const extractForm = document.getElementById('extractForm');
         const extractAlert = document.getElementById('extractAlert');
         const extractLoading = document.getElementById('extractLoading');
+        const extractResult = document.getElementById('extractResult');
+        const extractSummary = document.getElementById('extractSummary');
+        const jsonFileList = document.getElementById('jsonFileList');
         
         // Xử lý submit form Extract
         extractForm.addEventListener('submit', async function(e) {
@@ -488,6 +589,10 @@ Output yêu cầu:
                 showAlert(extractAlert, 'warning', 'Vui lòng upload file (Excel hoặc PowerPoint) ở Bước 1 trước!');
                 return;
             }
+            
+            // Ẩn kết quả cũ
+            extractResult.style.display = 'none';
+            jsonFileList.innerHTML = '';
             
             // Hiển thị loading
             extractLoading.style.display = 'block';
@@ -507,36 +612,104 @@ Output yêu cầu:
                 // Ẩn loading
                 extractLoading.style.display = 'none';
                 
-                if (response.ok) {
-                    // Lấy tên file từ header Content-Disposition
-                    const disposition = response.headers.get('Content-Disposition');
-                    let filename = `to_translate_${Date.now()}.zip`;
-                    const parsedFilename = parseDownloadFilename(disposition);
-                    if (parsedFilename) {
-                        filename = parsedFilename;
+                // Kiểm tra content-type
+                const contentType = response.headers.get('content-type');
+                
+                if (response.ok && contentType && contentType.includes('application/json')) {
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        // Hiển thị tóm tắt
+                        extractSummary.textContent = `${data.total_files} file · ${data.total_items} keys`;
+                        
+                        // Render từng hàng file JSON
+                        renderJsonFileRows(data.files);
+                        
+                        // Hiện khu vực kết quả
+                        extractResult.style.display = 'block';
+                        
+                        showAlert(extractAlert, 'success', `Trích xuất thành công! ${data.total_files} file JSON, ${data.total_items} cặp key-value. Click <strong>Copy</strong> để copy prompt + JSON vào AI, hoặc <strong>Tải ZIP</strong> để tải tất cả.`);
+                    } else {
+                        showAlert(extractAlert, 'danger', data.error || 'Có lỗi xảy ra!');
                     }
-                    
-                    // Tải file ZIP
-                    const blob = await response.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = filename;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    window.URL.revokeObjectURL(url);
-                    
-                    showAlert(extractAlert, 'success', 'Trích xuất thành công! File ZIP đang được tải về. Giải nén file và dịch các file JSON bên trong, sau đó dùng chức năng Inject.');
-                } else {
-                    const error = await response.json();
-                    showAlert(extractAlert, 'danger', error.error || 'Có lỗi xảy ra!');
+                } else if (!response.ok) {
+                    if (contentType && contentType.includes('application/json')) {
+                        const error = await response.json();
+                        showAlert(extractAlert, 'danger', error.error || 'Có lỗi xảy ra!');
+                    } else {
+                        const text = await response.text();
+                        if (text.includes('<html') || text.includes('<!DOCTYPE')) {
+                            showAlert(extractAlert, 'danger', 'Phiên đăng nhập đã hết hạn. Vui lòng <a href="/login">đăng nhập lại</a>.');
+                        } else {
+                            showAlert(extractAlert, 'danger', 'Lỗi: ' + (text || 'Không xác định'));
+                        }
+                    }
                 }
             } catch (error) {
                 extractLoading.style.display = 'none';
                 showAlert(extractAlert, 'danger', 'Lỗi kết nối: ' + error.message);
             }
         });
+        
+        // Render danh sách file JSON thành từng hàng
+        function renderJsonFileRows(files) {
+            jsonFileList.innerHTML = '';
+            const promptText = document.getElementById('aiPrompt').textContent;
+            
+            files.forEach(function(file, idx) {
+                const row = document.createElement('div');
+                row.className = 'json-file-row';
+                row.innerHTML = `
+                    <span class="file-name" title="${file.name}">
+                        <i class="fas fa-file-code text-primary"></i>
+                        ${file.name}
+                    </span>
+                    <button type="button"
+                        class="btn btn-outline-primary btn-sm btn-copy-json"
+                        data-idx="${idx}"
+                        title="Copy prompt AI + nội dung JSON này">
+                        <i class="fas fa-copy"></i> Copy
+                    </button>
+                `;
+                
+                // Lưu nội dung vào data attribute (dùng dataset)
+                row.querySelector('.btn-copy-json').addEventListener('click', function() {
+                    const btnEl = this;
+                    const textToCopy = promptText + '\n\n' + file.content;
+                    
+                    navigator.clipboard.writeText(textToCopy).then(function() {
+                        btnEl.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                        btnEl.classList.add('copied');
+                        setTimeout(function() {
+                            btnEl.innerHTML = '<i class="fas fa-copy"></i> Copy';
+                            btnEl.classList.remove('copied');
+                        }, 2000);
+                    }).catch(function() {
+                        // Fallback cho browser không hỗ trợ clipboard API
+                        const textarea = document.createElement('textarea');
+                        textarea.value = textToCopy;
+                        textarea.style.position = 'fixed';
+                        textarea.style.opacity = '0';
+                        document.body.appendChild(textarea);
+                        textarea.select();
+                        try {
+                            document.execCommand('copy');
+                            btnEl.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                            btnEl.classList.add('copied');
+                            setTimeout(function() {
+                                btnEl.innerHTML = '<i class="fas fa-copy"></i> Copy';
+                                btnEl.classList.remove('copied');
+                            }, 2000);
+                        } catch(err) {
+                            alert('Không thể copy tự động. Vui lòng copy thủ công.');
+                        }
+                        document.body.removeChild(textarea);
+                    });
+                });
+                
+                jsonFileList.appendChild(row);
+            });
+        }
         
         // ==================== CHỨC NĂNG INJECT ====================
         
@@ -547,6 +720,94 @@ Output yêu cầu:
         const injectJsonFileRemove = document.getElementById('injectJsonFileRemove');
         const injectAlert = document.getElementById('injectAlert');
         const injectLoading = document.getElementById('injectLoading');
+        
+        // Paste JSON functionality
+        const pasteJsonTextarea = document.getElementById('pasteJsonTextarea');
+        const addPastedJsonBtn = document.getElementById('addPastedJsonBtn');
+        const pastedJsonList = document.getElementById('pastedJsonList');
+        const pastedJsonItems = document.getElementById('pastedJsonItems');
+        const clearPastedJsonBtn = document.getElementById('clearPastedJsonBtn');
+        
+        // Lưu danh sách JSON đã paste
+        let pastedJsonData = [];
+        
+        // Xử lý khi click "Thêm JSON này"
+        addPastedJsonBtn.addEventListener('click', function() {
+            const jsonText = pasteJsonTextarea.value.trim();
+            
+            if (!jsonText) {
+                showAlert(injectAlert, 'warning', 'Vui lòng paste nội dung JSON vào ô bên trên!');
+                return;
+            }
+            
+            // Validate JSON
+            try {
+                const parsedJson = JSON.parse(jsonText);
+                
+                // Kiểm tra xem có phải object không
+                if (typeof parsedJson !== 'object' || parsedJson === null) {
+                    showAlert(injectAlert, 'warning', 'JSON phải là một object (không phải array hoặc giá trị đơn)!');
+                    return;
+                }
+                
+                // Thêm vào danh sách
+                pastedJsonData.push(parsedJson);
+                
+                // Hiển thị trong danh sách
+                updatePastedJsonList();
+                
+                // Xóa textarea
+                pasteJsonTextarea.value = '';
+                
+                // Hiển thị thông báo
+                showAlert(injectAlert, 'success', `Đã thêm JSON #${pastedJsonData.length} với ${Object.keys(parsedJson).length} cặp key-value.`);
+                
+            } catch (e) {
+                showAlert(injectAlert, 'danger', 'JSON không hợp lệ: ' + e.message);
+            }
+        });
+        
+        // Cập nhật hiển thị danh sách JSON đã paste
+        function updatePastedJsonList() {
+            if (pastedJsonData.length === 0) {
+                pastedJsonList.style.display = 'none';
+                return;
+            }
+            
+            pastedJsonList.style.display = 'block';
+            pastedJsonItems.innerHTML = '';
+            
+            pastedJsonData.forEach((jsonObj, index) => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'mb-1 d-flex justify-content-between align-items-center';
+                itemDiv.innerHTML = `
+                    <div>
+                        <i class="fas fa-clipboard text-success"></i> 
+                        <small><strong>JSON #${index + 1}</strong> - ${Object.keys(jsonObj).length} keys</small>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="removePastedJson(${index})">
+                        <i class="fas fa-times"></i>
+                    </button>
+                `;
+                pastedJsonItems.appendChild(itemDiv);
+            });
+        }
+        
+        // Xóa một JSON đã paste
+        window.removePastedJson = function(index) {
+            pastedJsonData.splice(index, 1);
+            updatePastedJsonList();
+            showAlert(injectAlert, 'info', 'Đã xóa JSON.');
+        };
+        
+        // Xóa tất cả JSON đã paste
+        clearPastedJsonBtn.addEventListener('click', function() {
+            if (confirm('Xóa tất cả JSON đã paste?')) {
+                pastedJsonData = [];
+                updatePastedJsonList();
+                showAlert(injectAlert, 'info', 'Đã xóa tất cả JSON đã paste.');
+            }
+        });
         
         // Xử lý khi chọn file JSON (nhiều file)
         injectJsonFile.addEventListener('change', function(e) {
@@ -638,9 +899,9 @@ Output yêu cầu:
                 return;
             }
             
-            // Kiểm tra xem có file JSON được chọn không
-            if (injectJsonFile.files.length === 0) {
-                showAlert(injectAlert, 'warning', 'Vui lòng chọn file JSON đã dịch!');
+            // Kiểm tra xem có file JSON HOẶC pasted JSON không
+            if (injectJsonFile.files.length === 0 && pastedJsonData.length === 0) {
+                showAlert(injectAlert, 'warning', 'Vui lòng chọn file JSON đã dịch hoặc paste JSON!');
                 return;
             }
             
@@ -656,6 +917,11 @@ Output yêu cầu:
             Array.from(injectJsonFile.files).forEach(file => {
                 formData.append('json_files', file);
             });
+            
+            // Thêm tất cả JSON đã paste (gửi dưới dạng JSON string)
+            if (pastedJsonData.length > 0) {
+                formData.append('pasted_json_data', JSON.stringify(pastedJsonData));
+            }
             
             try {
                 // Gửi request
@@ -693,11 +959,28 @@ Output yêu cầu:
                     injectJsonFile.value = '';
                     injectJsonFileInfo.style.display = 'none';
                     
+                    // Reset pasted JSON
+                    pastedJsonData = [];
+                    updatePastedJsonList();
+                    pasteJsonTextarea.value = '';
+                    
                     // Tự động xóa tất cả file trong thư mục uploads sau khi thành công
                     await clearUploads(true);
                 } else {
-                    const error = await response.json();
-                    showAlert(injectAlert, 'danger', error.error || 'Có lỗi xảy ra!');
+                    // Kiểm tra xem response có phải JSON không
+                    const contentType = response.headers.get('content-type');
+                    if (contentType && contentType.includes('application/json')) {
+                        const error = await response.json();
+                        showAlert(injectAlert, 'danger', error.error || 'Có lỗi xảy ra!');
+                    } else {
+                        // Nếu không phải JSON (có thể là HTML từ trang login hoặc lỗi server)
+                        const text = await response.text();
+                        if (text.includes('<html') || text.includes('<!DOCTYPE')) {
+                            showAlert(injectAlert, 'danger', 'Phiên đăng nhập đã hết hạn. Vui lòng <a href="/login">đăng nhập lại</a>.');
+                        } else {
+                            showAlert(injectAlert, 'danger', 'Lỗi: ' + (text || 'Không xác định'));
+                        }
+                    }
                 }
             } catch (error) {
                 injectLoading.style.display = 'none';
@@ -741,7 +1024,23 @@ Output yêu cầu:
                     method: 'POST'
                 });
                 
-                const result = await response.json();
+                // Kiểm tra xem response có phải JSON không
+                const contentType = response.headers.get('content-type');
+                let result;
+                
+                if (contentType && contentType.includes('application/json')) {
+                    result = await response.json();
+                } else {
+                    const text = await response.text();
+                    if (text.includes('<html') || text.includes('<!DOCTYPE')) {
+                        if (!skipConfirm) {
+                            alert('❌ Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+                            window.location.href = '/login';
+                        }
+                        return;
+                    }
+                    result = { error: text };
+                }
                 
                 if (response.ok && result.success) {
                     if (!skipConfirm) {
@@ -770,37 +1069,7 @@ Output yêu cầu:
         }
         
         // Hàm copy prompt AI
-        function copyPrompt() {
-            const promptText = document.getElementById('aiPrompt').textContent;
-            
-            // Tạo textarea tạm để copy
-            const textarea = document.createElement('textarea');
-            textarea.value = promptText;
-            textarea.style.position = 'fixed';
-            textarea.style.opacity = '0';
-            document.body.appendChild(textarea);
-            textarea.select();
-            
-            try {
-                document.execCommand('copy');
-                // Hiển thị thông báo đã copy
-                const btn = event.target.closest('button');
-                const originalHTML = btn.innerHTML;
-                btn.innerHTML = '<i class="fas fa-check"></i> Đã copy!';
-                btn.classList.remove('btn-outline-primary');
-                btn.classList.add('btn-success');
-                
-                setTimeout(() => {
-                    btn.innerHTML = originalHTML;
-                    btn.classList.remove('btn-success');
-                    btn.classList.add('btn-outline-primary');
-                }, 2000);
-            } catch (err) {
-                alert('Không thể copy. Vui lòng copy thủ công.');
-            }
-            
-            document.body.removeChild(textarea);
-        }
+        // copyPrompt() đã được thay thế bởi renderJsonFileRows() inline copy
         
         function showAlert(element, type, message) {
             element.innerHTML = `
