@@ -181,6 +181,58 @@
             border-color: #28a745 !important;
             color: white !important;
         }
+
+        /* ===== DARK MODE ===== */
+        body.dark-mode {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        }
+        body.dark-mode .function-card {
+            background: #1e2a3a;
+            color: #e0e0e0;
+        }
+        body.dark-mode .function-card h3 { color: #90b4f7; }
+        body.dark-mode .upload-area {
+            background: #253244;
+            border-color: #4a6fa5;
+        }
+        body.dark-mode .upload-area:hover { background: #2c3e54; }
+        body.dark-mode .file-info { background: #253244; color: #ccc; }
+        body.dark-mode .json-file-row {
+            background: #1e3049;
+            border-color: #2d5080;
+            color: #ccc;
+        }
+        body.dark-mode .collapse-toggle {
+            background: #253244 !important;
+            color: #ccc;
+        }
+        body.dark-mode .collapse-toggle .text-info { color: #7ec8e3 !important; }
+        body.dark-mode .collapse > div {
+            background: #253244 !important;
+            color: #ccc;
+        }
+        body.dark-mode .form-control,
+        body.dark-mode .form-select {
+            background: #253244;
+            color: #e0e0e0;
+            border-color: #4a6fa5;
+        }
+        body.dark-mode .nav-tabs .nav-link { color: #90b4f7; }
+        body.dark-mode .nav-tabs .nav-link.active {
+            background: #1e3049;
+            color: #fff;
+            border-color: #4a6fa5;
+        }
+        body.dark-mode .text-muted { color: #8a9bb0 !important; }
+        body.dark-mode footer { color: #8a9bb0 !important; }
+        body.dark-mode .alert-info { background: #1b3a52; color: #7ec8e3; border-color: #2d6a8a; }
+        body.dark-mode #promptDetail > div {
+            background: #1b2d3e !important;
+            border-color: #2d5a7a !important;
+        }
+        body.dark-mode #aiPrompt { color: #b0c8e0; }
+        body.dark-mode .validation-item { background: #253244; border-color: #3a5070; }
+        body.dark-mode .tm-badge { background: #1e3049; color: #7ec8e3; }
     </style>
 </head>
 <body>
@@ -189,13 +241,29 @@
         <div class="header">
             <h1><i class="fas fa-language"></i> Tomo Translation</h1>
             <p>Công cụ quản lý trích xuất và nạp bản dịch cho file Excel (.xlsx), PowerPoint (.pptx) và Word (.docx)</p>
-            <div class="mt-3">
+            <div class="mt-3 d-flex flex-wrap justify-content-center gap-2">
                 <button class="btn btn-outline-light btn-sm" onclick="clearUploads()" title="Xóa file trong phiên của bạn">
                     <i class="fas fa-trash-alt"></i> Xóa file của tôi
                 </button>
-                <a href="/logout" class="btn btn-outline-light btn-sm ms-2" title="Đăng xuất">
+                <a href="/logout" class="btn btn-outline-light btn-sm" title="Đăng xuất">
                     <i class="fas fa-sign-out-alt"></i> Đăng xuất
                 </a>
+                <button class="btn btn-outline-light btn-sm" id="darkModeToggle" onclick="toggleDarkMode()" title="Chuyển chế độ tối/sáng">
+                    <i class="fas fa-moon" id="darkModeIcon"></i> <span id="darkModeLabel">Dark Mode</span>
+                </button>
+                <div class="dropdown">
+                    <button class="btn btn-outline-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        <i class="fas fa-database"></i> Translation Memory
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li><h6 class="dropdown-header" id="tmLangHeader">TM: ...</h6></li>
+                        <li><a class="dropdown-item" href="#" onclick="exportTM()"><i class="fas fa-download text-success"></i> Xuất TM (JSON)</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="document.getElementById('tmImportFile').click()"><i class="fas fa-upload text-primary"></i> Nhập TM (JSON)</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item text-danger" href="#" onclick="clearTM()"><i class="fas fa-trash"></i> Xóa TM</a></li>
+                    </ul>
+                </div>
+                <input type="file" id="tmImportFile" accept=".json" style="display:none" onchange="importTM(this)">
             </div>
         </div>
         
@@ -242,6 +310,28 @@
                         <div class="text-muted" style="font-size: 0.72rem; margin-top: 4px;">
                             <i class="fas fa-info-circle"></i> Danh sách ngôn ngữ chỉnh sửa trong <code>languages.json</code>
                         </div>
+                    </div>
+
+                    <!-- Glossary Management -->
+                    <div class="mt-3">
+                        <div class="d-flex align-items-center justify-content-between mb-1">
+                            <small><i class="fas fa-book text-warning"></i> <strong>Glossary:</strong></small>
+                            <div class="d-flex gap-1">
+                                <button class="btn btn-outline-warning btn-sm py-0 px-2" style="font-size:0.72rem" onclick="document.getElementById('glossaryUploadFile').click()" title="Upload CSV (source,translation)">
+                                    <i class="fas fa-upload"></i> Upload CSV
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size:0.72rem" id="exportGlossaryBtn" onclick="exportGlossary()" title="Tải glossary về">
+                                    <i class="fas fa-download"></i> Export
+                                </button>
+                                <button class="btn btn-outline-danger btn-sm py-0 px-2" style="font-size:0.72rem" id="clearGlossaryBtn" onclick="clearGlossary()" title="Xóa glossary">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div id="glossaryInfo" class="text-muted" style="font-size:0.72rem;">
+                            <i class="fas fa-circle-notch fa-spin"></i> Đang tải...
+                        </div>
+                        <input type="file" id="glossaryUploadFile" accept=".csv" style="display:none" onchange="uploadGlossary(this)">
                     </div>
                     
                     <!-- Hướng dẫn collapse -->
@@ -302,16 +392,28 @@
                             </a>
                             <span id="extractSummary" class="text-muted small ms-2"></span>
                         </div>
+                        <!-- Duplicate warning -->
+                        <div id="duplicateWarning" style="display:none" class="alert alert-warning py-1 px-2 mb-2" style="font-size:0.78rem;"></div>
                         
                         <!-- Danh sách file JSON -->
                         <div id="jsonFileList"></div>
                     </div>
                     
                     <!-- Prompt AI -->
-                    <div class="mt-3 text-center">
-                        <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="collapse" data-bs-target="#promptDetail">
-                            <i class="fas fa-eye"></i> Xem Prompt AI
-                        </button>
+                    <div class="mt-3">
+                        <!-- Template Selector -->
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                            <small><i class="fas fa-magic text-primary"></i> <strong>Template:</strong></small>
+                            <select class="form-select form-select-sm" id="templateSelect" style="font-size:0.78rem;"></select>
+                            <button class="btn btn-outline-primary btn-sm py-0 px-2" style="font-size:0.72rem;flex-shrink:0" onclick="openTemplateModal()">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                        </div>
+                        <div class="text-center">
+                            <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="collapse" data-bs-target="#promptDetail">
+                                <i class="fas fa-eye"></i> Xem Prompt AI
+                            </button>
+                        </div>
                     </div>
                     
                     <!-- Nội dung prompt collapse -->
@@ -445,6 +547,14 @@ Output yêu cầu:
                                 <i class="fas fa-download"></i> Nạp & Tải về
                             </button>
                         </div>
+
+                        <!-- Validation -->
+                        <div class="mt-2">
+                            <button type="button" class="btn btn-outline-info btn-sm w-100" id="validateBtn" onclick="runValidation()">
+                                <i class="fas fa-check-double"></i> Kiểm tra bản dịch
+                            </button>
+                            <div id="validationResult" class="mt-2" style="display:none;"></div>
+                        </div>
                         
                         <div class="loading text-center" id="injectLoading">
                             <div class="spinner-border text-primary" role="status">
@@ -498,18 +608,74 @@ Output yêu cầu:
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Modal: Template Editor -->
+    <div class="modal fade" id="templateModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-magic"></i> Quản lý Prompt Templates</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Template list (left) + edit form (right) -->
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <strong class="small">Danh sách:</strong>
+                                <button class="btn btn-outline-success btn-sm py-0 px-2" style="font-size:0.75rem" onclick="addNewTemplate()">
+                                    <i class="fas fa-plus"></i> Thêm
+                                </button>
+                            </div>
+                            <div id="templateList" class="list-group" style="max-height:300px;overflow-y:auto;"></div>
+                        </div>
+                        <div class="col-md-8" id="templateEditPanel" style="display:none;">
+                            <div class="mb-2">
+                                <label class="form-label small mb-1"><strong>Tên template:</strong></label>
+                                <input type="text" class="form-control form-control-sm" id="editTemplateName" placeholder="Tên hiển thị...">
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label small mb-1"><strong>Nội dung prompt</strong> <span class="text-muted">(dùng <code>{TARGET_LANG}</code> cho ngôn ngữ đích)</span>:</label>
+                                <textarea class="form-control" id="editTemplateContent" rows="10" style="font-size:0.78rem;font-family:monospace;"></textarea>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-primary btn-sm" onclick="saveEditTemplate()"><i class="fas fa-save"></i> Lưu</button>
+                                <button class="btn btn-outline-danger btn-sm" onclick="deleteEditTemplate()"><i class="fas fa-trash"></i> Xóa</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <small class="text-muted me-auto">Templates lưu trong <code>prompt_templates.json</code></small>
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Đóng</button>
+                </div>
+            </div>
+        </div>
+    </div>
     
     <script>
         // ==================== BIẾN TOÀN CỤC ====================
-        let uploadedExcelFilename = null; // Lưu tên file Excel đã upload
+        let uploadedExcelFilename  = null;
+        let extractedFilesData     = null;
+        let currentGlossary        = {};
+        let currentTM              = {};
+        let currentLangCode        = 'ja';
+        let currentLangName        = 'tiếng Nhật';
+        let currentTemplateContent = '';
+        let editingTemplateIdx     = -1;
 
         // ==================== NGÔN NGỮ ĐÍCH ====================
-        // Template prompt (dùng {TARGET_LANG} làm placeholder)
-        const PROMPT_TEMPLATE = document.getElementById('aiPrompt').textContent;
+        const INITIAL_PROMPT = document.getElementById('aiPrompt').textContent;
+        currentTemplateContent = INITIAL_PROMPT;
 
         function updatePrompt(langName) {
-            document.getElementById('aiPrompt').textContent =
-                PROMPT_TEMPLATE.replace('{TARGET_LANG}', langName);
+            let promptText = currentTemplateContent.replace(/{TARGET_LANG}/g, langName);
+            const entries = Object.entries(currentGlossary);
+            if (entries.length > 0) {
+                promptText += '\n\n📖 GLOSSARY (dùng bản dịch đã quy định):\n' +
+                    entries.map(([k, v]) => `- "${k}" → "${v}"`).join('\n');
+            }
+            document.getElementById('aiPrompt').textContent = promptText;
         }
 
         async function loadLanguages() {
@@ -518,37 +684,44 @@ Output yêu cầu:
                 const res = await fetch('/api/languages');
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 const langs = await res.json();
-
                 select.innerHTML = '';
                 langs.forEach(function(lang) {
                     const opt = document.createElement('option');
-                    opt.value = lang.code;
-                    opt.textContent = lang.label;
+                    opt.value        = lang.code;
+                    opt.textContent  = lang.label;
                     opt.dataset.name = lang.name;
-                    // Mặc định chọn tiếng Nhật
                     if (lang.code === 'ja') opt.selected = true;
                     select.appendChild(opt);
                 });
-
-                // Cập nhật prompt với ngôn ngữ mặc định
-                const defaultOpt = select.options[select.selectedIndex];
-                if (defaultOpt) updatePrompt(defaultOpt.dataset.name);
-
+                const def = select.options[select.selectedIndex];
+                if (def) {
+                    currentLangCode = def.value;
+                    currentLangName = def.dataset.name;
+                    updatePrompt(currentLangName);
+                    updateTMHeader(currentLangName);
+                    await Promise.all([loadGlossary(currentLangCode), loadTM(currentLangCode)]);
+                }
             } catch (e) {
                 select.innerHTML = '<option value="ja" data-name="tiếng Nhật">🇯🇵 Tiếng Nhật (Japanese)</option>';
                 updatePrompt('tiếng Nhật');
                 console.warn('Không thể tải languages.json:', e);
             }
-
-            // Cập nhật prompt khi user đổi ngôn ngữ
-            select.addEventListener('change', function() {
+            select.addEventListener('change', async function() {
                 const chosen = this.options[this.selectedIndex];
-                if (chosen) updatePrompt(chosen.dataset.name);
+                if (chosen) {
+                    currentLangCode = chosen.value;
+                    currentLangName = chosen.dataset.name;
+                    updatePrompt(currentLangName);
+                    updateTMHeader(currentLangName);
+                    await Promise.all([loadGlossary(currentLangCode), loadTM(currentLangCode)]);
+                }
             });
         }
 
         // Chạy ngay khi trang load
         loadLanguages();
+        loadTemplates();
+        loadTemplates();
 
         // ==================== UPLOAD EXCEL CHUNG ====================
         const mainExcelFile = document.getElementById('mainExcelFile');
@@ -682,8 +855,14 @@ Output yêu cầu:
                         // Hiển thị tóm tắt
                         extractSummary.textContent = `${data.total_files} file · ${data.total_items} keys`;
                         
+                        // Lưu extracted data cho TM và validation
+                        extractedFilesData = data.files;
+                        
                         // Render từng hàng file JSON
                         renderJsonFileRows(data.files);
+                        
+                        // Kiểm tra text trùng lặp
+                        detectDuplicatesInFiles(data.files);
                         
                         // Hiện khu vực kết quả
                         extractResult.style.display = 'block';
@@ -1016,6 +1195,9 @@ Output yêu cầu:
                     
                     showAlert(injectAlert, 'success', 'Nạp bản dịch thành công! File đang được tải về. Tất cả file tạm đã được xóa.');
                     
+                    // Tự động lưu cặp dịch vào TM
+                    await savePairsToTM();
+
                     // Reset form JSON
                     injectJsonFile.value = '';
                     injectJsonFileInfo.style.display = 'none';
@@ -1132,7 +1314,376 @@ Output yêu cầu:
         // Hàm copy prompt AI
         // copyPrompt() đã được thay thế bởi renderJsonFileRows() inline copy
         
-        function showAlert(element, type, message) {
+
+        // ==================== DARK MODE ====================
+        function toggleDarkMode() {
+            const isDark = document.body.classList.toggle('dark-mode');
+            localStorage.setItem('darkMode', isDark ? '1' : '0');
+            document.getElementById('darkModeIcon').className   = isDark ? 'fas fa-sun'  : 'fas fa-moon';
+            document.getElementById('darkModeLabel').textContent = isDark ? 'Light Mode' : 'Dark Mode';
+        }
+        (function() {
+            if (localStorage.getItem('darkMode') === '1') {
+                document.body.classList.add('dark-mode');
+                document.getElementById('darkModeIcon').className    = 'fas fa-sun';
+                document.getElementById('darkModeLabel').textContent = 'Light Mode';
+            }
+        })();
+
+        // ==================== PROMPT TEMPLATES ====================
+        let allTemplates = [];
+
+        async function loadTemplates() {
+            try {
+                const res = await fetch('/api/templates');
+                if (!res.ok) throw new Error();
+                allTemplates = await res.json();
+            } catch(e) {
+                allTemplates = [{id:'default', name:'Mặc định', content: INITIAL_PROMPT}];
+            }
+            renderTemplateSelect();
+        }
+
+        function renderTemplateSelect() {
+            const sel = document.getElementById('templateSelect');
+            if (!sel) return;
+            sel.innerHTML = '';
+            allTemplates.forEach((t, i) => {
+                const opt = document.createElement('option');
+                opt.value = i;
+                opt.textContent = t.name;
+                sel.appendChild(opt);
+            });
+            applyTemplate(0);
+            sel.addEventListener('change', function() { applyTemplate(parseInt(this.value)); });
+        }
+
+        function applyTemplate(idx) {
+            if (!allTemplates[idx]) return;
+            currentTemplateContent = allTemplates[idx].content;
+            updatePrompt(currentLangName);
+        }
+
+        function openTemplateModal() {
+            renderTemplateListInModal();
+            new bootstrap.Modal(document.getElementById('templateModal')).show();
+        }
+
+        function renderTemplateListInModal() {
+            const list = document.getElementById('templateList');
+            list.innerHTML = '';
+            allTemplates.forEach((t, i) => {
+                const btn = document.createElement('button');
+                btn.className = 'list-group-item list-group-item-action py-1 small';
+                btn.textContent = t.name;
+                btn.onclick = () => openTemplateForEdit(i);
+                list.appendChild(btn);
+            });
+        }
+
+        function openTemplateForEdit(idx) {
+            editingTemplateIdx = idx;
+            document.getElementById('editTemplateName').value    = allTemplates[idx].name;
+            document.getElementById('editTemplateContent').value = allTemplates[idx].content;
+            document.getElementById('templateEditPanel').style.display = 'block';
+            document.querySelectorAll('#templateList .list-group-item').forEach((el, i) => {
+                el.classList.toggle('active', i === idx);
+            });
+        }
+
+        function addNewTemplate() {
+            allTemplates.push({id: 'custom_' + Date.now(), name: 'Template mới', content: INITIAL_PROMPT});
+            renderTemplateListInModal();
+            openTemplateForEdit(allTemplates.length - 1);
+        }
+
+        async function saveEditTemplate() {
+            if (editingTemplateIdx < 0) return;
+            allTemplates[editingTemplateIdx].name    = document.getElementById('editTemplateName').value.trim() || 'Template';
+            allTemplates[editingTemplateIdx].content = document.getElementById('editTemplateContent').value;
+            try {
+                await fetch('/api/templates', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(allTemplates)});
+            } catch(e) {}
+            renderTemplateListInModal();
+            renderTemplateSelect();
+            alert('✅ Đã lưu template!');
+        }
+
+        async function deleteEditTemplate() {
+            if (editingTemplateIdx < 0 || allTemplates.length <= 1) { alert('Cần giữ ít nhất 1 template.'); return; }
+            if (!confirm('Xóa template này?')) return;
+            allTemplates.splice(editingTemplateIdx, 1);
+            editingTemplateIdx = -1;
+            document.getElementById('templateEditPanel').style.display = 'none';
+            try {
+                await fetch('/api/templates', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(allTemplates)});
+            } catch(e) {}
+            renderTemplateListInModal();
+            renderTemplateSelect();
+        }
+
+        // ==================== GLOSSARY ====================
+        async function loadGlossary(lang) {
+            try {
+                const res = await fetch(`/api/glossary/${lang}`);
+                currentGlossary = res.ok ? await res.json() : {};
+            } catch(e) { currentGlossary = {}; }
+            updateGlossaryInfo();
+            updatePrompt(currentLangName);
+        }
+
+        function updateGlossaryInfo() {
+            const el = document.getElementById('glossaryInfo');
+            if (!el) return;
+            const count = Object.keys(currentGlossary).length;
+            if (count > 0) {
+                el.innerHTML = `<i class="fas fa-check-circle text-success"></i> ${count} từ trong glossary — sẽ tự động thêm vào prompt`;
+            } else {
+                el.innerHTML = `<i class="fas fa-circle text-secondary"></i> Chưa có glossary — upload CSV để thêm`;
+            }
+        }
+
+        async function uploadGlossary(input) {
+            if (!input.files.length) return;
+            const fd = new FormData();
+            fd.append('file', input.files[0]);
+            input.value = '';
+            try {
+                const res = await fetch(`/api/glossary/${currentLangCode}/upload`, {method: 'POST', body: fd});
+                const data = await res.json();
+                if (data.success) {
+                    alert(`✅ Đã upload ${data.count} từ vào glossary!`);
+                    await loadGlossary(currentLangCode);
+                } else {
+                    alert('❌ Lỗi: ' + data.error);
+                }
+            } catch(e) { alert('❌ Lỗi kết nối'); }
+        }
+
+        async function exportGlossary() {
+            window.location.href = `/api/glossary/${currentLangCode}/export`;
+        }
+
+        async function clearGlossary() {
+            const count = Object.keys(currentGlossary).length;
+            if (count === 0) { alert('Glossary đang trống.'); return; }
+            if (!confirm(`Xóa toàn bộ ${count} từ trong glossary ${currentLangName}?`)) return;
+            try {
+                await fetch(`/api/glossary/${currentLangCode}/clear`, {method: 'POST'});
+                currentGlossary = {};
+                updateGlossaryInfo();
+                updatePrompt(currentLangName);
+                alert('✅ Đã xóa glossary.');
+            } catch(e) { alert('❌ Lỗi kết nối'); }
+        }
+
+        // ==================== TRANSLATION MEMORY ====================
+        function updateTMHeader(langName) {
+            const h = document.getElementById('tmLangHeader');
+            if (h) h.textContent = `TM: ${langName}`;
+        }
+
+        async function loadTM(lang) {
+            try {
+                const res = await fetch(`/api/tm?lang=${lang}`);
+                currentTM = res.ok ? await res.json() : {};
+            } catch(e) { currentTM = {}; }
+        }
+
+        async function savePairsToTM() {
+            if (!extractedFilesData || pastedJsonData.length === 0) return;
+            // Gom source text từ extracted files
+            const sourceMap = {};
+            extractedFilesData.forEach(f => {
+                try { Object.assign(sourceMap, JSON.parse(f.content)); } catch(e) {}
+            });
+            // Gom translated text từ pasted data
+            const translatedMap = {};
+            pastedJsonData.forEach(obj => Object.assign(translatedMap, obj));
+            // Build pairs (chỉ lưu khi source ≠ translated)
+            const pairs = {};
+            for (const [key, src] of Object.entries(sourceMap)) {
+                if (translatedMap[key] && translatedMap[key] !== src) {
+                    pairs[src] = translatedMap[key];
+                }
+            }
+            if (Object.keys(pairs).length === 0) return;
+            try {
+                const res = await fetch('/api/tm', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({lang: currentLangCode, pairs})
+                });
+                const data = await res.json();
+                if (data.success) {
+                    await loadTM(currentLangCode);
+                    console.log(`TM: đã lưu ${data.saved} cặp (tổng ${data.total})`);
+                }
+            } catch(e) {}
+        }
+
+        async function exportTM() {
+            const count = Object.keys(currentTM).length;
+            if (count === 0) { alert('TM đang trống cho ngôn ngữ này.'); return; }
+            window.location.href = `/api/tm/export/${currentLangCode}`;
+        }
+
+        async function importTM(input) {
+            if (!input.files.length) return;
+            const fd = new FormData();
+            fd.append('file', input.files[0]);
+            input.value = '';
+            try {
+                const res = await fetch(`/api/tm/import/${currentLangCode}`, {method: 'POST', body: fd});
+                const data = await res.json();
+                if (data.success) {
+                    alert(`✅ Đã nhập ${data.imported} cặp vào TM (tổng: ${data.total})`);
+                    await loadTM(currentLangCode);
+                } else { alert('❌ ' + data.error); }
+            } catch(e) { alert('❌ Lỗi kết nối'); }
+        }
+
+        async function clearTM() {
+            const count = Object.keys(currentTM).length;
+            if (count === 0) { alert('TM đang trống.'); return; }
+            if (!confirm(`Xóa toàn bộ ${count} cặp trong TM cho ${currentLangName}?`)) return;
+            try {
+                await fetch(`/api/tm/clear/${currentLangCode}`, {method: 'POST'});
+                currentTM = {};
+                alert('✅ Đã xóa TM.');
+            } catch(e) { alert('❌ Lỗi kết nối'); }
+        }
+
+        // ==================== DUPLICATE DETECTION ====================
+        function detectDuplicatesInFiles(files) {
+            const valueCounts = {};
+            files.forEach(file => {
+                try {
+                    const obj = JSON.parse(file.content);
+                    for (const [k, v] of Object.entries(obj)) {
+                        if (!valueCounts[v]) valueCounts[v] = [];
+                        valueCounts[v].push(k);
+                    }
+                } catch(e) {}
+            });
+            const dups = Object.entries(valueCounts).filter(([v, keys]) => keys.length > 1);
+            const warn = document.getElementById('duplicateWarning');
+            if (dups.length > 0) {
+                const totalKeys = dups.reduce((s, [, keys]) => s + keys.length, 0);
+                warn.style.display = 'block';
+                warn.innerHTML = `<i class="fas fa-copy text-warning"></i> <strong>Phát hiện ${dups.length} text trùng lặp</strong> (${totalKeys} keys có cùng nội dung) — có thể dịch 1 lần để tiết kiệm!`;
+            } else {
+                warn.style.display = 'none';
+            }
+        }
+
+        // ==================== SMART VALIDATION ====================
+        function runValidation() {
+            // Gom tất cả JSON đã paste
+            const translated = {};
+            pastedJsonData.forEach(obj => Object.assign(translated, obj));
+
+            if (Object.keys(translated).length === 0) {
+                document.getElementById('validationResult').style.display = 'block';
+                document.getElementById('validationResult').innerHTML =
+                    '<div class="alert alert-warning py-1 small mt-1"><i class="fas fa-exclamation-triangle"></i> Chưa có JSON nào để kiểm tra. Hãy paste JSON đã dịch trước.</div>';
+                return;
+            }
+
+            // Gom source text (nếu có)
+            const source = {};
+            if (extractedFilesData) {
+                extractedFilesData.forEach(f => {
+                    try { Object.assign(source, JSON.parse(f.content)); } catch(e) {}
+                });
+            }
+
+            const errors = [], warnings = [];
+            const INVALID_QUOTES = /[“”„‟«»‘’]/;
+            const PLACEHOLDER_RE = /\{[\w\d_]+\}|%[sdf\d]|\$\d+|%\d+\$[sd]|%\d/g;
+            const URL_RE         = /https?:\/\/[^\s"]+/g;
+            const EMAIL_RE       = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
+
+            for (const [key, tVal] of Object.entries(translated)) {
+                // 1. Dấu ngoặc kép đặc biệt
+                if (INVALID_QUOTES.test(tVal)) {
+                    errors.push({key, msg: 'Có dấu ngoặc kép đặc biệt (" " hoặc tương tự) — cần thay bằng \"'});
+                }
+                const sVal = source[key];
+                if (sVal !== undefined) {
+                    // 2. Placeholder bị thiếu
+                    const srcPH = [...sVal.matchAll(PLACEHOLDER_RE)].map(m => m[0]);
+                    const missing = srcPH.filter(ph => !tVal.includes(ph));
+                    if (missing.length > 0) {
+                        errors.push({key, msg: `Thiếu placeholder: ${missing.join(', ')}`});
+                    }
+                    // 3. Độ dài chênh lệch > 50%
+                    if (sVal.length > 5) {
+                        const ratio = tVal.length / sVal.length;
+                        if (ratio > 2.0 || ratio < 0.3) {
+                            warnings.push({key, msg: `Độ dài khác biệt nhiều: gốc ${sVal.length} → dịch ${tVal.length} ký tự`});
+                        }
+                    }
+                    // 4. URL không được thay đổi
+                    const srcURLs = [...sVal.matchAll(URL_RE)].map(m => m[0]);
+                    srcURLs.filter(u => !tVal.includes(u)).forEach(u => {
+                        warnings.push({key, msg: `URL cần giữ nguyên: ${u.substring(0, 50)}`});
+                    });
+                    // 5. Email không được thay đổi
+                    const srcEmails = [...sVal.matchAll(EMAIL_RE)].map(m => m[0]);
+                    srcEmails.filter(e => !tVal.includes(e)).forEach(e => {
+                        warnings.push({key, msg: `Email cần giữ nguyên: ${e}`});
+                    });
+                }
+            }
+
+            renderValidationResult(errors, warnings, Object.keys(translated).length);
+        }
+
+        function renderValidationResult(errors, warnings, totalKeys) {
+            const el = document.getElementById('validationResult');
+            el.style.display = 'block';
+            if (errors.length === 0 && warnings.length === 0) {
+                el.innerHTML = `<div class="alert alert-success py-1 small mt-1"><i class="fas fa-check-circle"></i> Kiểm tra ${totalKeys} keys — Không phát hiện vấn đề!</div>`;
+                return;
+            }
+            let html = `<div class="mt-1" style="font-size:0.78rem;">
+                <div class="mb-1"><strong>${totalKeys} keys</strong> — <span class="text-danger">${errors.length} lỗi</span>, <span class="text-warning">${warnings.length} cảnh báo</span></div>`;
+            if (errors.length > 0) {
+                html += `<div class="mb-1"><strong class="text-danger"><i class="fas fa-times-circle"></i> Lỗi:</strong>
+                    <ul class="mb-0 ps-3">` +
+                    errors.slice(0, 20).map(e => `<li><code>${e.key.substring(0,30)}</code>: ${e.msg}</li>`).join('') +
+                    (errors.length > 20 ? `<li>... và ${errors.length - 20} lỗi khác</li>` : '') +
+                    `</ul></div>`;
+            }
+            if (warnings.length > 0) {
+                html += `<div><strong class="text-warning"><i class="fas fa-exclamation-triangle"></i> Cảnh báo:</strong>
+                    <ul class="mb-0 ps-3">` +
+                    warnings.slice(0, 10).map(w => `<li><code>${w.key.substring(0,30)}</code>: ${w.msg}</li>`).join('') +
+                    (warnings.length > 10 ? `<li>... và ${warnings.length - 10} cảnh báo khác</li>` : '') +
+                    `</ul></div>`;
+            }
+            html += '</div>';
+            el.innerHTML = html;
+        }
+
+
+        // ==================== DARK MODE ====================
+        function toggleDarkMode() {
+            const isDark = document.body.classList.toggle('dark-mode');
+            localStorage.setItem('darkMode', isDark ? '1' : '0');
+            document.getElementById('darkModeIcon').className   = isDark ? 'fas fa-sun'  : 'fas fa-moon';
+            document.getElementById('darkModeLabel').textContent = isDark ? 'Light Mode' : 'Dark Mode';
+        }
+        (function() {
+            if (localStorage.getItem('darkMode') === '1') {
+                document.body.classList.add('dark-mode');
+                document.getElementById('darkModeIcon').className    = 'fas fa-sun';
+                document.getElementById('darkModeLabel').textContent = 'Light Mode';
+            }
+        })();
+
+                function showAlert(element, type, message) {
             element.innerHTML = `
                 <div class="alert alert-${type} alert-custom alert-dismissible fade show" role="alert">
                     <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'warning' ? 'exclamation-triangle' : 'times-circle'}"></i>
