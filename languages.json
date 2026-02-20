@@ -8,7 +8,5 @@
   {"code": "de", "name": "tiếng Đức",            "label": "🇩🇪 Tiếng Đức (German)"},
   {"code": "es", "name": "tiếng Tây Ban Nha",    "label": "🇪🇸 Tiếng Tây Ban Nha (Spanish)"},
   {"code": "th", "name": "tiếng Thái",           "label": "🇹🇭 Tiếng Thái (Thai)"},
-  {"code": "id", "name": "tiếng Indonesia",      "label": "🇮🇩 Tiếng Indonesia (Indonesian)"},
-  {"code": "pt", "name": "tiếng Bồ Đào Nha",    "label": "🇵🇹 Tiếng Bồ Đào Nha (Portuguese)"},
-  {"code": "ar", "name": "tiếng Ả Rập",          "label": "🇸🇦 Tiếng Ả Rập (Arabic)"}
+  {"code": "id", "name": "tiếng Indonesia",      "label": "🇮🇩 Tiếng Indonesia (Indonesian)"}
 ]

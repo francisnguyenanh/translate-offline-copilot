@@ -1,19 +1,189 @@
 {
   "default": [
     {
-      "content": "Hãy dịch các giá trị (values) trong file JSON này sang {TARGET_LANG}.\n\nPhong cách: Chính xác, chuyên nghiệp, dùng trong tài liệu kinh doanh.\n\nQuy tắc bắt buộc:\n1. Giữ nguyên 100% các keys (tọa độ cell như \"Sheet1!A1\")\n2. CHỈ dịch nội dung bên trong values\n3. KHÔNG dịch các từ/cụm từ đã là ngôn ngữ đích - GIỮ NGUYÊN chúng\n4. KHÔNG dịch các mã kỹ thuật, placeholder, hoặc tên biến\n5. KHÔNG dịch số, ngày tháng, ký hiệu đặc biệt\n6. Giữ nguyên format JSON chuẩn\n\n⚠️ QUY TẮC QUAN TRỌNG về dấu ngoặc kép:\n- CHỈ sử dụng dấu ngoặc kép THẲNG chuẩn JSON: \" (U+0022)\n- TUYỆT ĐỐI KHÔNG dùng dấu ngoặc kép đặc biệt: \" \" „ ‟ « »\n- Nếu cần trích dẫn trong nội dung dịch: dùng 「 」hoặc 'đơn'\n- Ví dụ ĐÚNG: \"App 「Order Printer Pro」 の使用\"\n- Ví dụ SAI: \"App \"Order Printer Pro\" の使用\" ❌\n\nOutput yêu cầu:\n- Trả về ĐÚNG cấu trúc JSON gốc\n- KHÔNG thêm giải thích hay văn bản nào khác\n- Đảm bảo encoding UTF-8\n- Kiểm tra kỹ KHÔNG có dấu ngoặc kép đặc biệt trong output",
       "id": "formal",
-      "name": "Dịch chính xác (Formal)"
+      "name": "Dịch chính xác (Formal)",
+      "content": "Hãy dịch các giá trị (values) trong file JSON này sang {TARGET_LANG}.\n\nPhong cách: Chính xác, chuyên nghiệp, dùng trong tài liệu kinh doanh.\n\nQuy tắc bắt buộc:\n1. Giữ nguyên 100% các keys (tọa độ cell như \"Sheet1!A1\")\n2. CHỈ dịch nội dung bên trong values\n3. KHÔNG dịch các từ/cụm từ đã là ngôn ngữ đích - GIỮ NGUYÊN chúng\n4. KHÔNG dịch các mã kỹ thuật, placeholder, hoặc tên biến\n5. KHÔNG dịch số, ngày tháng, ký hiệu đặc biệt\n6. Giữ nguyên format JSON chuẩn\n\n⚠️ QUY TẮC QUAN TRỌNG về dấu ngoặc kép:\n- CHỈ sử dụng dấu ngoặc kép THẲNG chuẩn JSON: \" (U+0022)\n- TUYỆT ĐỐI KHÔNG dùng dấu ngoặc kép đặc biệt: \" \" „ ‟ « »\n- Nếu cần trích dẫn trong nội dung dịch: dùng 「 」hoặc 'đơn'\n- Ví dụ ĐÚNG: \"App 「Order Printer Pro」 の使用\"\n- Ví dụ SAI: \"App \"Order Printer Pro\" の使用\" ❌\n\nOutput yêu cầu:\n- Trả về ĐÚNG cấu trúc JSON gốc\n- KHÔNG thêm giải thích hay văn bản nào khác\n- Đảm bảo encoding UTF-8\n- Kiểm tra kỹ KHÔNG có dấu ngoặc kép đặc biệt trong output"
     },
     {
-      "content": "Hãy dịch các giá trị (values) trong file JSON này sang {TARGET_LANG}.\n\nPhong cách: Tự nhiên, thân thiện, dễ đọc - phù hợp cho giao diện người dùng và app.\n\nQuy tắc bắt buộc:\n1. Giữ nguyên 100% các keys (tọa độ cell như \"Sheet1!A1\")\n2. CHỈ dịch nội dung bên trong values\n3. KHÔNG dịch các từ/cụm từ đã là ngôn ngữ đích - GIỮ NGUYÊN chúng\n4. KHÔNG dịch các mã kỹ thuật, placeholder, hoặc tên biến\n5. KHÔNG dịch số, ngày tháng, ký hiệu đặc biệt\n6. Giữ nguyên format JSON chuẩn\n\n⚠️ QUY TẮC QUAN TRỌNG về dấu ngoặc kép:\n- CHỈ sử dụng dấu ngoặc kép THẲNG chuẩn JSON: \" (U+0022)\n- TUYỆT ĐỐI KHÔNG dùng dấu ngoặc kép đặc biệt: \" \" „ ‟ « »\n- Nếu cần trích dẫn trong nội dung dịch: dùng 「 」hoặc 'đơn'\n- Ví dụ ĐÚNG: \"App 「Order Printer Pro」 の使用\"\n- Ví dụ SAI: \"App \"Order Printer Pro\" の使用\" ❌\n\nOutput yêu cầu:\n- Trả về ĐÚNG cấu trúc JSON gốc\n- KHÔNG thêm giải thích hay văn bản nào khác\n- Đảm bảo encoding UTF-8\n- Kiểm tra kỹ KHÔNG có dấu ngoặc kép đặc biệt trong output",
       "id": "casual",
-      "name": "Dịch tự nhiên (Casual)"
+      "name": "Dịch tự nhiên (Casual)",
+      "content": "Hãy dịch các giá trị (values) trong file JSON này sang {TARGET_LANG}.\n\nPhong cách: Tự nhiên, thân thiện, dễ đọc - phù hợp cho giao diện người dùng và app.\n\nQuy tắc bắt buộc:\n1. Giữ nguyên 100% các keys (tọa độ cell như \"Sheet1!A1\")\n2. CHỈ dịch nội dung bên trong values\n3. KHÔNG dịch các từ/cụm từ đã là ngôn ngữ đích - GIỮ NGUYÊN chúng\n4. KHÔNG dịch các mã kỹ thuật, placeholder, hoặc tên biến\n5. KHÔNG dịch số, ngày tháng, ký hiệu đặc biệt\n6. Giữ nguyên format JSON chuẩn\n\n⚠️ QUY TẮC QUAN TRỌNG về dấu ngoặc kép:\n- CHỈ sử dụng dấu ngoặc kép THẲNG chuẩn JSON: \" (U+0022)\n- TUYỆT ĐỐI KHÔNG dùng dấu ngoặc kép đặc biệt: \" \" „ ‟ « »\n- Nếu cần trích dẫn trong nội dung dịch: dùng 「 」hoặc 'đơn'\n- Ví dụ ĐÚNG: \"App 「Order Printer Pro」 の使用\"\n- Ví dụ SAI: \"App \"Order Printer Pro\" の使用\" ❌\n\nOutput yêu cầu:\n- Trả về ĐÚNG cấu trúc JSON gốc\n- KHÔNG thêm giải thích hay văn bản nào khác\n- Đảm bảo encoding UTF-8\n- Kiểm tra kỹ KHÔNG có dấu ngoặc kép đặc biệt trong output"
     },
     {
-      "content": "Hãy dịch các giá trị (values) trong file JSON này sang {TARGET_LANG}.\n\nPhong cách: Kỹ thuật, chính xác cao, ưu tiên giữ nguyên thuật ngữ chuyên ngành IT.\n\nQuy tắc bắt buộc:\n1. Giữ nguyên 100% các keys (tọa độ cell như \"Sheet1!A1\")\n2. CHỈ dịch nội dung bên trong values\n3. KHÔNG dịch các từ/cụm từ đã là ngôn ngữ đích - GIỮ NGUYÊN chúng\n4. KHÔNG dịch các mã kỹ thuật, placeholder, hoặc tên biến\n5. KHÔNG dịch số, ngày tháng, ký hiệu đặc biệt\n6. Giữ nguyên format JSON chuẩn\n\n⚠️ QUY TẮC QUAN TRỌNG về dấu ngoặc kép:\n- CHỈ sử dụng dấu ngoặc kép THẲNG chuẩn JSON: \" (U+0022)\n- TUYỆT ĐỐI KHÔNG dùng dấu ngoặc kép đặc biệt: \" \" „ ‟ « »\n- Nếu cần trích dẫn trong nội dung dịch: dùng 「 」hoặc 'đơn'\n- Ví dụ ĐÚNG: \"App 「Order Printer Pro」 の使用\"\n- Ví dụ SAI: \"App \"Order Printer Pro\" の使用\" ❌\n\nOutput yêu cầu:\n- Trả về ĐÚNG cấu trúc JSON gốc\n- KHÔNG thêm giải thích hay văn bản nào khác\n- Đảm bảo encoding UTF-8\n- Kiểm tra kỹ KHÔNG có dấu ngoặc kép đặc biệt trong output",
       "id": "technical",
-      "name": "Dịch kỹ thuật (Technical)"
+      "name": "Dịch kỹ thuật (Technical)",
+      "content": "Hãy dịch các giá trị (values) trong file JSON này sang {TARGET_LANG}.\n\nPhong cách: Kỹ thuật, chính xác cao, ưu tiên giữ nguyên thuật ngữ chuyên ngành IT.\n\nQuy tắc bắt buộc:\n1. Giữ nguyên 100% các keys (tọa độ cell như \"Sheet1!A1\")\n2. CHỈ dịch nội dung bên trong values\n3. KHÔNG dịch các từ/cụm từ đã là ngôn ngữ đích - GIỮ NGUYÊN chúng\n4. KHÔNG dịch các mã kỹ thuật, placeholder, hoặc tên biến\n5. KHÔNG dịch số, ngày tháng, ký hiệu đặc biệt\n6. Giữ nguyên format JSON chuẩn\n\n⚠️ QUY TẮC QUAN TRỌNG về dấu ngoặc kép:\n- CHỈ sử dụng dấu ngoặc kép THẲNG chuẩn JSON: \" (U+0022)\n- TUYỆT ĐỐI KHÔNG dùng dấu ngoặc kép đặc biệt: \" \" „ ‟ « »\n- Nếu cần trích dẫn trong nội dung dịch: dùng 「 」hoặc 'đơn'\n- Ví dụ ĐÚNG: \"App 「Order Printer Pro」 の使用\"\n- Ví dụ SAI: \"App \"Order Printer Pro\" の使用\" ❌\n\nOutput yêu cầu:\n- Trả về ĐÚNG cấu trúc JSON gốc\n- KHÔNG thêm giải thích hay văn bản nào khác\n- Đảm bảo encoding UTF-8\n- Kiểm tra kỹ KHÔNG có dấu ngoặc kép đặc biệt trong output"
+    }
+  ],
+  "ja": [
+    {
+      "id": "formal",
+      "name": "Dịch chính xác (Formal)",
+      "content": "このJSONファイルの値を {TARGET_LANG} に翻訳してください。\n\nスタイル：正確、プロフェッショナル、ビジネス文書向け。\n\n必須ルール：\n1. キー（\"Sheet1!A1\" のようなセル座標）は100%保持すること\n2. 値（values）の中身のみを翻訳すること\n3. すでにターゲット言語になっている単語/フレーズは翻訳せず、そのまま保持すること\n4. 技術コード、プレースホルダー、変数名は翻訳しないこと\n5. 数値、日付、特殊記号は翻訳しないこと\n6. 標準的なJSON形式を維持すること\n\n⚠️ 引用符に関する重要ルール：\n- 標準的なJSONのストレートダブルクォーテーション「\"」(U+0022) のみを使用すること\n- 特殊な引用符（\" \" „ ‟ « »）は絶対に使用しないこと\n- 翻訳内で引用が必要な場合は、「 」または 'シングルクォーテーション' を使用すること\n- 正しい例: \"App 「Order Printer Pro」 の使用\"\n- 間違った例: \"App \"Order Printer Pro\" の使用\" ❌\n\n出力要件：\n- 元のJSON構造を正確に返すこと\n- 説明やその他のテキストを追加しないこと\n- UTF-8エンコーディングを保証すること\n- 出力に特殊な引用符が含まれていないか再確認すること"
+    },
+    {
+      "id": "casual",
+      "name": "Dịch tự nhiên (Casual)",
+      "content": "このJSONファイルの値を {TARGET_LANG} に翻訳してください。\n\nスタイル：自然、親しみやすい、読みやすい - ユーザーインターフェースやアプリ向け。\n\n必須ルール：\n1. キー（\"Sheet1!A1\" のようなセル座標）は100%保持すること\n2. 値（values）の中身のみを翻訳すること\n3. すでにターゲット言語になっている単語/フレーズは翻訳せず、そのまま保持すること\n4. 技術コード、プレースホルダー、変数名は翻訳しないこと\n5. 数値、日付、特殊記号は翻訳しないこと\n6. 標準的なJSON形式を維持すること\n\n⚠️ 引用符に関する重要ルール：\n- 標準的なJSONのストレートダブルクォーテーション「\"」(U+0022) のみを使用すること\n- 特殊な引用符（\" \" „ ‟ « »）は絶対に使用しないこと\n- 翻訳内で引用が必要な場合は、「 」または 'シングルクォーテーション' を使用すること\n- 正しい例: \"App 「Order Printer Pro」 の使用\"\n- 間違った例: \"App \"Order Printer Pro\" の使用\" ❌\n\n出力要件：\n- 元のJSON構造を正確に返すこと\n- 説明やその他のテキストを追加しないこと\n- UTF-8エンコーディングを保証すること\n- 出力に特殊な引用符が含まれていないか再確認すること"
+    },
+    {
+      "id": "technical",
+      "name": "Dịch kỹ thuật (Technical)",
+      "content": "このJSONファイルの値を {TARGET_LANG} に翻訳してください。\n\nスタイル：技術的、高精度、IT専門用語の保持を優先。\n\n必須ルール：\n1. キー（\"Sheet1!A1\" のようなセル座標）は100%保持すること\n2. 値（values）の中身のみを翻訳すること\n3. すでにターゲット言語になっている単語/フレーズは翻訳せず、そのまま保持すること\n4. 技術コード、プレースホルダー、変数名は翻訳しないこと\n5. 数値、日付、特殊記号は翻訳しないこと\n6. 標準的なJSON形式を維持すること\n\n⚠️ 引用符に関する重要ルール：\n- 標準的なJSONのストレートダブルクォーテーション「\"」(U+0022) のみを使用すること\n- 特殊な引用符（\" \" „ ‟ « »）は絶対に使用しないこと\n- 翻訳内で引用が必要な場合は、「 」または 'シングルクォーテーション' を使用すること\n- 正しい例: \"App 「Order Printer Pro」 の使用\"\n- 間違った例: \"App \"Order Printer Pro\" の使用\" ❌\n\n出力要件：\n- 元のJSON構造を正確に返すこと\n- 説明やその他のテキストを追加しないこと\n- UTF-8エンコーディングを保証すること\n- 出力に特殊な引用符が含まれていないか再確認すること"
+    }
+  ],
+  "vi": [
+    {
+      "id": "formal",
+      "name": "Dịch chính xác (Formal)",
+      "content": "Hãy dịch các giá trị (values) trong file JSON này sang {TARGET_LANG}.\n\nPhong cách: Chính xác, chuyên nghiệp, dùng trong tài liệu kinh doanh.\n\nQuy tắc bắt buộc:\n1. Giữ nguyên 100% các keys (tọa độ cell như \"Sheet1!A1\")\n2. CHỈ dịch nội dung bên trong values\n3. KHÔNG dịch các từ/cụm từ đã là ngôn ngữ đích - GIỮ NGUYÊN chúng\n4. KHÔNG dịch các mã kỹ thuật, placeholder, hoặc tên biến\n5. KHÔNG dịch số, ngày tháng, ký hiệu đặc biệt\n6. Giữ nguyên format JSON chuẩn\n\n⚠️ QUY TẮC QUAN TRỌNG về dấu ngoặc kép:\n- CHỈ sử dụng dấu ngoặc kép THẲNG chuẩn JSON: \" (U+0022)\n- TUYỆT ĐỐI KHÔNG dùng dấu ngoặc kép đặc biệt: \" \" „ ‟ « »\n- Nếu cần trích dẫn trong nội dung dịch: dùng 「 」hoặc 'đơn'\n- Ví dụ ĐÚNG: \"App 「Order Printer Pro」 の使用\"\n- Ví dụ SAI: \"App \"Order Printer Pro\" の使用\" ❌\n\nOutput yêu cầu:\n- Trả về ĐÚNG cấu trúc JSON gốc\n- KHÔNG thêm giải thích hay văn bản nào khác\n- Đảm bảo encoding UTF-8\n- Kiểm tra kỹ KHÔNG có dấu ngoặc kép đặc biệt trong output"
+    },
+    {
+      "id": "casual",
+      "name": "Dịch tự nhiên (Casual)",
+      "content": "Hãy dịch các giá trị (values) trong file JSON này sang {TARGET_LANG}.\n\nPhong cách: Tự nhiên, thân thiện, dễ đọc - phù hợp cho giao diện người dùng và app.\n\nQuy tắc bắt buộc:\n1. Giữ nguyên 100% các keys (tọa độ cell như \"Sheet1!A1\")\n2. CHỈ dịch nội dung bên trong values\n3. KHÔNG dịch các từ/cụm từ đã là ngôn ngữ đích - GIỮ NGUYÊN chúng\n4. KHÔNG dịch các mã kỹ thuật, placeholder, hoặc tên biến\n5. KHÔNG dịch số, ngày tháng, ký hiệu đặc biệt\n6. Giữ nguyên format JSON chuẩn\n\n⚠️ QUY TẮC QUAN TRỌNG về dấu ngoặc kép:\n- CHỈ sử dụng dấu ngoặc kép THẲNG chuẩn JSON: \" (U+0022)\n- TUYỆT ĐỐI KHÔNG dùng dấu ngoặc kép đặc biệt: \" \" „ ‟ « »\n- Nếu cần trích dẫn trong nội dung dịch: dùng 「 」hoặc 'đơn'\n- Ví dụ ĐÚNG: \"App 「Order Printer Pro」 の使用\"\n- Ví dụ SAI: \"App \"Order Printer Pro\" の使用\" ❌\n\nOutput yêu cầu:\n- Trả về ĐÚNG cấu trúc JSON gốc\n- KHÔNG thêm giải thích hay văn bản nào khác\n- Đảm bảo encoding UTF-8\n- Kiểm tra kỹ KHÔNG có dấu ngoặc kép đặc biệt trong output"
+    },
+    {
+      "id": "technical",
+      "name": "Dịch kỹ thuật (Technical)",
+      "content": "Hãy dịch các giá trị (values) trong file JSON này sang {TARGET_LANG}.\n\nPhong cách: Kỹ thuật, chính xác cao, ưu tiên giữ nguyên thuật ngữ chuyên ngành IT.\n\nQuy tắc bắt buộc:\n1. Giữ nguyên 100% các keys (tọa độ cell như \"Sheet1!A1\")\n2. CHỈ dịch nội dung bên trong values\n3. KHÔNG dịch các từ/cụm từ đã là ngôn ngữ đích - GIỮ NGUYÊN chúng\n4. KHÔNG dịch các mã kỹ thuật, placeholder, hoặc tên biến\n5. KHÔNG dịch số, ngày tháng, ký hiệu đặc biệt\n6. Giữ nguyên format JSON chuẩn\n\n⚠️ QUY TẮC QUAN TRỌNG về dấu ngoặc kép:\n- CHỈ sử dụng dấu ngoặc kép THẲNG chuẩn JSON: \" (U+0022)\n- TUYỆT ĐỐI KHÔNG dùng dấu ngoặc kép đặc biệt: \" \" „ ‟ « »\n- Nếu cần trích dẫn trong nội dung dịch: dùng 「 」hoặc 'đơn'\n- Ví dụ ĐÚNG: \"App 「Order Printer Pro」 の使用\"\n- Ví dụ SAI: \"App \"Order Printer Pro\" の使用\" ❌\n\nOutput yêu cầu:\n- Trả về ĐÚNG cấu trúc JSON gốc\n- KHÔNG thêm giải thích hay văn bản nào khác\n- Đảm bảo encoding UTF-8\n- Kiểm tra kỹ KHÔNG có dấu ngoặc kép đặc biệt trong output"
+    }
+  ],
+  "en": [
+    {
+      "id": "formal",
+      "name": "Dịch chính xác (Formal)",
+      "content": "Please translate the values in this JSON file into {TARGET_LANG}.\n\nStyle: Accurate, professional, for business documents.\n\nMandatory Rules:\n1. Keep 100% of the keys (cell coordinates like \"Sheet1!A1\")\n2. ONLY translate the content inside the values\n3. DO NOT translate words/phrases already in the target language - KEEP them as is\n4. DO NOT translate technical codes, placeholders, or variable names\n5. DO NOT translate numbers, dates, or special symbols\n6. Maintain the standard JSON format\n\n⚠️ IMPORTANT RULE regarding quotation marks:\n- ONLY use standard JSON straight double quotes: \" (U+0022)\n- ABSOLUTELY DO NOT use special quotes: \" \" „ ‟ « »\n- If a quote is needed within the translated content: use 「 」 or 'single quotes'\n- Correct Example: \"Use of App 「Order Printer Pro」\"\n- Incorrect Example: \"Use of App \"Order Printer Pro\"\" ❌\n\nRequired Output:\n- Return the EXACT original JSON structure\n- DO NOT add any explanations or other text\n- Ensure UTF-8 encoding\n- Double-check that there are NO special quotes in the output"
+    },
+    {
+      "id": "casual",
+      "name": "Dịch tự nhiên (Casual)",
+      "content": "Please translate the values in this JSON file into {TARGET_LANG}.\n\nStyle: Natural, friendly, easy to read - suitable for user interfaces and apps.\n\nMandatory Rules:\n1. Keep 100% of the keys (cell coordinates like \"Sheet1!A1\")\n2. ONLY translate the content inside the values\n3. DO NOT translate words/phrases already in the target language - KEEP them as is\n4. DO NOT translate technical codes, placeholders, or variable names\n5. DO NOT translate numbers, dates, or special symbols\n6. Maintain the standard JSON format\n\n⚠️ IMPORTANT RULE regarding quotation marks:\n- ONLY use standard JSON straight double quotes: \" (U+0022)\n- ABSOLUTELY DO NOT use special quotes: \" \" „ ‟ « »\n- If a quote is needed within the translated content: use 「 」 or 'single quotes'\n- Correct Example: \"Use of App 「Order Printer Pro」\"\n- Incorrect Example: \"Use of App \"Order Printer Pro\"\" ❌\n\nRequired Output:\n- Return the EXACT original JSON structure\n- DO NOT add any explanations or other text\n- Ensure UTF-8 encoding\n- Double-check that there are NO special quotes in the output"
+    },
+    {
+      "id": "technical",
+      "name": "Dịch kỹ thuật (Technical)",
+      "content": "Please translate the values in this JSON file into {TARGET_LANG}.\n\nStyle: Technical, high precision, prioritize keeping IT industry terminology.\n\nMandatory Rules:\n1. Keep 100% of the keys (cell coordinates like \"Sheet1!A1\")\n2. ONLY translate the content inside the values\n3. DO NOT translate words/phrases already in the target language - KEEP them as is\n4. DO NOT translate technical codes, placeholders, or variable names\n5. DO NOT translate numbers, dates, or special symbols\n6. Maintain the standard JSON format\n\n⚠️ IMPORTANT RULE regarding quotation marks:\n- ONLY use standard JSON straight double quotes: \" (U+0022)\n- ABSOLUTELY DO NOT use special quotes: \" \" „ ‟ « »\n- If a quote is needed within the translated content: use 「 」 or 'single quotes'\n- Correct Example: \"Use of App 「Order Printer Pro」\"\n- Incorrect Example: \"Use of App \"Order Printer Pro\"\" ❌\n\nRequired Output:\n- Return the EXACT original JSON structure\n- DO NOT add any explanations or other text\n- Ensure UTF-8 encoding\n- Double-check that there are NO special quotes in the output"
+    }
+  ],
+  "zh": [
+    {
+      "id": "formal",
+      "name": "Dịch chính xác (Formal)",
+      "content": "请将此 JSON 文件中的值 (values) 翻译成 {TARGET_LANG}。\n\n风格：准确、专业，适用于商务文档。\n\n强制规则：\n1. 100% 保留键名 (keys)（如 \"Sheet1!A1\" 等单元格坐标）\n2. 仅翻译值 (values) 内部的内容\n3. 不要翻译已经是目标语言的词汇/短语 - 请保留原样\n4. 不要翻译技术代码、占位符或变量名\n5. 不要翻译数字、日期、特殊符号\n6. 保持标准 JSON 格式\n\n⚠️ 关于引号的重要规则：\n- 仅使用标准 JSON 直引号：\" (U+0022)\n- 严禁使用特殊引号：\" \" „ ‟ « »\n- 如果翻译内容中需要引用：使用 「 」 或 '单引号'\n- 正确示例：\"App 「Order Printer Pro」 的使用\"\n- 错误示例：\"App \"Order Printer Pro\" 的使用\" ❌\n\n输出要求：\n- 返回准确的原始 JSON 结构\n- 不要添加任何解释或其他文本\n- 确保 UTF-8 编码\n- 仔细检查输出中不含特殊引号"
+    },
+    {
+      "id": "casual",
+      "name": "Dịch tự nhiên (Casual)",
+      "content": "请将此 JSON 文件中的值 (values) 翻译成 {TARGET_LANG}。\n\n风格：自然、友好、易读 - 适用于用户界面和应用。\n\n强制规则：\n1. 100% 保留键名 (keys)（如 \"Sheet1!A1\" 等单元格坐标）\n2. 仅翻译值 (values) 内部的内容\n3. 不要翻译已经是目标语言的词汇/短语 - 请保留原样\n4. 不要翻译技术代码、占位符或变量名\n5. 不要翻译数字、日期、特殊符号\n6. 保持标准 JSON 格式\n\n⚠️ 关于引号的重要规则：\n- 仅使用标准 JSON 直引号：\" (U+0022)\n- 严禁使用特殊引号：\" \" „ ‟ « »\n- 如果翻译内容中需要引用：使用 「 」 或 '单引号'\n- 正确示例：\"App 「Order Printer Pro」 的使用\"\n- 错误示例：\"App \"Order Printer Pro\" 的使用\" ❌\n\n输出要求：\n- 返回准确的原始 JSON 结构\n- 不要添加任何解释或其他文本\n- 确保 UTF-8 编码\n- 仔细检查输出中不含特殊引号"
+    },
+    {
+      "id": "technical",
+      "name": "Dịch kỹ thuật (Technical)",
+      "content": "请将此 JSON 文件中的值 (values) 翻译成 {TARGET_LANG}。\n\n风格：技术化、高精度，优先保留 IT 专业术语。\n\n强制规则：\n1. 100% 保留键名 (keys)（如 \"Sheet1!A1\" 等单元格坐标）\n2. 仅翻译值 (values) 内部的内容\n3. 不要翻译已经是目标语言的词汇/短语 - 请保留原样\n4. 不要翻译技术代码、占位符或变量名\n5. 不要翻译数字、日期、特殊符号\n6. 保持标准 JSON 格式\n\n⚠️ 关于引号的重要规则：\n- 仅使用标准 JSON 直引号：\" (U+0022)\n- 严禁使用特殊引号：\" \" „ ‟ « »\n- 如果翻译内容中需要引用：使用 「 」 或 '单引号'\n- 正确示例：\"App 「Order Printer Pro」 的使用\"\n- 错误示例：\"App \"Order Printer Pro\" 的使用\" ❌\n\n输出要求：\n- 返回准确的原始 JSON 结构\n- 不要添加任何解释或其他文本\n- 确保 UTF-8 编码\n- 仔细检查输出中不含特殊引号"
+    }
+  ],
+  "ko": [
+    {
+      "id": "formal",
+      "name": "Dịch chính xác (Formal)",
+      "content": "이 JSON 파일의 값(values)을 {TARGET_LANG} 전용으로 번역해 주세요.\n\n스타일: 정확하고 전문적이며 비즈니스 문서에 적합함.\n\n필수 규칙:\n1. 키(Key, \"Sheet1!A1\"과 같은 셀 좌표)는 100% 그대로 유지\n2. 값(values) 내부의 내용만 번역\n3. 이미 대상 언어로 되어 있는 단어/문구는 번역하지 말고 그대로 유지\n4. 기술 코드, 플레이스홀더 또는 변수 이름은 번역하지 않음\n5. 숫자, 날짜, 특수 기호는 번역하지 않음\n6. 표준 JSON 형식을 유지\n\n⚠️ 따옴표 관련 중요 규칙:\n- 표준 JSON 직선 큰따옴표만 사용: \" (U+0022)\n- 특수 따옴표 절대 사용 금지: \" \" „ ‟ « »\n- 번역 내용 내에서 인용이 필요한 경우: 「 」 또는 '홑따옴표' 사용\n- 올바른 예: \"App 「Order Printer Pro」 의 사용\"\n- 잘못된 예: \"App \"Order Printer Pro\" 의 사용\" ❌\n\n출력 요구 사항:\n- 원본 JSON 구조를 정확히 반환\n- 설명이나 기타 텍스트를 추가하지 않음\n- UTF-8 인코딩 보장\n- 출력물에 특수 따옴표가 없는지 철저히 확인"
+    },
+    {
+      "id": "casual",
+      "name": "Dịch tự nhiên (Casual)",
+      "content": "이 JSON 파일의 값(values)을 {TARGET_LANG} 전용으로 번역해 주세요.\n\n스타일: 자연스럽고 친근하며 읽기 쉬움 - 사용자 인터페이스 및 앱에 적합함.\n\n필수 규칙:\n1. 키(Key, \"Sheet1!A1\"과 같은 셀 좌표)는 100% 그대로 유지\n2. 값(values) 내부의 내용만 번역\n3. 이미 대상 언어로 되어 있는 단어/문구는 번역하지 말고 그대로 유지\n4. 기술 코드, 플레이스홀더 또는 변수 이름은 번역하지 않음\n5. 숫자, 날짜, 특수 기호는 번역하지 않음\n6. 표준 JSON 형식을 유지\n\n⚠️ 따옴표 관련 중요 규칙:\n- 표준 JSON 직선 큰따옴표만 사용: \" (U+0022)\n- 특수 따옴표 절대 사용 금지: \" \" „ ‟ « »\n- 번역 내용 내에서 인용이 필요한 경우: 「 」 또는 '홑따옴표' 사용\n- 올바른 예: \"App 「Order Printer Pro」 의 사용\"\n- 잘못된 예: \"App \"Order Printer Pro\" 의 사용\" ❌\n\n출력 요구 사항:\n- 원본 JSON 구조를 정확히 반환\n- 설명이나 기타 텍스트를 추가하지 않음\n- UTF-8 인코딩 보장\n- 출력물에 특수 따옴표가 없는지 철저히 확인"
+    },
+    {
+      "id": "technical",
+      "name": "Dịch kỹ thuật (Technical)",
+      "content": "이 JSON 파일의 값(values)을 {TARGET_LANG} 전용으로 번역해 주세요.\n\n스타일: 기술적이고 높은 정밀도, IT 전문 용어 유지를 우선함.\n\n필수 규칙:\n1. 키(Key, \"Sheet1!A1\"과 같은 셀 좌표)는 100% 그대로 유지\n2. 값(values) 내부의 내용만 번역\n3. 이미 대상 언어로 되어 있는 단어/문구는 번역하지 말고 그대로 유지\n4. 기술 코드, 플레이스홀더 또는 변수 이름은 번역하지 않음\n5. 숫자, 날짜, 특수 기호는 번역하지 않음\n6. 표준 JSON 형식을 유지\n\n⚠️ 따옴표 관련 중요 규칙:\n- 표준 JSON 직선 큰따옴표만 사용: \" (U+0022)\n- 특수 따옴표 절대 사용 금지: \" \" „ ‟ « »\n- 번역 내용 내에서 인용이 필요한 경우: 「 」 또는 '홑따옴표' 사용\n- 올바른 예: \"App 「Order Printer Pro」 의 사용\"\n- 잘못된 예: \"App \"Order Printer Pro\" 의 사용\" ❌\n\n출력 요구 사항:\n- 원본 JSON 구조를 정확히 반환\n- 설명이나 기타 텍스트를 추가하지 않음\n- UTF-8 인코딩 보장\n- 출력물에 특수 따옴표가 없는지 철저히 확인"
+    }
+  ],
+  "fr": [
+    {
+      "id": "formal",
+      "name": "Dịch chính xác (Formal)",
+      "content": "Veuillez traduire les valeurs (values) de ce fichier JSON en {TARGET_LANG}.\n\nStyle : Précis, professionnel, utilisé pour les documents commerciaux.\n\nRègles obligatoires :\n1. Conserver 100 % des clés (coordonnées de cellules comme \"Sheet1!A1\")\n2. Traduire UNIQUEMENT le contenu à l'intérieur des valeurs\n3. NE PAS traduire les mots/phrases déjà dans la langue cible - les GARDER tels quels\n4. NE PAS traduire les codes techniques, placeholders ou noms de variables\n5. NE PAS traduire les nombres, dates ou symboles spéciaux\n6. Conserver le format JSON standard\n\n⚠️ RÈGLE IMPORTANTE concernant les guillemets :\n- Utilisez UNIQUEMENT des guillemets DROITS standards JSON : \" (U+0022)\n- N'utilisez ABSOLUMENT PAS de guillemets spéciaux : \" \" „ ‟ « »\n- Si une citation est nécessaire dans le contenu traduit : utilisez 「 」 ou des 'guillemets simples'\n- Exemple CORRECT : \"Utilisation de l'App 「Order Printer Pro」\"\n- Exemple INCORRECT : \"Utilisation de l'App \"Order Printer Pro\"\" ❌\n\nSortie requise :\n- Retourner la structure JSON d'origine EXACTE\n- NE PAS ajouter d'explications ou d'autres textes\n- Assurer l'encodage UTF-8\n- Vérifier soigneusement qu'il n'y a AUCUN guillemet spécial dans la sortie"
+    },
+    {
+      "id": "casual",
+      "name": "Dịch tự nhiên (Casual)",
+      "content": "Veuillez traduire les valeurs (values) de ce fichier JSON en {TARGET_LANG}.\n\nStyle : Naturel, amical, facile à lire - adapté aux interfaces utilisateur et aux applications.\n\nRègles obligatoires :\n1. Conserver 100 % des clés (coordonnées de cellules comme \"Sheet1!A1\")\n2. Traduire UNIQUEMENT le contenu à l'intérieur des valeurs\n3. NE PAS traduire les mots/phrases déjà dans la langue cible - les GARDER tels quels\n4. NE PAS traduire les codes techniques, placeholders ou noms de variables\n5. NE PAS traduire les nombres, dates ou symboles spéciaux\n6. Conserver le format JSON standard\n\n⚠️ RÈGLE IMPORTANTE concernant les guillemets :\n- Utilisez UNIQUEMENT des guillemets DROITS standards JSON : \" (U+0022)\n- N'utilisez ABSOLUMENT PAS de guillemets spéciaux : \" \" „ ‟ « »\n- Si une citation est nécessaire dans le contenu traduit : utilisez 「 」 ou des 'guillemets simples'\n- Exemple CORRECT : \"Utilisation de l'App 「Order Printer Pro」\"\n- Exemple INCORRECT : \"Utilisation de l'App \"Order Printer Pro\"\" ❌\n\nSortie requise :\n- Retourner la structure JSON d'origine EXACTE\n- NE PAS ajouter d'explications ou d'autres textes\n- Assurer l'encodage UTF-8\n- Vérifier soigneusement qu'il n'y a AUCUN guillemet spécial dans la sortie"
+    },
+    {
+      "id": "technical",
+      "name": "Dịch kỹ thuật (Technical)",
+      "content": "Veuillez traduire les valeurs (values) de ce fichier JSON en {TARGET_LANG}.\n\nStyle : Technique, haute précision, priorité au maintien de la terminologie informatique.\n\nRègles obligatoires :\n1. Conserver 100 % des clés (coordonnées de cellules comme \"Sheet1!A1\")\n2. Traduire UNIQUEMENT le contenu à l'intérieur des valeurs\n3. NE PAS traduire les mots/phrases déjà dans la langue cible - les GARDER tels quels\n4. NE PAS traduire les codes techniques, placeholders ou noms de variables\n5. NE PAS traduire les nombres, dates ou symboles spéciaux\n6. Conserver le format JSON standard\n\n⚠️ RÈGLE IMPORTANTE concernant les guillemets :\n- Utilisez UNIQUEMENT des guillemets DROITS standards JSON : \" (U+0022)\n- N'utilisez ABSOLUMENT PAS de guillemets spéciaux : \" \" „ ‟ « »\n- Si une citation est nécessaire dans le contenu traduit : utilisez 「 」 ou des 'guillemets simples'\n- Exemple CORRECT : \"Utilisation de l'App 「Order Printer Pro」\"\n- Exemple INCORRECT : \"Utilisation de l'App \"Order Printer Pro\"\" ❌\n\nSortie requise :\n- Retourner la structure JSON d'origine EXACTE\n- NE PAS ajouter d'explications ou d'autres textes\n- Assurer l'encodage UTF-8\n- Vérifier soigneusement qu'il n'y a AUCUN guillemet spécial dans la sortie"
+    }
+  ],
+  "de": [
+    {
+      "id": "formal",
+      "name": "Dịch chính xác (Formal)",
+      "content": "Bitte übersetzen Sie die Werte (values) in dieser JSON-Datei nach {TARGET_LANG}.\n\nStil: Präzise, professionell, für Geschäftsdokumente.\n\nVerbindliche Regeln:\n1. Behalten Sie 100 % der Schlüssel (Zellkoordinaten wie \"Sheet1!A1\") bei\n2. Übersetzen Sie NUR den Inhalt innerhalb der Werte (values)\n3. Übersetzen Sie Wörter/Phrasen NICHT, die bereits in der Zielsprache vorliegen - BEHALTEN Sie diese bei\n4. Übersetzen Sie keine technischen Codes, Platzhalter oder Variablennamen\n5. Übersetzen Sie keine Zahlen, Daten oder Sonderzeichen\n6. Behalten Sie das Standard-JSON-Format bei\n\n⚠️ WICHTIGE REGEL zu Anführungszeichen:\n- Verwenden Sie NUR gerade Standard-JSON-Anführungszeichen: \" (U+0022)\n- Verwenden Sie ABSOLUT KEINE speziellen Anführungszeichen: \" \" „ ‟ « »\n- Wenn ein Zitat im übersetzten Inhalt erforderlich ist: verwenden Sie 「 」 oder 'einfache Anführungszeichen'\n- Richtiges Beispiel: \"Verwendung der App 「Order Printer Pro」\"\n- Falsches Beispiel: \"Verwendung der App \"Order Printer Pro\"\" ❌\n\nErforderliche Ausgabe:\n- Geben Sie die EXAKTE ursprüngliche JSON-Struktur zurück\n- Fügen Sie keine Erklärungen oder andere Texte hinzu\n- Stellen Sie die UTF-8-Kodierung sicher\n- Überprüfen Sie sorgfältig, dass KEINE speziellen Anführungszeichen in der Ausgabe enthalten sind"
+    },
+    {
+      "id": "casual",
+      "name": "Dịch tự nhiên (Casual)",
+      "content": "Bitte übersetzen Sie die Werte (values) in dieser JSON-Datei nach {TARGET_LANG}.\n\nStil: Natürlich, freundlich, leicht lesbar - geeignet für Benutzeroberflächen und Apps.\n\nVerbindliche Regeln:\n1. Behalten Sie 100 % der Schlüssel (Zellkoordinaten wie \"Sheet1!A1\") bei\n2. Übersetzen Sie NUR den Inhalt innerhalb der Werte (values)\n3. Übersetzen Sie Wörter/Phrasen NICHT, die bereits in der Zielsprache vorliegen - BEHALTEN Sie diese bei\n4. Übersetzen Sie keine technischen Codes, Platzhalter oder Variablennamen\n5. Übersetzen Sie keine Zahlen, Daten oder Sonderzeichen\n6. Behalten Sie das Standard-JSON-Format bei\n\n⚠️ WICHTIGE REGEL zu Anführungszeichen:\n- Verwenden Sie NUR gerade Standard-JSON-Anführungszeichen: \" (U+0022)\n- Verwenden Sie ABSOLUT KEINE speziellen Anführungszeichen: \" \" „ ‟ « »\n- Wenn ein Zitat im übersetzten Inhalt erforderlich ist: verwenden Sie 「 」 oder 'einfache Anführungszeichen'\n- Richtiges Beispiel: \"Verwendung der App 「Order Printer Pro」\"\n- Falsches Beispiel: \"Verwendung der App \"Order Printer Pro\"\" ❌\n\nErforderliche Ausgabe:\n- Geben Sie die EXAKTE ursprüngliche JSON-Struktur zurück\n- Fügen Sie keine Erklärungen oder andere Texte hinzu\n- Stellen Sie die UTF-8-Kodierung sicher\n- Überprüfen Sie sorgfältig, dass KEINE speziellen Anführungszeichen in der Ausgabe enthalten sind"
+    },
+    {
+      "id": "technical",
+      "name": "Dịch kỹ thuật (Technical)",
+      "content": "Bitte übersetzen Sie die Werte (values) in dieser JSON-Datei nach {TARGET_LANG}.\n\nStil: Technisch, hochpräzise, Priorität auf Beibehaltung der IT-Fachterminologie.\n\nVerbindliche Regeln:\n1. Behalten Sie 100 % der Schlüssel (Zellkoordinaten wie \"Sheet1!A1\") bei\n2. Übersetzen Sie NUR den Inhalt innerhalb der Werte (values)\n3. Übersetzen Sie Wörter/Phrasen NICHT, die bereits in der Zielsprache vorliegen - BEHALTEN Sie diese bei\n4. Übersetzen Sie keine technischen Codes, Platzhalter oder Variablennamen\n5. Übersetzen Sie keine Zahlen, Daten oder Sonderzeichen\n6. Behalten Sie das Standard-JSON-Format bei\n\n⚠️ WICHTIGE REGEL zu Anführungszeichen:\n- Verwenden Sie NUR gerade Standard-JSON-Anführungszeichen: \" (U+0022)\n- Verwenden Sie ABSOLUT KEINE speziellen Anführungszeichen: \" \" „ ‟ « »\n- Wenn ein Zitat im übersetzten Inhalt erforderlich ist: verwenden Sie 「 」 oder 'einfache Anführungszeichen'\n- Richtiges Beispiel: \"Verwendung der App 「Order Printer Pro」\"\n- Falsches Beispiel: \"Verwendung der App \"Order Printer Pro\"\" ❌\n\nErforderliche Ausgabe:\n- Geben Sie die EXAKTE ursprüngliche JSON-Struktur zurück\n- Fügen Sie keine Erklärungen oder andere Texte hinzu\n- Stellen Sie die UTF-8-Kodierung sicher\n- Überprüfen Sie sorgfältig, dass KEINE speziellen Anführungszeichen in der Ausgabe enthalten sind"
+    }
+  ],
+  "es": [
+    {
+      "id": "formal",
+      "name": "Dịch chính xác (Formal)",
+      "content": "Traduzca los valores (values) de este archivo JSON a {TARGET_LANG}.\n\nEstilo: Preciso, profesional, utilizado en documentos comerciales.\n\nReglas obligatorias:\n1. Mantener el 100% de las llaves (coordenadas de celda como \"Sheet1!A1\")\n2. Traducir SOLO el contenido dentro de los valores\n3. NO traducir palabras/frases que ya estén en el idioma de destino; MANTÉNGALAS igual\n4. NO traducir códigos técnicos, marcadores de posición o nombres de variables\n5. NO traducir números, fechas o símbolos especiales\n6. Mantener el formato JSON estándar\n\n⚠️ REGLA IMPORTANTE sobre las comillas:\n- Use SOLO comillas dobles RECTAS estándar de JSON: \" (U+0022)\n- ABSOLUTAMENTE NO use comillas especiales: \" \" „ ‟ « »\n- Si necesita una cita dentro del contenido traducido: use 「 」 o 'comillas simples'\n- Ejemplo CORRECTO: \"Uso de la App 「Order Printer Pro」\"\n- Ejemplo INCORRECTO: \"Uso de la App \"Order Printer Pro\"\" ❌\n\nResultado requerido:\n- Devolver EXACTAMENTE la estructura JSON original\n- NO añadir explicaciones ni ningún otro texto\n- Garantizar la codificación UTF-8\n- Comprobar cuidadosamente que NO haya comillas especiales en el resultado"
+    },
+    {
+      "id": "casual",
+      "name": "Dịch tự nhiên (Casual)",
+      "content": "Traduzca los valores (values) de este archivo JSON a {TARGET_LANG}.\n\nEstilo: Natural, amigable, fácil de leer; adecuado para interfaces de usuario y aplicaciones.\n\nReglas obligatorias:\n1. Mantener el 100% de las llaves (coordenadas de celda como \"Sheet1!A1\")\n2. Traducir SOLO el contenido dentro de los valores\n3. NO traducir palabras/frases que ya estén en el idioma de destino; MANTÉNGALAS igual\n4. NO traducir códigos técnicos, marcadores de posición o nombres de variables\n5. NO traducir números, fechas o símbolos especiales\n6. Mantener el formato JSON estándar\n\n⚠️ REGLA IMPORTANTE sobre las comillas:\n- Use SOLO comillas dobles RECTAS estándar de JSON: \" (U+0022)\n- ABSOLUTAMENTE NO use comillas especiales: \" \" „ ‟ « »\n- Si necesita una cita dentro del contenido traducido: use 「 」 o 'comillas simples'\n- Ejemplo CORRECTO: \"Uso de la App 「Order Printer Pro」\"\n- Ejemplo INCORRECTO: \"Uso de la App \"Order Printer Pro\"\" ❌\n\nResultado requerido:\n- Devolver EXACTAMENTE la estructura JSON original\n- NO añadir explicaciones ni ningún otro texto\n- Garantizar la codificación UTF-8\n- Comprobar cuidadosamente que NO haya comillas especiales en el resultado"
+    },
+    {
+      "id": "technical",
+      "name": "Dịch kỹ thuật (Technical)",
+      "content": "Traduzca los valores (values) de este archivo JSON a {TARGET_LANG}.\n\nEstilo: Técnico, alta precisión, prioridad en mantener la terminología especializada de TI.\n\nReglas obligatorias:\n1. Mantener el 100% de las llaves (coordenadas de celda como \"Sheet1!A1\")\n2. Traducir SOLO el contenido dentro de los valores\n3. NO traducir palabras/frases que ya estén en el idioma de destino; MANTÉNGALAS igual\n4. NO traducir códigos técnicos, marcadores de posición o nombres de variables\n5. NO traducir números, fechas o símbolos especiales\n6. Mantener el formato JSON estándar\n\n⚠️ REGLA IMPORTANTE sobre las comillas:\n- Use SOLO comillas dobles RECTAS estándar de JSON: \" (U+0022)\n- ABSOLUTAMENTE NO use comillas especiales: \" \" „ ‟ « »\n- Si necesita una cita dentro del contenido traducido: use 「 」 o 'comillas simples'\n- Ejemplo CORRECTO: \"Uso de la App 「Order Printer Pro」\"\n- Ejemplo INCORRECTO: \"Uso de la App \"Order Printer Pro\"\" ❌\n\nResultado requerido:\n- Devolver EXACTAMENTE la estructura JSON original\n- NO añadir explicaciones ni ningún otro texto\n- Garantizar la codificación UTF-8\n- Comprobar cuidadosamente que NO haya comillas especiales en el resultado"
+    }
+  ],
+  "th": [
+    {
+      "id": "formal",
+      "name": "Dịch chính xác (Formal)",
+      "content": "โปรดแปลค่า (values) ในไฟล์ JSON นี้เป็นภาษา {TARGET_LANG}\n\nรูปแบบ: แม่นยำ, เป็นทางการ, ใช้สำหรับเอกสารทางธุรกิจ\n\nกฎที่ต้องปฏิบัติตาม:\n1. รักษาคีย์ (keys) ไว้ 100% (เช่น พิกัดเซลล์ \"Sheet1!A1\")\n2. แปลเฉพาะเนื้อหาภายใน values เท่านั้น\n3. ห้ามแปลคำ/วลีที่เป็นภาษาปลายทางอยู่แล้ว - ให้คงไว้ตามเดิม\n4. ห้ามแปลรหัสทางเทคนิค, placeholder หรือชื่อตัวแปร\n5. ห้ามแปลตัวเลข, วันที่, สัญลักษณ์พิเศษ\n6. รักษาโครงสร้าง JSON มาตรฐานไว้\n\n⚠️ กฎสำคัญเกี่ยวกับเครื่องหมายคำพูด:\n- ใช้เฉพาะเครื่องหมายคำพูดคู่แบบตรงมาตรฐาน JSON: \" (U+0022) เท่านั้น\n- ห้ามใช้เครื่องหมายคำพูดพิเศษโดยเด็ดขาด: \" \" „ ‟ « »\n- หากจำเป็นต้องใช้การอ้างอิงในเนื้อหาที่แปล: ให้ใช้ 「 」 หรือ 'เครื่องหมายคำพูดเดี่ยว'\n- ตัวอย่างที่ถูกต้อง: \"การใช้งาน App 「Order Printer Pro」\"\n- ตัวอย่างที่ผิด: \"การใช้งาน App \"Order Printer Pro\"\" ❌\n\nผลลัพธ์ที่ต้องการ:\n- ส่งคืนโครงสร้าง JSON เดิมที่ถูกต้อง\n- ห้ามเพิ่มคำอธิบายหรือข้อความอื่นๆ\n- ตรวจสอบให้แน่ใจว่าใช้การเข้ารหัส UTF-8\n- ตรวจสอบอย่างละเอียดว่าไม่มีเครื่องหมายคำพูดพิเศษในผลลัพธ์"
+    },
+    {
+      "id": "casual",
+      "name": "Dịch tự nhiên (Casual)",
+      "content": "โปรดแปลค่า (values) ในไฟล์ JSON นี้เป็นภาษา {TARGET_LANG}\n\nรูปแบบ: เป็นธรรมชาติ, เป็นกันเอง, อ่านง่าย - เหมาะสำหรับ UI และแอปพลิเคชัน\n\nกฎที่ต้องปฏิบัติตาม:\n1. รักษาคีย์ (keys) ไว้ 100% (เช่น พิกัดเซลล์ \"Sheet1!A1\")\n2. แปลเฉพาะเนื้อหาภายใน values เท่านั้น\n3. ห้ามแปลคำ/วลีที่เป็นภาษาปลายทางอยู่แล้ว - ให้คงไว้ตามเดิม\n4. ห้ามแปลรหัสทางเทคนิค, placeholder หรือชื่อตัวแปร\n5. ห้ามแปลตัวเลข, วันที่, สัญลักษณ์พิเศษ\n6. รักษาโครงสร้าง JSON มาตรฐานไว้\n\n⚠️ กฎสำคัญเกี่ยวกับเครื่องหมายคำพูด:\n- ใช้เฉพาะเครื่องหมายคำพูดคู่แบบตรงมาตรฐาน JSON: \" (U+0022) เท่านั้น\n- ห้ามใช้เครื่องหมายคำพูดพิเศษโดยเด็ดขาด: \" \" „ ‟ « »\n- หากจำเป็นต้องใช้การอ้างอิงในเนื้อหาที่แปล: ให้ใช้ 「 」 หรือ 'เครื่องหมายคำพูดเดี่ยว'\n- ตัวอย่างที่ถูกต้อง: \"การใช้งาน App 「Order Printer Pro」\"\n- ตัวอย่างที่ผิด: \"การใช้งาน App \"Order Printer Pro\"\" ❌\n\nผลลัพธ์ที่ต้องการ:\n- ส่งคืนโครงสร้าง JSON เดิมที่ถูกต้อง\n- ห้ามเพิ่มคำอธิบายหรือข้อความอื่นๆ\n- ตรวจสอบให้แน่ใจว่าใช้การเข้ารหัส UTF-8\n- ตรวจสอบอย่างละเอียดว่าไม่มีเครื่องหมายคำพูดพิเศษในผลลัพธ์"
+    },
+    {
+      "id": "technical",
+      "name": "Dịch kỹ thuật (Technical)",
+      "content": "โปรดแปลค่า (values) ในไฟล์ JSON นี้เป็นภาษา {TARGET_LANG}\n\nรูปแบบ: ทางเทคนิค, ความแม่นยำสูง, เน้นการรักษาศัพท์เฉพาะทาง IT\n\nกฎที่ต้องปฏิบัติตาม:\n1. รักษาคีย์ (keys) ไว้ 100% (เช่น พิกัดเซลล์ \"Sheet1!A1\")\n2. แปลเฉพาะเนื้อหาภายใน values เท่านั้น\n3. ห้ามแปลคำ/วลีที่เป็นภาษาปลายทางอยู่แล้ว - ให้คงไว้ตามเดิม\n4. ห้ามแปลรหัสทางเทคนิค, placeholder หรือชื่อตัวแปร\n5. ห้ามแปลตัวเลข, วันที่, สัญลักษณ์พิเศษ\n6. รักษาโครงสร้าง JSON มาตรฐานไว้\n\n⚠️ กฎสำคัญเกี่ยวกับเครื่องหมายคำพูด:\n- ใช้เฉพาะเครื่องหมายคำพูดคู่แบบตรงมาตรฐาน JSON: \" (U+0022) เท่านั้น\n- ห้ามใช้เครื่องหมายคำพูดพิเศษโดยเด็ดขาด: \" \" „ ‟ « »\n- หากจำเป็นต้องใช้การอ้างอิงในเนื้อหาที่แปล: ให้ใช้ 「 」 หรือ 'เครื่องหมายคำพูดเดี่ยว'\n- ตัวอย่างที่ถูกต้อง: \"การใช้งาน App 「Order Printer Pro」\"\n- ตัวอย่างที่ผิด: \"การใช้งาน App \"Order Printer Pro\"\" ❌\n\nผลลัพธ์ที่ต้องการ:\n- ส่งคืนโครงสร้าง JSON เดิมที่ถูกต้อง\n- ห้ามเพิ่มคำอธิบายหรือข้อความอื่นๆ\n- ตรวจสอบให้แน่ใจว่าใช้การเข้ารหัส UTF-8\n- ตรวจสอบอย่างละเอียดว่าไม่มีเครื่องหมายคำพูดพิเศษในผลลัพธ์"
+    }
+  ],
+  "id": [
+    {
+      "id": "formal",
+      "name": "Dịch chính xác (Formal)",
+      "content": "Harap terjemahkan nilai (values) dalam file JSON này sang {TARGET_LANG}.\n\nGaya: Akurat, profesional, digunakan dalam dokumen bisnis.\n\nAturan wajib:\n1. Pertahankan 100% kunci (keys) (koordinat sel như \"Sheet1!A1\")\n2. HANYA terjemahkan konten di dalam nilai (values)\n3. JANGAN terjemahkan kata/frasa yang sudah dalam bahasa target - PERTAHANKAN apa adanya\n4. JANGAN terjemahkan kode teknis, placeholder, atau nama variabel\n5. JANGAN terjemahkan angka, tanggal, simbol khusus\n6. Pertahankan format JSON standar\n\n⚠️ ATURAN PENTING mengenai tanda kutip:\n- HANYA gunakan tanda kutip ganda LURUS standar JSON: \" (U+0022)\n- SAMA SEKALI JANGAN gunakan tanda kutip khusus: \" \" „ ‟ « »\n- Jika perlu kutipan dalam konten terjemahan: gunakan 「 」 atau 'kutip tunggal'\n- Contoh BENAR: \"Penggunaan App 「Order Printer Pro」\"\n- Contoh SALAH: \"Penggunaan App \"Order Printer Pro\"\" ❌\n\nOutput yang diminta:\n- Kembalikan struktur JSON asli yang BENAR\n- JANGAN tambahkan penjelasan hoặc teks lainnya\n- Pastikan encoding UTF-8\n- Periksa kembali JANGAN ada tanda kutip khusus trong output"
+    },
+    {
+      "id": "casual",
+      "name": "Dịch tự nhiên (Casual)",
+      "content": "Harap terjemahkan nilai (values) dalam file JSON này sang {TARGET_LANG}.\n\nGaya: Alami, ramah, dễ đọc - cocok untuk giao diện người dùng và app.\n\nAturan wajib:\n1. Pertahankan 100% kunci (keys) (koordinat sel như \"Sheet1!A1\")\n2. HANYA terjemahkan konten di dalam nilai (values)\n3. JANGAN terjemahkan kata/frasa yang sudah dalam bahasa target - PERTAHANKAN apa adanya\n4. JANGAN terjemahkan kode teknis, placeholder, hoặc nama variabel\n5. JANGAN terjemahkan angka, ngày tháng, simbol khusus\n6. Pertahankan format JSON chuẩn\n\n⚠️ ATURAN PENTING mengenai tanda kutip:\n- HANYA gunakan tanda kutip ganda LURUS standar JSON: \" (U+0022)\n- SAMA SEKALI JANGAN gunakan tanda kutip khusus: \" \" „ ‟ « »\n- Jika cần kutipan trong nội dung terjemahan: gunakan 「 」 hoặc 'kutip tunggal'\n- Contoh BENAR: \"Penggunaan App 「Order Printer Pro」\"\n- Contoh SALAH: \"Penggunaan App \"Order Printer Pro\"\" ❌\n\nOutput yang diminta:\n- Kembalikan cấu trúc JSON asli yang BENAR\n- JANGAN tambahkan penjelasan hoặc văn bản khác\n- Pastikan encoding UTF-8\n- Periksa kembali JANGAN ada dấu ngoặc kép đặc biệt trong output"
+    },
+    {
+      "id": "technical",
+      "name": "Dịch kỹ thuật (Technical)",
+      "content": "Harap terjemahkan nilai (values) trong file JSON ini sang {TARGET_LANG}.\n\nGaya: Teknis, akurasi tinggi, ưu tiên giữ nguyên thuật ngữ chuyên ngành IT.\n\nAturan wajib:\n1. Giữ nguyên 100% các keys (tọa độ cell như \"Sheet1!A1\")\n2. CHỈ dịch nội dung bên trong values\n3. KHÔNG dịch các từ/cụm từ đã là ngôn ngữ đích - GIỮ NGUYÊN chúng\n4. KHÔNG dịch các mã kỹ thuật, placeholder, hoặc tên biến\n5. KHÔNG dịch số, ngày tháng, ký hiệu đặc biệt\n6. Giữ nguyên format JSON chuẩn\n\n⚠️ QUY TẮC QUAN TRỌNG về dấu ngoặc kép:\n- CHỈ sử dụng dấu ngoặc kép THẲNG chuẩn JSON: \" (U+0022)\n- TUYỆT ĐỐI KHÔNG dùng dấu ngoặc kép đặc biệt: \" \" „ ‟ « »\n- Nếu cần trích dẫn trong nội dung dịch: dùng 「 」hoặc 'đơn'\n- Ví dụ ĐÚNG: \"App 「Order Printer Pro」 の sử dụng\"\n- Ví dụ SAI: \"App \"Order Printer Pro\" の sử dụng\" ❌\n\nOutput yêu cầu:\n- Trả về ĐÚNG cấu trúc JSON gốc\n- KHÔNG thêm giải thích hay văn bản nào khác\n- Đảm bảo encoding UTF-8\n- Kiểm tra kỹ KHÔNG có dấu ngoặc kép đặc biệt trong output"
     }
   ]
 }
