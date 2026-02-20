@@ -26,7 +26,7 @@ app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 60 * 1024 * 1024  # Giới hạn 50MB
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['SECRET_KEY'] = os.urandom(24)  # Secret key cho session
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)  # Session timeout 8h
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=5)  # Session timeout 5h
 
 # Các định dạng file được phép
 ALLOWED_EXTENSIONS = {'xlsx', 'pptx', 'docx'}
