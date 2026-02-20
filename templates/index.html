@@ -230,6 +230,19 @@
                         
                         <div id="mainAlert"></div>
                     </form>
+
+                    <!-- Chọn ngôn ngữ đích -->
+                    <div class="mt-3">
+                        <label for="targetLangSelect" class="form-label small mb-1">
+                            <i class="fas fa-globe"></i> <strong>Ngôn ngữ đích:</strong>
+                        </label>
+                        <select class="form-select form-select-sm" id="targetLangSelect">
+                            <option value="" disabled>Đang tải danh sách...</option>
+                        </select>
+                        <div class="text-muted" style="font-size: 0.72rem; margin-top: 4px;">
+                            <i class="fas fa-info-circle"></i> Danh sách ngôn ngữ chỉnh sửa trong <code>languages.json</code>
+                        </div>
+                    </div>
                     
                     <!-- Hướng dẫn collapse -->
                     <div class="mt-3">
@@ -304,7 +317,7 @@
                     <!-- Nội dung prompt collapse -->
                     <div class="collapse mt-2" id="promptDetail">
                         <div style="background: #e3f2fd; padding: 10px; border-radius: 5px; border: 1px solid #90caf9;">
-                            <pre id="aiPrompt" style="margin: 0; font-size: 0.7rem; white-space: pre-wrap; word-wrap: break-word; max-height: 200px; overflow-y: auto;">Hãy dịch các giá trị (values) trong file JSON này sang tiếng Nhật.
+                            <pre id="aiPrompt" style="margin: 0; font-size: 0.7rem; white-space: pre-wrap; word-wrap: break-word; max-height: 200px; overflow-y: auto;">Hãy dịch các giá trị (values) trong file JSON này sang {TARGET_LANG}.
 
 Quy tắc bắt buộc:
 1. Giữ nguyên 100% các keys (tọa độ cell như "Sheet1!A1")
@@ -489,7 +502,54 @@ Output yêu cầu:
     <script>
         // ==================== BIẾN TOÀN CỤC ====================
         let uploadedExcelFilename = null; // Lưu tên file Excel đã upload
-        
+
+        // ==================== NGÔN NGỮ ĐÍCH ====================
+        // Template prompt (dùng {TARGET_LANG} làm placeholder)
+        const PROMPT_TEMPLATE = document.getElementById('aiPrompt').textContent;
+
+        function updatePrompt(langName) {
+            document.getElementById('aiPrompt').textContent =
+                PROMPT_TEMPLATE.replace('{TARGET_LANG}', langName);
+        }
+
+        async function loadLanguages() {
+            const select = document.getElementById('targetLangSelect');
+            try {
+                const res = await fetch('/api/languages');
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const langs = await res.json();
+
+                select.innerHTML = '';
+                langs.forEach(function(lang) {
+                    const opt = document.createElement('option');
+                    opt.value = lang.code;
+                    opt.textContent = lang.label;
+                    opt.dataset.name = lang.name;
+                    // Mặc định chọn tiếng Nhật
+                    if (lang.code === 'ja') opt.selected = true;
+                    select.appendChild(opt);
+                });
+
+                // Cập nhật prompt với ngôn ngữ mặc định
+                const defaultOpt = select.options[select.selectedIndex];
+                if (defaultOpt) updatePrompt(defaultOpt.dataset.name);
+
+            } catch (e) {
+                select.innerHTML = '<option value="ja" data-name="tiếng Nhật">🇯🇵 Tiếng Nhật (Japanese)</option>';
+                updatePrompt('tiếng Nhật');
+                console.warn('Không thể tải languages.json:', e);
+            }
+
+            // Cập nhật prompt khi user đổi ngôn ngữ
+            select.addEventListener('change', function() {
+                const chosen = this.options[this.selectedIndex];
+                if (chosen) updatePrompt(chosen.dataset.name);
+            });
+        }
+
+        // Chạy ngay khi trang load
+        loadLanguages();
+
         // ==================== UPLOAD EXCEL CHUNG ====================
         const mainExcelFile = document.getElementById('mainExcelFile');
         const mainFileInfo = document.getElementById('mainFileInfo');
@@ -654,7 +714,6 @@ Output yêu cầu:
         // Render danh sách file JSON thành từng hàng
         function renderJsonFileRows(files) {
             jsonFileList.innerHTML = '';
-            const promptText = document.getElementById('aiPrompt').textContent;
             
             files.forEach(function(file, idx) {
                 const row = document.createElement('div');
@@ -675,6 +734,8 @@ Output yêu cầu:
                 // Lưu nội dung vào data attribute (dùng dataset)
                 row.querySelector('.btn-copy-json').addEventListener('click', function() {
                     const btnEl = this;
+                    // Đọc prompt tại thời điểm click để luôn dùng ngôn ngữ hiện tại
+                    const promptText = document.getElementById('aiPrompt').textContent;
                     const textToCopy = promptText + '\n\n' + file.content;
                     
                     navigator.clipboard.writeText(textToCopy).then(function() {

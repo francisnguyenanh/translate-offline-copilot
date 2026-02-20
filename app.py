@@ -621,6 +621,29 @@ def index():
     cleanup_old_sessions()
     return render_template('index.html')
 
+@app.route('/api/languages', methods=['GET'])
+@login_required
+def get_languages():
+    """
+    Trả về danh sách ngôn ngữ đích từ file languages.json
+    """
+    languages_file = os.path.join(os.path.dirname(__file__), 'languages.json')
+    try:
+        with open(languages_file, 'r', encoding='utf-8') as f:
+            languages = json.load(f)
+        return jsonify(languages)
+    except FileNotFoundError:
+        # Fallback nếu file không tồn tại
+        return jsonify([
+            {"code": "ja", "name": "tiếng Nhật",  "label": "🇯🇵 Tiếng Nhật (Japanese)"},
+            {"code": "en", "name": "tiếng Anh",   "label": "🇺🇸 Tiếng Anh (English)"},
+            {"code": "vi", "name": "tiếng Việt",  "label": "🇻🇳 Tiếng Việt (Vietnamese)"},
+            {"code": "zh", "name": "tiếng Trung", "label": "🇨🇳 Tiếng Trung (Chinese)"},
+            {"code": "ko", "name": "tiếng Hàn",   "label": "🇰🇷 Tiếng Hàn (Korean)"}
+        ])
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/extract', methods=['POST'])
 @login_required
 def extract():
