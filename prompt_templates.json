@@ -1,17 +1,19 @@
-[
-  {
-    "content": "Hãy dịch các giá trị (values) trong file JSON này sang {TARGET_LANG}.\n\nPhong cách: Chính xác, chuyên nghiệp, dùng trong tài liệu kinh doanh.\n\nQuy tắc bắt buộc:\n1. Giữ nguyên 100% các keys (tọa độ cell như \"Sheet1!A1\")\n2. CHỈ dịch nội dung bên trong values\n3. KHÔNG dịch các từ/cụm từ đã là ngôn ngữ đích - GIỮ NGUYÊN chúng\n4. KHÔNG dịch các mã kỹ thuật, placeholder, hoặc tên biến\n5. KHÔNG dịch số, ngày tháng, ký hiệu đặc biệt\n6. Giữ nguyên format JSON chuẩn\n\n⚠️ QUY TẮC QUAN TRỌNG về dấu ngoặc kép:\n- CHỈ sử dụng dấu ngoặc kép THẲNG chuẩn JSON: \" (U+0022)\n- TUYỆT ĐỐI KHÔNG dùng dấu ngoặc kép đặc biệt: \" \" „ ‟ « »\n- Nếu cần trích dẫn trong nội dung dịch: dùng 「 」hoặc 'đơn'\n- Ví dụ ĐÚNG: \"App 「Order Printer Pro」 の使用\"\n- Ví dụ SAI: \"App \"Order Printer Pro\" の使用\" ❌\n\nOutput yêu cầu:\n- Trả về ĐÚNG cấu trúc JSON gốc\n- KHÔNG thêm giải thích hay văn bản nào khác\n- Đảm bảo encoding UTF-8\n- Kiểm tra kỹ KHÔNG có dấu ngoặc kép đặc biệt trong output",
-    "id": "formal",
-    "name": "Dịch chính xác (Formal)"
-  },
-  {
-    "content": "Hãy dịch các giá trị (values) trong file JSON này sang {TARGET_LANG}.\n\nPhong cách: Tự nhiên, thân thiện, dễ đọc - phù hợp cho giao diện người dùng và app.\n\nQuy tắc bắt buộc:\n1. Giữ nguyên 100% các keys (tọa độ cell như \"Sheet1!A1\")\n2. CHỈ dịch nội dung bên trong values\n3. KHÔNG dịch các từ/cụm từ đã là ngôn ngữ đích - GIỮ NGUYÊN chúng\n4. KHÔNG dịch các mã kỹ thuật, placeholder, hoặc tên biến\n5. KHÔNG dịch số, ngày tháng, ký hiệu đặc biệt\n6. Giữ nguyên format JSON chuẩn\n\n⚠️ QUY TẮC QUAN TRỌNG về dấu ngoặc kép:\n- CHỈ sử dụng dấu ngoặc kép THẲNG chuẩn JSON: \" (U+0022)\n- TUYỆT ĐỐI KHÔNG dùng dấu ngoặc kép đặc biệt: \" \" „ ‟ « »\n- Nếu cần trích dẫn trong nội dung dịch: dùng 「 」hoặc 'đơn'\n- Ví dụ ĐÚNG: \"App 「Order Printer Pro」 の使用\"\n- Ví dụ SAI: \"App \"Order Printer Pro\" の使用\" ❌\n\nOutput yêu cầu:\n- Trả về ĐÚNG cấu trúc JSON gốc\n- KHÔNG thêm giải thích hay văn bản nào khác\n- Đảm bảo encoding UTF-8\n- Kiểm tra kỹ KHÔNG có dấu ngoặc kép đặc biệt trong output",
-    "id": "casual",
-    "name": "Dịch tự nhiên (Casual)"
-  },
-  {
-    "content": "Hãy dịch các giá trị (values) trong file JSON này sang {TARGET_LANG}.\n\nPhong cách: Kỹ thuật, chính xác cao, ưu tiên giữ nguyên thuật ngữ chuyên ngành IT.\n\nQuy tắc bắt buộc:\n1. Giữ nguyên 100% các keys (tọa độ cell như \"Sheet1!A1\")\n2. CHỈ dịch nội dung bên trong values\n3. KHÔNG dịch các từ/cụm từ đã là ngôn ngữ đích - GIỮ NGUYÊN chúng\n4. KHÔNG dịch các mã kỹ thuật, placeholder, hoặc tên biến\n5. KHÔNG dịch số, ngày tháng, ký hiệu đặc biệt\n6. Giữ nguyên format JSON chuẩn\n\n⚠️ QUY TẮC QUAN TRỌNG về dấu ngoặc kép:\n- CHỈ sử dụng dấu ngoặc kép THẲNG chuẩn JSON: \" (U+0022)\n- TUYỆT ĐỐI KHÔNG dùng dấu ngoặc kép đặc biệt: \" \" „ ‟ « »\n- Nếu cần trích dẫn trong nội dung dịch: dùng 「 」hoặc 'đơn'\n- Ví dụ ĐÚNG: \"App 「Order Printer Pro」 の使用\"\n- Ví dụ SAI: \"App \"Order Printer Pro\" の使用\" ❌\n\nOutput yêu cầu:\n- Trả về ĐÚNG cấu trúc JSON gốc\n- KHÔNG thêm giải thích hay văn bản nào khác\n- Đảm bảo encoding UTF-8\n- Kiểm tra kỹ KHÔNG có dấu ngoặc kép đặc biệt trong output",
-    "id": "technical",
-    "name": "Dịch kỹ thuật (Technical)"
-  }
-]
+{
+  "default": [
+    {
+      "content": "Hãy dịch các giá trị (values) trong file JSON này sang {TARGET_LANG}.\n\nPhong cách: Chính xác, chuyên nghiệp, dùng trong tài liệu kinh doanh.\n\nQuy tắc bắt buộc:\n1. Giữ nguyên 100% các keys (tọa độ cell như \"Sheet1!A1\")\n2. CHỈ dịch nội dung bên trong values\n3. KHÔNG dịch các từ/cụm từ đã là ngôn ngữ đích - GIỮ NGUYÊN chúng\n4. KHÔNG dịch các mã kỹ thuật, placeholder, hoặc tên biến\n5. KHÔNG dịch số, ngày tháng, ký hiệu đặc biệt\n6. Giữ nguyên format JSON chuẩn\n\n⚠️ QUY TẮC QUAN TRỌNG về dấu ngoặc kép:\n- CHỈ sử dụng dấu ngoặc kép THẲNG chuẩn JSON: \" (U+0022)\n- TUYỆT ĐỐI KHÔNG dùng dấu ngoặc kép đặc biệt: \" \" „ ‟ « »\n- Nếu cần trích dẫn trong nội dung dịch: dùng 「 」hoặc 'đơn'\n- Ví dụ ĐÚNG: \"App 「Order Printer Pro」 の使用\"\n- Ví dụ SAI: \"App \"Order Printer Pro\" の使用\" ❌\n\nOutput yêu cầu:\n- Trả về ĐÚNG cấu trúc JSON gốc\n- KHÔNG thêm giải thích hay văn bản nào khác\n- Đảm bảo encoding UTF-8\n- Kiểm tra kỹ KHÔNG có dấu ngoặc kép đặc biệt trong output",
+      "id": "formal",
+      "name": "Dịch chính xác (Formal)"
+    },
+    {
+      "content": "Hãy dịch các giá trị (values) trong file JSON này sang {TARGET_LANG}.\n\nPhong cách: Tự nhiên, thân thiện, dễ đọc - phù hợp cho giao diện người dùng và app.\n\nQuy tắc bắt buộc:\n1. Giữ nguyên 100% các keys (tọa độ cell như \"Sheet1!A1\")\n2. CHỈ dịch nội dung bên trong values\n3. KHÔNG dịch các từ/cụm từ đã là ngôn ngữ đích - GIỮ NGUYÊN chúng\n4. KHÔNG dịch các mã kỹ thuật, placeholder, hoặc tên biến\n5. KHÔNG dịch số, ngày tháng, ký hiệu đặc biệt\n6. Giữ nguyên format JSON chuẩn\n\n⚠️ QUY TẮC QUAN TRỌNG về dấu ngoặc kép:\n- CHỈ sử dụng dấu ngoặc kép THẲNG chuẩn JSON: \" (U+0022)\n- TUYỆT ĐỐI KHÔNG dùng dấu ngoặc kép đặc biệt: \" \" „ ‟ « »\n- Nếu cần trích dẫn trong nội dung dịch: dùng 「 」hoặc 'đơn'\n- Ví dụ ĐÚNG: \"App 「Order Printer Pro」 の使用\"\n- Ví dụ SAI: \"App \"Order Printer Pro\" の使用\" ❌\n\nOutput yêu cầu:\n- Trả về ĐÚNG cấu trúc JSON gốc\n- KHÔNG thêm giải thích hay văn bản nào khác\n- Đảm bảo encoding UTF-8\n- Kiểm tra kỹ KHÔNG có dấu ngoặc kép đặc biệt trong output",
+      "id": "casual",
+      "name": "Dịch tự nhiên (Casual)"
+    },
+    {
+      "content": "Hãy dịch các giá trị (values) trong file JSON này sang {TARGET_LANG}.\n\nPhong cách: Kỹ thuật, chính xác cao, ưu tiên giữ nguyên thuật ngữ chuyên ngành IT.\n\nQuy tắc bắt buộc:\n1. Giữ nguyên 100% các keys (tọa độ cell như \"Sheet1!A1\")\n2. CHỈ dịch nội dung bên trong values\n3. KHÔNG dịch các từ/cụm từ đã là ngôn ngữ đích - GIỮ NGUYÊN chúng\n4. KHÔNG dịch các mã kỹ thuật, placeholder, hoặc tên biến\n5. KHÔNG dịch số, ngày tháng, ký hiệu đặc biệt\n6. Giữ nguyên format JSON chuẩn\n\n⚠️ QUY TẮC QUAN TRỌNG về dấu ngoặc kép:\n- CHỈ sử dụng dấu ngoặc kép THẲNG chuẩn JSON: \" (U+0022)\n- TUYỆT ĐỐI KHÔNG dùng dấu ngoặc kép đặc biệt: \" \" „ ‟ « »\n- Nếu cần trích dẫn trong nội dung dịch: dùng 「 」hoặc 'đơn'\n- Ví dụ ĐÚNG: \"App 「Order Printer Pro」 の使用\"\n- Ví dụ SAI: \"App \"Order Printer Pro\" の使用\" ❌\n\nOutput yêu cầu:\n- Trả về ĐÚNG cấu trúc JSON gốc\n- KHÔNG thêm giải thích hay văn bản nào khác\n- Đảm bảo encoding UTF-8\n- Kiểm tra kỹ KHÔNG có dấu ngoặc kép đặc biệt trong output",
+      "id": "technical",
+      "name": "Dịch kỹ thuật (Technical)"
+    }
+  ]
+}

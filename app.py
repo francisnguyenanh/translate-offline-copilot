@@ -72,13 +72,84 @@ def get_default_templates():
         }
     ]
 
-def load_templates():
-    """Đọc prompt templates từ file (fallback về default nếu không có)"""
+def load_templates(lang='default'):
+    """Đọc prompt templates cho một ngôn ngữ cụ thể (fallback về default)"""
     try:
         with open(TEMPLATES_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            data = json.load(f)
+        # Tương thích ngược: nếu data là array thì đó là format cũ
+        if isinstance(data, list):
+            return data
+        return data.get(lang) or data.get('default') or get_default_templates()
     except Exception:
         return get_default_templates()
+
+
+def build_dedup_data(extracted_data, chunk_size=400):
+    """
+    Gộp các keys có cùng value để giảm số lượng cần dịch.
+    Returns: (dedup_files, mapping, stats)
+      - dedup_files: list of {name, content} – các chunk dedup (giống format files thường)
+      - mapping: {dedup_key: [orig_key1, orig_key2, ...]}
+      - stats: {total, unique, saved, percent_saved}
+    """
+    # Group keys by value (giữ order)
+    value_to_keys = {}
+    for key, value in extracted_data.items():
+        if value not in value_to_keys:
+            value_to_keys[value] = []
+        value_to_keys[value].append(key)
+
+    # Build dedup dict và mapping
+    dedup_data = {}
+    mapping = {}  # dedup_key → [original_keys]
+    for idx, (value, keys) in enumerate(value_to_keys.items(), 1):
+        dk = f'dedup_{idx}'
+        dedup_data[dk] = value
+        mapping[dk] = keys
+
+    total = len(extracted_data)
+    unique = len(dedup_data)
+    saved = total - unique
+    percent = round(saved * 100 / total) if total > 0 else 0
+    stats = {'total': total, 'unique': unique, 'saved': saved, 'percent_saved': percent}
+
+    # Chia thành các chunk
+    items = list(dedup_data.items())
+    num_chunks = max(1, (unique + chunk_size - 1) // chunk_size)
+    dedup_files = []
+    for i in range(num_chunks):
+        chunk = dict(items[i * chunk_size:(i + 1) * chunk_size])
+        dedup_files.append({
+            'name': f'dedup_part{i+1:02d}_of_{num_chunks:02d}.json',
+            'content': json.dumps(chunk, ensure_ascii=False, indent=2)
+        })
+
+    return dedup_files, mapping, stats
+
+
+def expand_dedup_data(json_data, session_folder):
+    """
+    Mở rộng dedup JSON (dedup_N → value) thành keys gốc dựa trên mapping đã lưu.
+    Nếu không tìm thấy mapping file thì trả về nguyên.
+    """
+    mapping_path = os.path.join(session_folder, 'dedup_mapping.json')
+    if not os.path.exists(mapping_path):
+        return json_data
+    try:
+        with open(mapping_path, 'r', encoding='utf-8') as f:
+            mapping = json.load(f)
+        expanded = {}
+        for key, value in json_data.items():
+            if key.startswith('dedup_') and key in mapping:
+                for orig_key in mapping[key]:
+                    expanded[orig_key] = value
+            else:
+                expanded[key] = value  # key thường, giữ nguyên
+        return expanded
+    except Exception:
+        return json_data
+
 
 def get_password():
     """Đọc password từ file password.txt"""
@@ -699,19 +770,29 @@ def get_languages():
 @app.route('/api/templates', methods=['GET'])
 @login_required
 def api_get_templates():
-    """Trả về danh sách prompt templates"""
-    return jsonify(load_templates())
+    """Trả về danh sách prompt templates cho ngôn ngữ được chỉ định"""
+    lang = request.args.get('lang', 'default')
+    return jsonify(load_templates(lang))
 
 @app.route('/api/templates', methods=['POST'])
 @login_required
 def api_save_templates():
-    """Lưu danh sách prompt templates (ghi đè toàn bộ)"""
-    data = request.json
-    if not isinstance(data, list):
+    """Lưu danh sách prompt templates cho ngôn ngữ được chỉ định"""
+    lang = request.args.get('lang', 'default')
+    new_templates = request.json
+    if not isinstance(new_templates, list):
         return jsonify({'error': 'Dữ liệu phải là array'}), 400
     try:
+        try:
+            with open(TEMPLATES_FILE, 'r', encoding='utf-8') as f:
+                all_data = json.load(f)
+            if isinstance(all_data, list):
+                all_data = {'default': all_data}
+        except Exception:
+            all_data = {}
+        all_data[lang] = new_templates
         with open(TEMPLATES_FILE, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+            json.dump(all_data, f, ensure_ascii=False, indent=2)
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -1004,13 +1085,23 @@ def extract():
             'temp_dir': temp_dir
         }
         
+        # Tính toán dedup data (gộp keys có cùng value)
+        dedup_files, dedup_mapping, dedup_stats = build_dedup_data(extracted_data, CHUNK_SIZE)
+
+        # Lưu dedup mapping vào session folder để dùng khi inject
+        dedup_mapping_path = os.path.join(session_folder, 'dedup_mapping.json')
+        with open(dedup_mapping_path, 'w', encoding='utf-8') as f:
+            json.dump(dedup_mapping, f, ensure_ascii=False, indent=2)
+
         # Trả về JSON response với danh sách file để frontend hiển thị
         return jsonify({
             'success': True,
             'total_files': num_files,
             'total_items': total_items,
             'files': files_data,
-            'zip_display_name': zip_display_name
+            'zip_display_name': zip_display_name,
+            'dedup_files': dedup_files,
+            'dedup_stats': dedup_stats
         })
         
     except Exception as e:
@@ -1203,8 +1294,11 @@ def inject():
                     
             except json.JSONDecodeError as e:
                 return jsonify({'error': f'Pasted JSON không hợp lệ: {str(e)}'}), 400
-        
-        
+
+        # Mở rộng dedup keys nếu có (khi user dịch từ dedup JSON)
+        if any(k.startswith('dedup_') for k in json_data):
+            json_data = expand_dedup_data(json_data, session_folder)
+
         # Xác định loại file và nạp dữ liệu (dùng tên file gốc)
         file_ext = original_excel_filename.rsplit('.', 1)[1].lower()
         
