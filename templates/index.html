@@ -181,21 +181,217 @@
             border-color: #28a745 !important;
             color: white !important;
         }
+
+        /* ===== DARK MODE ===== */
+        body.dark-mode {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        }
+        body.dark-mode .function-card {
+            background: #1e2a3a;
+            color: #e0e0e0;
+        }
+        body.dark-mode .function-card h3 { color: #90b4f7; }
+        body.dark-mode .upload-area {
+            background: #253244;
+            border-color: #4a6fa5;
+        }
+        body.dark-mode .upload-area:hover { background: #2c3e54; }
+        body.dark-mode .file-info { background: #253244; color: #ccc; }
+        body.dark-mode .json-file-row {
+            background: #1e3049;
+            border-color: #2d5080;
+            color: #ccc;
+        }
+        body.dark-mode .collapse-toggle {
+            background: #253244 !important;
+            color: #ccc;
+        }
+        body.dark-mode .collapse-toggle .text-info { color: #7ec8e3 !important; }
+        body.dark-mode .collapse > div {
+            background: #253244 !important;
+            color: #ccc;
+        }
+        body.dark-mode .form-control,
+        body.dark-mode .form-select {
+            background: #253244;
+            color: #e0e0e0;
+            border-color: #4a6fa5;
+        }
+        body.dark-mode .nav-tabs .nav-link { color: #90b4f7; }
+        body.dark-mode .nav-tabs .nav-link.active {
+            background: #1e3049;
+            color: #fff;
+            border-color: #4a6fa5;
+        }
+        body.dark-mode .text-muted { color: #8a9bb0 !important; }
+        body.dark-mode footer { color: #8a9bb0 !important; }
+        body.dark-mode .alert-info { background: #1b3a52; color: #7ec8e3; border-color: #2d6a8a; }
+        body.dark-mode #promptDetail > div {
+            background: #1b2d3e !important;
+            border-color: #2d5a7a !important;
+        }
+        body.dark-mode #aiPrompt { color: #b0c8e0; }
+        body.dark-mode .validation-item { background: #253244; border-color: #3a5070; }
+        .dedup-banner {
+            background: #e8f5e9;
+            border: 1px solid #a5d6a7;
+            border-radius: 6px;
+            font-size: 0.8rem;
+        }
+        body.dark-mode .dedup-banner {
+            background: #193d2a;
+            border-color: #1f6640;
+            color: #6dd99e;
+        }
+        body.dark-mode .dedup-banner .text-muted { color: #4d9e6a !important; }
+
+        /* === Dark mode: Improvement for Step 2/3 === */
+        body.dark-mode .file-name { color: #e0e0e0; font-weight: 500; }
+        body.dark-mode .json-file-row { color: #e0e0e0; }
+        body.dark-mode .form-control::placeholder { color: #8a9bb0; }
+        
+        /* === Dark mode: Modal === */
+        body.dark-mode .modal-content {
+            background: #1e3049;
+            color: #e0e0e0;
+            border-color: #2d5080;
+        }
+        body.dark-mode .modal-header {
+            background: #17253a;
+            border-bottom-color: #2d5080;
+        }
+        body.dark-mode .modal-footer {
+            background: #17253a;
+            border-top-color: #2d5080;
+        }
+        body.dark-mode .modal-title { color: #e0e0e0; }
+        body.dark-mode .btn-close { filter: invert(1) brightness(1.5); }
+
+        /* === Dark mode: Dropdown === */
+        body.dark-mode .dropdown-menu {
+            background: #1e3049;
+            border-color: #2d5080;
+        }
+        body.dark-mode .dropdown-item { color: #d0dff0; }
+        body.dark-mode .dropdown-item:hover,
+        body.dark-mode .dropdown-item:focus {
+            background: #253c5a;
+            color: #fff;
+        }
+        body.dark-mode .dropdown-header { color: #8ab4d8; }
+        body.dark-mode .dropdown-divider { border-color: #2d5080; }
+
+        /* === Dark mode: List group (template list in modal) === */
+        body.dark-mode .list-group-item {
+            background: #1e3049;
+            color: #d0dff0;
+            border-color: #2d5080;
+        }
+        body.dark-mode .list-group-item:hover {
+            background: #253c5a;
+            color: #fff;
+        }
+        body.dark-mode .list-group-item.active {
+            background: #0d5c9e;
+            border-color: #1a7ac4;
+            color: #fff;
+        }
+        body.dark-mode .list-group-item-action { color: #d0dff0; }
+
+        /* === Dark mode: Alerts === */
+        body.dark-mode .alert-success {
+            background: #193d2a;
+            color: #6dd99e;
+            border-color: #1f6640;
+        }
+        body.dark-mode .alert-danger {
+            background: #3d1919;
+            color: #f08080;
+            border-color: #7a2020;
+        }
+        body.dark-mode .alert-warning {
+            background: #3d3019;
+            color: #f0c060;
+            border-color: #7a6020;
+        }
+        body.dark-mode .alert-secondary {
+            background: #253244;
+            color: #b0c4d8;
+            border-color: #3a5070;
+        }
+
+        /* === Dark mode: Typography & Labels === */
+        body.dark-mode label,
+        body.dark-mode .form-label { color: #ffffff; }
+        body.dark-mode code {
+            background: #172840;
+            color: #79d4f3;
+            border: 1px solid #2d5080;
+        }
+        body.dark-mode small { color: #a0b0c0; }
+        body.dark-mode strong { color: #ffffff; }
+        body.dark-mode p { color: #e0e0e0; }
+        body.dark-mode hr { border-color: #2d5080; opacity: 0.5; }
+
+        /* === Dark mode: Cards & function cards === */
+        body.dark-mode .card {
+            background: #1b2d3e;
+            border-color: #2d5080;
+            color: #d0e0f0;
+        }
+        body.dark-mode .card-header {
+            background: #17253a;
+            border-bottom-color: #2d5080;
+            color: #e0e0e0;
+        }
+        body.dark-mode .card-body { color: #d0e0f0; }
+
+        /* === Dark mode: Table === */
+        body.dark-mode .table {
+            color: #d0e0f0;
+            border-color: #2d5080;
+        }
+        body.dark-mode .table th,
+        body.dark-mode .table td { border-color: #2d5080; }
+        body.dark-mode .table-striped tbody tr:nth-of-type(odd) { background: #1b2d40; }
+
+        /* === Dark mode: Textarea === */
+        body.dark-mode textarea.form-control {
+            background: #172840;
+            color: #ffffff;
+            border-color: #3a6090;
+        }
+        body.dark-mode textarea.form-control:focus {
+            background: #1b3050;
+            border-color: #5090c8;
+            box-shadow: 0 0 0 0.2rem rgba(80,144,200,0.25);
+        }
+
+        /* === Dark mode: Tab border at bottom === */
+        body.dark-mode .nav-tabs { border-bottom-color: #2d5080; }
+        body.dark-mode .nav-tabs .nav-link:not(.active):hover {
+            background: #1b2d3e;
+            border-color: #2d5080 #2d5080 transparent;
+        }
     </style>
 </head>
-<body>
+<body class="dark-mode">
     <div class="main-container">
         <!-- Header -->
         <div class="header">
             <h1><i class="fas fa-language"></i> Tomo Translation</h1>
             <p>Công cụ quản lý trích xuất và nạp bản dịch cho file Excel (.xlsx), PowerPoint (.pptx) và Word (.docx)</p>
-            <div class="mt-3">
+            <div class="mt-3 d-flex flex-wrap justify-content-center gap-2">
                 <button class="btn btn-outline-light btn-sm" onclick="clearUploads()" title="Xóa file trong phiên của bạn">
                     <i class="fas fa-trash-alt"></i> Xóa file của tôi
                 </button>
-                <a href="/logout" class="btn btn-outline-light btn-sm ms-2" title="Đăng xuất">
+                <a href="/logout" class="btn btn-outline-light btn-sm" title="Đăng xuất">
                     <i class="fas fa-sign-out-alt"></i> Đăng xuất
                 </a>
+                <button class="btn btn-outline-light btn-sm" id="darkModeToggle" onclick="toggleDarkMode()" title="Chuyển chế độ tối/sáng">
+                    <i class="fas fa-sun" id="darkModeIcon"></i> <span id="darkModeLabel">Light Mode</span>
+                </button>
+
             </div>
         </div>
         
@@ -243,6 +439,8 @@
                             <i class="fas fa-info-circle"></i> Danh sách ngôn ngữ chỉnh sửa trong <code>languages.json</code>
                         </div>
                     </div>
+
+
                     
                     <!-- Hướng dẫn collapse -->
                     <div class="mt-3">
@@ -252,7 +450,7 @@
                             <i class="fas fa-chevron-down float-end"></i>
                         </div>
                         <div class="collapse mt-2" id="step1Guide">
-                            <div class="p-2" style="background: #f8f9fa; border-radius: 5px;">
+                            <div class="p-2" style="border-radius: 5px;">
                                 <ul class="small mb-0" style="padding-left: 20px;">
                                     <li>Hỗ trợ Excel (.xlsx), PowerPoint (.pptx) <b>và Word (.docx)</b></li>
                                     <li>Kéo thả hoặc click để chọn file</li>
@@ -291,29 +489,22 @@
                         <div id="extractAlert"></div>
                     </form>
                     
-                    <!-- Kết quả sau khi trích xuất -->
-                    <div id="extractResult" style="display: none;">
-                        <hr class="my-2">
-                        
-                        <!-- Btn download ZIP -->
-                        <div class="text-center mb-2">
-                            <a id="downloadZipBtn" href="/download-zip" class="btn btn-success btn-sm">
-                                <i class="fas fa-file-archive"></i> Tải ZIP
-                            </a>
-                            <span id="extractSummary" class="text-muted small ms-2"></span>
-                        </div>
-                        
-                        <!-- Danh sách file JSON -->
-                        <div id="jsonFileList"></div>
-                    </div>
-                    
                     <!-- Prompt AI -->
-                    <div class="mt-3 text-center">
-                        <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="collapse" data-bs-target="#promptDetail">
-                            <i class="fas fa-eye"></i> Xem Prompt AI
-                        </button>
+                    <div class="mt-3">
+                        <!-- Template Selector -->
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                            <small> <strong>Template:</strong></small>
+                            <select class="form-select form-select-sm" id="templateSelect" style="font-size:0.78rem;"></select>
+                            <button class="btn btn-outline-primary btn-sm py-0 px-2" style="font-size:0.72rem;flex-shrink:0" onclick="openTemplateModal()">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                        </div>
+                        <div class="text-center">
+                            <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="collapse" data-bs-target="#promptDetail">
+                                <i class="fas fa-eye"></i> Xem Prompt AI
+                            </button>
+                        </div>
                     </div>
-                    
                     <!-- Nội dung prompt collapse -->
                     <div class="collapse mt-2" id="promptDetail">
                         <div style="background: #e3f2fd; padding: 10px; border-radius: 5px; border: 1px solid #90caf9;">
@@ -341,7 +532,30 @@ Output yêu cầu:
 - Kiểm tra kỹ KHÔNG có dấu ngoặc kép đặc biệt trong output</pre>
                         </div>
                     </div>
+                    <!-- Kết quả sau khi trích xuất -->
+                    <div id="extractResult" style="display: none;">
+                        <hr class="my-2">                        
+
+                        <!-- Dedup Panel -->
+                        <div id="dedupPanel" style="display:none;"></div>
+
+                        <!-- Danh sách file JSON -->
+                        <div id="jsonFileList"></div>
+
+                        <!-- Btn download ZIP -->
+                        <div class="text-center mb-2">
+                            <a id="downloadZipBtn" href="/download-zip" class="btn btn-success btn-sm">
+                                <i class="fas fa-file-archive"></i> Tải ZIP
+                            </a>
+                            <span id="extractSummary" class="text-muted small ms-2"></span>
+                        </div>
+                                                
+                        <!-- Duplicate warning -->
+                        
+
+                    </div>
                     
+
                     <!-- Hướng dẫn collapse -->
                     <div class="mt-3">
                         <div class="collapse-toggle p-2" style="background: #f8f9fa; border-radius: 5px;" data-bs-toggle="collapse" data-bs-target="#step2Guide">
@@ -350,7 +564,7 @@ Output yêu cầu:
                             <i class="fas fa-chevron-down float-end"></i>
                         </div>
                         <div class="collapse mt-2" id="step2Guide">
-                            <div class="p-2" style="background: #f8f9fa; border-radius: 5px;">
+                            <div class="p-2" style=" border-radius: 5px;">
                                 <ul class="small mb-0" style="padding-left: 20px;">
                                     <li>Click "Trích xuất JSON" để xử lý</li>
                                     <li>Sau khi xong: hiển thị từng file JSON</li>
@@ -445,6 +659,14 @@ Output yêu cầu:
                                 <i class="fas fa-download"></i> Nạp & Tải về
                             </button>
                         </div>
+
+                        <!-- Validation -->
+                        <div class="mt-2">
+                            <button type="button" class="btn btn-outline-info btn-sm w-100" id="validateBtn" onclick="runValidation()">
+                                <i class="fas fa-check-double"></i> Kiểm tra bản dịch
+                            </button>
+                            <div id="validationResult" class="mt-2" style="display:none;"></div>
+                        </div>
                         
                         <div class="loading text-center" id="injectLoading">
                             <div class="spinner-border text-primary" role="status">
@@ -464,7 +686,7 @@ Output yêu cầu:
                             <i class="fas fa-chevron-down float-end"></i>
                         </div>
                         <div class="collapse mt-2" id="step3Guide">
-                            <div class="p-2" style="background: #f8f9fa; border-radius: 5px;">
+                            <div class="p-2" style="border-radius: 5px;">
                                 <ul class="small mb-0" style="padding-left: 20px;">
                                     <li><strong>2 cách nạp JSON:</strong></li>
                                     <li style="list-style: none; padding-left: 15px;">
@@ -498,18 +720,68 @@ Output yêu cầu:
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Modal: Template Editor -->
+    <div class="modal fade" id="templateModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-magic"></i> Quản lý Prompt Templates</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Template list (left) + edit form (right) -->
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <strong class="small">Danh sách:</strong>
+                                <button class="btn btn-outline-success btn-sm py-0 px-2" style="font-size:0.75rem" onclick="addNewTemplate()">
+                                    <i class="fas fa-plus"></i> Thêm
+                                </button>
+                            </div>
+                            <div id="templateList" class="list-group" style="max-height:300px;overflow-y:auto;"></div>
+                        </div>
+                        <div class="col-md-8" id="templateEditPanel" style="display:none;">
+                            <div class="mb-2">
+                                <label class="form-label small mb-1"><strong>Tên template:</strong></label>
+                                <input type="text" class="form-control form-control-sm" id="editTemplateName" placeholder="Tên hiển thị...">
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label small mb-1"><strong>Nội dung prompt</strong> <span class="text-muted">(dùng <code>{TARGET_LANG}</code> cho ngôn ngữ đích)</span>:</label>
+                                <textarea class="form-control" id="editTemplateContent" rows="10" style="font-size:0.78rem;font-family:monospace;"></textarea>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-primary btn-sm" onclick="saveEditTemplate()"><i class="fas fa-save"></i> Lưu</button>
+                                <button class="btn btn-outline-danger btn-sm" onclick="deleteEditTemplate()"><i class="fas fa-trash"></i> Xóa</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <small class="text-muted me-auto">Templates lưu trong <code>prompt_templates.json</code></small>
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Đóng</button>
+                </div>
+            </div>
+        </div>
+    </div>
     
     <script>
         // ==================== BIẾN TOÀN CỤC ====================
-        let uploadedExcelFilename = null; // Lưu tên file Excel đã upload
+        let uploadedExcelFilename  = null;
+        let extractedFilesData     = null;
+        let extractedDedupData     = null;  // Dedup files từ server
+        let currentLangCode        = 'ja';
+        let currentLangName        = 'tiếng Nhật';
+        let currentTemplateContent = '';
+        let editingTemplateIdx     = -1;
 
         // ==================== NGÔN NGỮ ĐÍCH ====================
-        // Template prompt (dùng {TARGET_LANG} làm placeholder)
-        const PROMPT_TEMPLATE = document.getElementById('aiPrompt').textContent;
+        const INITIAL_PROMPT = document.getElementById('aiPrompt').textContent;
+        currentTemplateContent = INITIAL_PROMPT;
 
         function updatePrompt(langName) {
-            document.getElementById('aiPrompt').textContent =
-                PROMPT_TEMPLATE.replace('{TARGET_LANG}', langName);
+            let promptText = currentTemplateContent.replace(/{TARGET_LANG}/g, langName);
+            document.getElementById('aiPrompt').textContent = promptText;
         }
 
         async function loadLanguages() {
@@ -518,32 +790,35 @@ Output yêu cầu:
                 const res = await fetch('/api/languages');
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 const langs = await res.json();
-
                 select.innerHTML = '';
                 langs.forEach(function(lang) {
                     const opt = document.createElement('option');
-                    opt.value = lang.code;
-                    opt.textContent = lang.label;
+                    opt.value        = lang.code;
+                    opt.textContent  = lang.label;
                     opt.dataset.name = lang.name;
-                    // Mặc định chọn tiếng Nhật
                     if (lang.code === 'ja') opt.selected = true;
                     select.appendChild(opt);
                 });
-
-                // Cập nhật prompt với ngôn ngữ mặc định
-                const defaultOpt = select.options[select.selectedIndex];
-                if (defaultOpt) updatePrompt(defaultOpt.dataset.name);
-
+                const def = select.options[select.selectedIndex];
+                if (def) {
+                    currentLangCode = def.value;
+                    currentLangName = def.dataset.name;
+                    updatePrompt(currentLangName);
+                    await loadTemplates(currentLangCode);
+                }
             } catch (e) {
                 select.innerHTML = '<option value="ja" data-name="tiếng Nhật">🇯🇵 Tiếng Nhật (Japanese)</option>';
                 updatePrompt('tiếng Nhật');
                 console.warn('Không thể tải languages.json:', e);
             }
-
-            // Cập nhật prompt khi user đổi ngôn ngữ
-            select.addEventListener('change', function() {
+            select.addEventListener('change', async function() {
                 const chosen = this.options[this.selectedIndex];
-                if (chosen) updatePrompt(chosen.dataset.name);
+                if (chosen) {
+                    currentLangCode = chosen.value;
+                    currentLangName = chosen.dataset.name;
+                    updatePrompt(currentLangName);
+                    await loadTemplates(currentLangCode);
+                }
             });
         }
 
@@ -653,6 +928,9 @@ Output yêu cầu:
             // Ẩn kết quả cũ
             extractResult.style.display = 'none';
             jsonFileList.innerHTML = '';
+            extractedDedupData = null;
+            const dedupPanel = document.getElementById('dedupPanel');
+            if (dedupPanel) { dedupPanel.style.display = 'none'; dedupPanel.innerHTML = ''; }
             
             // Hiển thị loading
             extractLoading.style.display = 'block';
@@ -680,15 +958,37 @@ Output yêu cầu:
                     
                     if (data.success) {
                         // Hiển thị tóm tắt
-                        extractSummary.textContent = `${data.total_files} file · ${data.total_items} keys`;
-                        
-                        // Render từng hàng file JSON
+                        // Lưu extracted data cho TM và validation
+                        extractedFilesData = data.files;
+                        extractedDedupData = data.dedup_files || null;
+
+                        // Render file rows
                         renderJsonFileRows(data.files);
-                        
+
+                        // Render dedup panel
+                        if (extractedDedupData && data.dedup_stats) {
+                            renderDedupPanel(extractedDedupData, data.dedup_stats);
+                        }
+
+                        // Cập nhật summary
+                        const ds = data.dedup_stats;
+                        if (ds && ds.saved > 0) {
+                            extractSummary.textContent = `${data.total_files} file · ${data.total_items} keys (${ds.unique} unique)`;
+                        } else {
+                            extractSummary.textContent = `${data.total_files} file · ${data.total_items} keys`;
+                        }
+
+                        // Kiểm tra text trùng lặp
+                        detectDuplicatesInFiles(data.files);
+
                         // Hiện khu vực kết quả
                         extractResult.style.display = 'block';
-                        
-                        showAlert(extractAlert, 'success', `Trích xuất thành công! ${data.total_files} file JSON, ${data.total_items} cặp key-value. Click <strong>Copy</strong> để copy prompt + JSON vào AI, hoặc <strong>Tải ZIP</strong> để tải tất cả.`);
+
+                        const ds2 = data.dedup_stats;
+                        const dedupNote = (ds2 && ds2.saved > 0)
+                            ? ` | 📈 <strong>Dedup:</strong> chỉ cần dịch <strong>${ds2.unique}</strong>/${ds2.total} (tiết kiệm ${ds2.saved}, ${ds2.percent_saved}%)`
+                            : '';
+                        //showAlert(extractAlert, 'success', `Trích xuất thành công! ${data.total_files} file JSON, ${data.total_items} cặp key-value.${dedupNote} Click <strong>Copy</strong> hoặc <strong>Copy Dedup</strong> để dùng với AI.`);
                     } else {
                         showAlert(extractAlert, 'danger', data.error || 'Có lỗi xảy ra!');
                     }
@@ -771,8 +1071,70 @@ Output yêu cầu:
                 jsonFileList.appendChild(row);
             });
         }
-        
-        // ==================== CHỨC NĂNG INJECT ====================
+
+        // Render dedup panel – hiển thị thống kê và các file dedup
+        function renderDedupPanel(dedupFiles, stats) {
+            const panel = document.getElementById('dedupPanel');
+            if (!panel) return;
+
+            const savedPct = stats.saved > 0
+                ? `<span class="badge bg-success ms-1">-${stats.percent_saved}%</span>`
+                : '';
+
+            let rowsHtml = dedupFiles.map((file, idx) => `
+                <div class="json-file-row d-flex align-items-center gap-2" style="margin-top:4px">
+                    <span class="file-name text-truncate" style="flex:1;font-size:0.78rem" title="${file.name}">
+                        <i class="fas fa-compress-alt text-success"></i> ${file.name}
+                    </span>
+                    <button type="button"
+                        class="btn btn-outline-success btn-sm btn-copy-dedup"
+                        data-dedup-idx="${idx}"
+                        title="Copy prompt AI + nội dung dedup JSON này (ít keys hơn)">
+                        <i class="fas fa-copy"></i> Copy Dedup
+                    </button>
+                </div>
+            `).join('');
+
+            panel.innerHTML = `
+                <div class="dedup-banner alert py-2 px-3 mb-2">
+                    <strong><i class="fas fa-compress-arrows-alt text-success me-1"></i>Dedup Mode</strong>
+                    — Tổng <strong>${stats.total}</strong> keys →
+                    chỉ cần dịch <strong>${stats.unique}</strong> unique values
+                    ${savedPct}
+                    <span class="text-muted">(tiết kiệm ${stats.saved} lần dịch)</span>
+                    <div class="mt-1" id="dedupFileRows">${rowsHtml}</div>
+                </div>`;
+            panel.style.display = 'block';
+
+            // Gắn sự kiện cho các nút Copy Dedup
+            panel.querySelectorAll('.btn-copy-dedup').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const btnEl = this;
+                    const idx   = parseInt(this.dataset.dedupIdx);
+                    const file  = extractedDedupData[idx];
+                    const promptText = document.getElementById('aiPrompt').textContent;
+                    const textToCopy = promptText + '\n\n' + file.content;
+
+                    navigator.clipboard.writeText(textToCopy).then(() => {
+                        btnEl.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                        btnEl.classList.add('copied');
+                        setTimeout(() => {
+                            btnEl.innerHTML = '<i class="fas fa-copy"></i> Copy Dedup';
+                            btnEl.classList.remove('copied');
+                        }, 2000);
+                    }).catch(() => {
+                        const ta = document.createElement('textarea');
+                        ta.value = textToCopy;
+                        ta.style.cssText = 'position:fixed;opacity:0';
+                        document.body.appendChild(ta);
+                        ta.select();
+                        try { document.execCommand('copy'); btnEl.innerHTML = '<i class="fas fa-check"></i> Copied!'; setTimeout(() => { btnEl.innerHTML = '<i class="fas fa-copy"></i> Copy Dedup'; }, 2000); }
+                        catch(e) { alert('Không thể copy tự động.'); }
+                        document.body.removeChild(ta);
+                    });
+                });
+            });
+        }
         
         const injectForm = document.getElementById('injectForm');
         const injectJsonFile = document.getElementById('injectJsonFile');
@@ -1132,7 +1494,229 @@ Output yêu cầu:
         // Hàm copy prompt AI
         // copyPrompt() đã được thay thế bởi renderJsonFileRows() inline copy
         
-        function showAlert(element, type, message) {
+
+        // ==================== PROMPT TEMPLATES ====================
+        let allTemplates = [];
+
+        async function loadTemplates(lang) {
+            lang = lang || currentLangCode || 'default';
+            try {
+                const res = await fetch('/api/templates?lang=' + encodeURIComponent(lang));
+                if (!res.ok) throw new Error();
+                allTemplates = await res.json();
+            } catch(e) {
+                allTemplates = [{id:'default', name:'Mặc định', content: INITIAL_PROMPT}];
+            }
+            renderTemplateSelect();
+        }
+
+        function renderTemplateSelect() {
+            const sel = document.getElementById('templateSelect');
+            if (!sel) return;
+            sel.innerHTML = '';
+            allTemplates.forEach((t, i) => {
+                const opt = document.createElement('option');
+                opt.value = i;
+                opt.textContent = t.name;
+                sel.appendChild(opt);
+            });
+            applyTemplate(0);
+            // Replace with clone to clear any previously attached listeners
+            const fresh = sel.cloneNode(true);
+            sel.parentNode.replaceChild(fresh, sel);
+            fresh.addEventListener('change', function() { applyTemplate(parseInt(this.value)); });
+        }
+
+        function applyTemplate(idx) {
+            if (!allTemplates[idx]) return;
+            currentTemplateContent = allTemplates[idx].content;
+            updatePrompt(currentLangName);
+        }
+
+        function openTemplateModal() {
+            const title = document.querySelector('#templateModal .modal-title');
+            if (title) title.innerHTML = `<i class="fas fa-magic"></i> Quản lý Prompt Templates <small class="text-muted ms-1" style="font-size:0.75em">(${currentLangName})</small>`;
+            renderTemplateListInModal();
+            new bootstrap.Modal(document.getElementById('templateModal')).show();
+        }
+
+        function renderTemplateListInModal() {
+            const list = document.getElementById('templateList');
+            list.innerHTML = '';
+            allTemplates.forEach((t, i) => {
+                const btn = document.createElement('button');
+                btn.className = 'list-group-item list-group-item-action py-1 small';
+                btn.textContent = t.name;
+                btn.onclick = () => openTemplateForEdit(i);
+                list.appendChild(btn);
+            });
+        }
+
+        function openTemplateForEdit(idx) {
+            editingTemplateIdx = idx;
+            document.getElementById('editTemplateName').value    = allTemplates[idx].name;
+            document.getElementById('editTemplateContent').value = allTemplates[idx].content;
+            document.getElementById('templateEditPanel').style.display = 'block';
+            document.querySelectorAll('#templateList .list-group-item').forEach((el, i) => {
+                el.classList.toggle('active', i === idx);
+            });
+        }
+
+        function addNewTemplate() {
+            allTemplates.push({id: 'custom_' + Date.now(), name: 'Template mới', content: INITIAL_PROMPT});
+            renderTemplateListInModal();
+            openTemplateForEdit(allTemplates.length - 1);
+        }
+
+        async function saveEditTemplate() {
+            if (editingTemplateIdx < 0) return;
+            allTemplates[editingTemplateIdx].name    = document.getElementById('editTemplateName').value.trim() || 'Template';
+            allTemplates[editingTemplateIdx].content = document.getElementById('editTemplateContent').value;
+            try {
+                await fetch('/api/templates?lang=' + encodeURIComponent(currentLangCode), {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(allTemplates)});
+            } catch(e) {}
+            renderTemplateListInModal();
+            renderTemplateSelect();
+            alert('✅ Đã lưu template!');
+        }
+
+        async function deleteEditTemplate() {
+            if (editingTemplateIdx < 0 || allTemplates.length <= 1) { alert('Cần giữ ít nhất 1 template.'); return; }
+            if (!confirm('Xóa template này?')) return;
+            allTemplates.splice(editingTemplateIdx, 1);
+            editingTemplateIdx = -1;
+            document.getElementById('templateEditPanel').style.display = 'none';
+            try {
+                await fetch('/api/templates?lang=' + encodeURIComponent(currentLangCode), {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(allTemplates)});
+            } catch(e) {}
+            renderTemplateListInModal();
+            renderTemplateSelect();
+        }
+
+        // ==================== DUPLICATE DETECTION ====================
+        function detectDuplicatesInFiles(files) {
+            const valueCounts = {};
+            files.forEach(file => {
+                try {
+                    const obj = JSON.parse(file.content);
+                    for (const [k, v] of Object.entries(obj)) {
+                        if (!valueCounts[v]) valueCounts[v] = [];
+                        valueCounts[v].push(k);
+                    }
+                } catch(e) {}
+            });
+            const dups = Object.entries(valueCounts).filter(([v, keys]) => keys.length > 1);
+        }
+
+        // ==================== SMART VALIDATION ====================
+        function runValidation() {
+            // Gom tất cả JSON đã paste
+            const translated = {};
+            pastedJsonData.forEach(obj => Object.assign(translated, obj));
+
+            if (Object.keys(translated).length === 0) {
+                document.getElementById('validationResult').style.display = 'block';
+                document.getElementById('validationResult').innerHTML =
+                    '<div class="alert alert-warning py-1 small mt-1"><i class="fas fa-exclamation-triangle"></i> Chưa có JSON nào để kiểm tra. Hãy paste JSON đã dịch trước.</div>';
+                return;
+            }
+
+            // Gom source text (nếu có)
+            const source = {};
+            if (extractedFilesData) {
+                extractedFilesData.forEach(f => {
+                    try { Object.assign(source, JSON.parse(f.content)); } catch(e) {}
+                });
+            }
+
+            const errors = [], warnings = [];
+            const INVALID_QUOTES = /[“”„‟«»‘’]/;
+            const PLACEHOLDER_RE = /\{[\w\d_]+\}|%[sdf\d]|\$\d+|%\d+\$[sd]|%\d/g;
+            const URL_RE         = /https?:\/\/[^\s"]+/g;
+            const EMAIL_RE       = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
+
+            for (const [key, tVal] of Object.entries(translated)) {
+                // 1. Dấu ngoặc kép đặc biệt
+                if (INVALID_QUOTES.test(tVal)) {
+                    errors.push({key, msg: 'Có dấu ngoặc kép đặc biệt (" " hoặc tương tự) — cần thay bằng \"'});
+                }
+                const sVal = source[key];
+                if (sVal !== undefined) {
+                    // 2. Placeholder bị thiếu
+                    const srcPH = [...sVal.matchAll(PLACEHOLDER_RE)].map(m => m[0]);
+                    const missing = srcPH.filter(ph => !tVal.includes(ph));
+                    if (missing.length > 0) {
+                        errors.push({key, msg: `Thiếu placeholder: ${missing.join(', ')}`});
+                    }
+                    // 3. Độ dài chênh lệch > 50%
+                    if (sVal.length > 5) {
+                        const ratio = tVal.length / sVal.length;
+                        if (ratio > 2.0 || ratio < 0.3) {
+                            warnings.push({key, msg: `Độ dài khác biệt nhiều: gốc ${sVal.length} → dịch ${tVal.length} ký tự`});
+                        }
+                    }
+                    // 4. URL không được thay đổi
+                    const srcURLs = [...sVal.matchAll(URL_RE)].map(m => m[0]);
+                    srcURLs.filter(u => !tVal.includes(u)).forEach(u => {
+                        warnings.push({key, msg: `URL cần giữ nguyên: ${u.substring(0, 50)}`});
+                    });
+                    // 5. Email không được thay đổi
+                    const srcEmails = [...sVal.matchAll(EMAIL_RE)].map(m => m[0]);
+                    srcEmails.filter(e => !tVal.includes(e)).forEach(e => {
+                        warnings.push({key, msg: `Email cần giữ nguyên: ${e}`});
+                    });
+                }
+            }
+
+            renderValidationResult(errors, warnings, Object.keys(translated).length);
+        }
+
+        function renderValidationResult(errors, warnings, totalKeys) {
+            const el = document.getElementById('validationResult');
+            el.style.display = 'block';
+            if (errors.length === 0 && warnings.length === 0) {
+                el.innerHTML = `<div class="alert alert-success py-1 small mt-1"><i class="fas fa-check-circle"></i> Kiểm tra ${totalKeys} keys — Không phát hiện vấn đề!</div>`;
+                return;
+            }
+            let html = `<div class="mt-1" style="font-size:0.78rem;">
+                <div class="mb-1"><strong>${totalKeys} keys</strong> — <span class="text-danger">${errors.length} lỗi</span>, <span class="text-warning">${warnings.length} cảnh báo</span></div>`;
+            if (errors.length > 0) {
+                html += `<div class="mb-1"><strong class="text-danger"><i class="fas fa-times-circle"></i> Lỗi:</strong>
+                    <ul class="mb-0 ps-3">` +
+                    errors.slice(0, 20).map(e => `<li><code>${e.key.substring(0,30)}</code>: ${e.msg}</li>`).join('') +
+                    (errors.length > 20 ? `<li>... và ${errors.length - 20} lỗi khác</li>` : '') +
+                    `</ul></div>`;
+            }
+            if (warnings.length > 0) {
+                html += `<div><strong class="text-warning"><i class="fas fa-exclamation-triangle"></i> Cảnh báo:</strong>
+                    <ul class="mb-0 ps-3">` +
+                    warnings.slice(0, 10).map(w => `<li><code>${w.key.substring(0,30)}</code>: ${w.msg}</li>`).join('') +
+                    (warnings.length > 10 ? `<li>... và ${warnings.length - 10} cảnh báo khác</li>` : '') +
+                    `</ul></div>`;
+            }
+            html += '</div>';
+            el.innerHTML = html;
+        }
+
+
+        // ==================== DARK MODE ====================
+        function toggleDarkMode() {
+            const isDark = document.body.classList.toggle('dark-mode');
+            localStorage.setItem('darkMode', isDark ? '1' : '0');
+            document.getElementById('darkModeIcon').className   = isDark ? 'fas fa-sun'  : 'fas fa-moon';
+            document.getElementById('darkModeLabel').textContent = isDark ? 'Light Mode' : 'Dark Mode';
+        }
+        (function() {
+            // Mặc định là Dark Mode (đã set class dark-mode trong <body>)
+            // Nếu user đã chủ động chọn Light Mode ('0'), thì mới chuyển về Light
+            if (localStorage.getItem('darkMode') === '0') {
+                document.body.classList.remove('dark-mode');
+                document.getElementById('darkModeIcon').className    = 'fas fa-moon';
+                document.getElementById('darkModeLabel').textContent = 'Dark Mode';
+            }
+        })();
+
+                function showAlert(element, type, message) {
             element.innerHTML = `
                 <div class="alert alert-${type} alert-custom alert-dismissible fade show" role="alert">
                     <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'warning' ? 'exclamation-triangle' : 'times-circle'}"></i>
