@@ -524,8 +524,14 @@
                     
                     <!-- Kết quả sau khi trích xuất -->
                     <div id="extractResult" style="display: none;">
-                        <hr class="my-2">
-                        
+                        <hr class="my-2">                        
+
+                        <!-- Dedup Panel -->
+                        <div id="dedupPanel" style="display:none;"></div>
+
+                        <!-- Danh sách file JSON -->
+                        <div id="jsonFileList"></div>
+
                         <!-- Btn download ZIP -->
                         <div class="text-center mb-2">
                             <a id="downloadZipBtn" href="/download-zip" class="btn btn-success btn-sm">
@@ -533,14 +539,10 @@
                             </a>
                             <span id="extractSummary" class="text-muted small ms-2"></span>
                         </div>
+                                                
                         <!-- Duplicate warning -->
-                        <div id="duplicateWarning" style="display:none" class="alert alert-warning py-1 px-2 mb-2" style="font-size:0.78rem;"></div>
+                        
 
-                        <!-- Dedup Panel -->
-                        <div id="dedupPanel" style="display:none;"></div>
-
-                        <!-- Danh sách file JSON -->
-                        <div id="jsonFileList"></div>
                     </div>
                     
                     <!-- Prompt AI -->
@@ -1029,7 +1031,7 @@ Output yêu cầu:
                         const dedupNote = (ds2 && ds2.saved > 0)
                             ? ` | 📈 <strong>Dedup:</strong> chỉ cần dịch <strong>${ds2.unique}</strong>/${ds2.total} (tiết kiệm ${ds2.saved}, ${ds2.percent_saved}%)`
                             : '';
-                        showAlert(extractAlert, 'success', `Trích xuất thành công! ${data.total_files} file JSON, ${data.total_items} cặp key-value.${dedupNote} Click <strong>Copy</strong> hoặc <strong>Copy Dedup</strong> để dùng với AI.`);
+                        //showAlert(extractAlert, 'success', `Trích xuất thành công! ${data.total_files} file JSON, ${data.total_items} cặp key-value.${dedupNote} Click <strong>Copy</strong> hoặc <strong>Copy Dedup</strong> để dùng với AI.`);
                     } else {
                         showAlert(extractAlert, 'danger', data.error || 'Có lỗi xảy ra!');
                     }
@@ -1797,14 +1799,6 @@ Output yêu cầu:
                 } catch(e) {}
             });
             const dups = Object.entries(valueCounts).filter(([v, keys]) => keys.length > 1);
-            const warn = document.getElementById('duplicateWarning');
-            if (dups.length > 0) {
-                const totalKeys = dups.reduce((s, [, keys]) => s + keys.length, 0);
-                warn.style.display = 'block';
-                warn.innerHTML = `<i class="fas fa-copy text-warning"></i> <strong>Phát hiện ${dups.length} text trùng lặp</strong> (${totalKeys} keys có cùng nội dung) — có thể dịch 1 lần để tiết kiệm!`;
-            } else {
-                warn.style.display = 'none';
-            }
         }
 
         // ==================== SMART VALIDATION ====================
