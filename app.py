@@ -8,7 +8,6 @@ import json
 import zipfile
 import uuid
 import shutil
-import csv
 import io
 from datetime import datetime, timedelta
 from urllib.parse import quote
@@ -32,24 +31,8 @@ ALLOWED_EXTENSIONS = {'xlsx', 'pptx', 'docx'}
 # Đọc password từ file
 PASSWORD_FILE = 'password.txt'
 
-# File lưu Translation Memory, Prompt Templates, thư mục Glossary
-TM_FILE = 'translation_memory.json'
+# File lưu Prompt Templates
 TEMPLATES_FILE = 'prompt_templates.json'
-GLOSSARIES_DIR = 'glossaries'
-
-# ==================== HELPER: TRANSLATION MEMORY ====================
-def load_tm():
-    """Đọc Translation Memory từ file"""
-    try:
-        with open(TM_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception:
-        return {}
-
-def save_tm_data(tm_data):
-    """Ghi Translation Memory ra file"""
-    with open(TM_FILE, 'w', encoding='utf-8') as f:
-        json.dump(tm_data, f, ensure_ascii=False, indent=2)
 
 # ==================== HELPER: PROMPT TEMPLATES ====================
 def get_default_templates():
@@ -793,137 +776,6 @@ def api_save_templates():
         all_data[lang] = new_templates
         with open(TEMPLATES_FILE, 'w', encoding='utf-8') as f:
             json.dump(all_data, f, ensure_ascii=False, indent=2)
-        return jsonify({'success': True})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# ==================== API: TRANSLATION MEMORY ====================
-
-@app.route('/api/tm', methods=['GET'])
-@login_required
-def api_get_tm():
-    """Lấy Translation Memory theo ngôn ngữ"""
-    lang = request.args.get('lang', 'ja')
-    tm = load_tm()
-    return jsonify(tm.get(lang, {}))
-
-@app.route('/api/tm', methods=['POST'])
-@login_required
-def api_save_tm():
-    """Lưu các cặp dịch mới vào Translation Memory"""
-    data = request.json
-    lang = data.get('lang', 'ja')
-    pairs = data.get('pairs', {})
-    if not pairs:
-        return jsonify({'error': 'Không có cặp dịch nào'}), 400
-    tm = load_tm()
-    if lang not in tm:
-        tm[lang] = {}
-    tm[lang].update(pairs)
-    save_tm_data(tm)
-    return jsonify({'success': True, 'saved': len(pairs), 'total': len(tm[lang])})
-
-@app.route('/api/tm/export/<lang>', methods=['GET'])
-@login_required
-def api_export_tm(lang):
-    """Xuất Translation Memory của một ngôn ngữ dưới dạng file JSON"""
-    tm = load_tm()
-    lang_tm = tm.get(lang, {})
-    buf = io.BytesIO(json.dumps(lang_tm, ensure_ascii=False, indent=2).encode('utf-8'))
-    return send_file(buf, mimetype='application/json', as_attachment=True,
-                     download_name=f'tm_{lang}.json')
-
-@app.route('/api/tm/import/<lang>', methods=['POST'])
-@login_required
-def api_import_tm(lang):
-    """Nhập Translation Memory từ file JSON (merge vào TM hiện có)"""
-    if 'file' not in request.files:
-        return jsonify({'error': 'Không có file'}), 400
-    try:
-        new_pairs = json.load(request.files['file'])
-        if not isinstance(new_pairs, dict):
-            return jsonify({'error': 'File phải là JSON object'}), 400
-        tm = load_tm()
-        if lang not in tm:
-            tm[lang] = {}
-        tm[lang].update(new_pairs)
-        save_tm_data(tm)
-        return jsonify({'success': True, 'imported': len(new_pairs), 'total': len(tm[lang])})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 400
-
-@app.route('/api/tm/clear/<lang>', methods=['POST'])
-@login_required
-def api_clear_tm(lang):
-    """Xóa toàn bộ TM của một ngôn ngữ"""
-    tm = load_tm()
-    count = len(tm.get(lang, {}))
-    tm[lang] = {}
-    save_tm_data(tm)
-    return jsonify({'success': True, 'cleared': count})
-
-# ==================== API: GLOSSARY ====================
-
-@app.route('/api/glossary/<lang>', methods=['GET'])
-@login_required
-def api_get_glossary(lang):
-    """Lấy glossary của ngôn ngữ"""
-    filepath = os.path.join(GLOSSARIES_DIR, f'glossary-{lang}.json')
-    try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            return jsonify(json.load(f))
-    except FileNotFoundError:
-        return jsonify({})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/glossary/<lang>/upload', methods=['POST'])
-@login_required
-def api_upload_glossary(lang):
-    """Upload glossary từ file CSV (format: source,translation)"""
-    if 'file' not in request.files:
-        return jsonify({'error': 'Không có file'}), 400
-    try:
-        content = request.files['file'].read().decode('utf-8-sig')
-        reader = csv.reader(io.StringIO(content))
-        glossary = {}
-        for row in reader:
-            if len(row) >= 2 and row[0].strip():
-                glossary[row[0].strip()] = row[1].strip()
-        os.makedirs(GLOSSARIES_DIR, exist_ok=True)
-        with open(os.path.join(GLOSSARIES_DIR, f'glossary-{lang}.json'), 'w', encoding='utf-8') as f:
-            json.dump(glossary, f, ensure_ascii=False, indent=2)
-        return jsonify({'success': True, 'count': len(glossary)})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 400
-
-@app.route('/api/glossary/<lang>/export', methods=['GET'])
-@login_required
-def api_export_glossary(lang):
-    """Xuất glossary dưới dạng file CSV"""
-    filepath = os.path.join(GLOSSARIES_DIR, f'glossary-{lang}.json')
-    try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-    except Exception:
-        data = {}
-    buf = io.StringIO()
-    writer = csv.writer(buf)
-    writer.writerow(['source', 'translation'])
-    for k, v in data.items():
-        writer.writerow([k, v])
-    bytes_buf = io.BytesIO(buf.getvalue().encode('utf-8-sig'))
-    return send_file(bytes_buf, mimetype='text/csv', as_attachment=True,
-                     download_name=f'glossary-{lang}.csv')
-
-@app.route('/api/glossary/<lang>/clear', methods=['POST'])
-@login_required
-def api_clear_glossary(lang):
-    """Xóa glossary của ngôn ngữ"""
-    filepath = os.path.join(GLOSSARIES_DIR, f'glossary-{lang}.json')
-    try:
-        if os.path.exists(filepath):
-            os.remove(filepath)
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 500

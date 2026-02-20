@@ -232,7 +232,6 @@
         }
         body.dark-mode #aiPrompt { color: #b0c8e0; }
         body.dark-mode .validation-item { background: #253244; border-color: #3a5070; }
-        body.dark-mode .tm-badge { background: #1e3049; color: #7ec8e3; }
         .dedup-banner {
             background: #e8f5e9;
             border: 1px solid #a5d6a7;
@@ -376,7 +375,7 @@
         }
     </style>
 </head>
-<body>
+<body class="dark-mode">
     <div class="main-container">
         <!-- Header -->
         <div class="header">
@@ -390,21 +389,9 @@
                     <i class="fas fa-sign-out-alt"></i> Đăng xuất
                 </a>
                 <button class="btn btn-outline-light btn-sm" id="darkModeToggle" onclick="toggleDarkMode()" title="Chuyển chế độ tối/sáng">
-                    <i class="fas fa-moon" id="darkModeIcon"></i> <span id="darkModeLabel">Dark Mode</span>
+                    <i class="fas fa-sun" id="darkModeIcon"></i> <span id="darkModeLabel">Light Mode</span>
                 </button>
-                <div class="dropdown">
-                    <button class="btn btn-outline-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                        <i class="fas fa-database"></i> Translation Memory
-                    </button>
-                    <ul class="dropdown-menu">
-                        <li><h6 class="dropdown-header" id="tmLangHeader">TM: ...</h6></li>
-                        <li><a class="dropdown-item" href="#" onclick="exportTM()"><i class="fas fa-download text-success"></i> Xuất TM (JSON)</a></li>
-                        <li><a class="dropdown-item" href="#" onclick="document.getElementById('tmImportFile').click()"><i class="fas fa-upload text-primary"></i> Nhập TM (JSON)</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item text-danger" href="#" onclick="clearTM()"><i class="fas fa-trash"></i> Xóa TM</a></li>
-                    </ul>
-                </div>
-                <input type="file" id="tmImportFile" accept=".json" style="display:none" onchange="importTM(this)">
+
             </div>
         </div>
         
@@ -453,27 +440,7 @@
                         </div>
                     </div>
 
-                    <!-- Glossary Management -->
-                    <div class="mt-3">
-                        <div class="d-flex align-items-center justify-content-between mb-1">
-                            <small><i class="fas fa-book text-warning"></i> <strong>Glossary:</strong></small>
-                            <div class="d-flex gap-1">
-                                <button class="btn btn-outline-warning btn-sm py-0 px-2" style="font-size:0.72rem" onclick="document.getElementById('glossaryUploadFile').click()" title="Upload CSV (source,translation)">
-                                    <i class="fas fa-upload"></i> Upload CSV
-                                </button>
-                                <button class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size:0.72rem" id="exportGlossaryBtn" onclick="exportGlossary()" title="Tải glossary về">
-                                    <i class="fas fa-download"></i> Export
-                                </button>
-                                <button class="btn btn-outline-danger btn-sm py-0 px-2" style="font-size:0.72rem" id="clearGlossaryBtn" onclick="clearGlossary()" title="Xóa glossary">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </div>
-                        </div>
-                        <div id="glossaryInfo" class="text-muted" style="font-size:0.72rem;">
-                            <i class="fas fa-circle-notch fa-spin"></i> Đang tải...
-                        </div>
-                        <input type="file" id="glossaryUploadFile" accept=".csv" style="display:none" onchange="uploadGlossary(this)">
-                    </div>
+
                     
                     <!-- Hướng dẫn collapse -->
                     <div class="mt-3">
@@ -483,7 +450,7 @@
                             <i class="fas fa-chevron-down float-end"></i>
                         </div>
                         <div class="collapse mt-2" id="step1Guide">
-                            <div class="p-2" style="background: #f8f9fa; border-radius: 5px;">
+                            <div class="p-2" style="border-radius: 5px;">
                                 <ul class="small mb-0" style="padding-left: 20px;">
                                     <li>Hỗ trợ Excel (.xlsx), PowerPoint (.pptx) <b>và Word (.docx)</b></li>
                                     <li>Kéo thả hoặc click để chọn file</li>
@@ -522,34 +489,11 @@
                         <div id="extractAlert"></div>
                     </form>
                     
-                    <!-- Kết quả sau khi trích xuất -->
-                    <div id="extractResult" style="display: none;">
-                        <hr class="my-2">                        
-
-                        <!-- Dedup Panel -->
-                        <div id="dedupPanel" style="display:none;"></div>
-
-                        <!-- Danh sách file JSON -->
-                        <div id="jsonFileList"></div>
-
-                        <!-- Btn download ZIP -->
-                        <div class="text-center mb-2">
-                            <a id="downloadZipBtn" href="/download-zip" class="btn btn-success btn-sm">
-                                <i class="fas fa-file-archive"></i> Tải ZIP
-                            </a>
-                            <span id="extractSummary" class="text-muted small ms-2"></span>
-                        </div>
-                                                
-                        <!-- Duplicate warning -->
-                        
-
-                    </div>
-                    
                     <!-- Prompt AI -->
                     <div class="mt-3">
                         <!-- Template Selector -->
                         <div class="d-flex align-items-center gap-2 mb-1">
-                            <small><i class="fas fa-magic text-primary"></i> <strong>Template:</strong></small>
+                            <small> <strong>Template:</strong></small>
                             <select class="form-select form-select-sm" id="templateSelect" style="font-size:0.78rem;"></select>
                             <button class="btn btn-outline-primary btn-sm py-0 px-2" style="font-size:0.72rem;flex-shrink:0" onclick="openTemplateModal()">
                                 <i class="fas fa-edit"></i>
@@ -561,7 +505,6 @@
                             </button>
                         </div>
                     </div>
-                    
                     <!-- Nội dung prompt collapse -->
                     <div class="collapse mt-2" id="promptDetail">
                         <div style="background: #e3f2fd; padding: 10px; border-radius: 5px; border: 1px solid #90caf9;">
@@ -589,7 +532,30 @@ Output yêu cầu:
 - Kiểm tra kỹ KHÔNG có dấu ngoặc kép đặc biệt trong output</pre>
                         </div>
                     </div>
+                    <!-- Kết quả sau khi trích xuất -->
+                    <div id="extractResult" style="display: none;">
+                        <hr class="my-2">                        
+
+                        <!-- Dedup Panel -->
+                        <div id="dedupPanel" style="display:none;"></div>
+
+                        <!-- Danh sách file JSON -->
+                        <div id="jsonFileList"></div>
+
+                        <!-- Btn download ZIP -->
+                        <div class="text-center mb-2">
+                            <a id="downloadZipBtn" href="/download-zip" class="btn btn-success btn-sm">
+                                <i class="fas fa-file-archive"></i> Tải ZIP
+                            </a>
+                            <span id="extractSummary" class="text-muted small ms-2"></span>
+                        </div>
+                                                
+                        <!-- Duplicate warning -->
+                        
+
+                    </div>
                     
+
                     <!-- Hướng dẫn collapse -->
                     <div class="mt-3">
                         <div class="collapse-toggle p-2" style="background: #f8f9fa; border-radius: 5px;" data-bs-toggle="collapse" data-bs-target="#step2Guide">
@@ -598,7 +564,7 @@ Output yêu cầu:
                             <i class="fas fa-chevron-down float-end"></i>
                         </div>
                         <div class="collapse mt-2" id="step2Guide">
-                            <div class="p-2" style="background: #f8f9fa; border-radius: 5px;">
+                            <div class="p-2" style=" border-radius: 5px;">
                                 <ul class="small mb-0" style="padding-left: 20px;">
                                     <li>Click "Trích xuất JSON" để xử lý</li>
                                     <li>Sau khi xong: hiển thị từng file JSON</li>
@@ -720,7 +686,7 @@ Output yêu cầu:
                             <i class="fas fa-chevron-down float-end"></i>
                         </div>
                         <div class="collapse mt-2" id="step3Guide">
-                            <div class="p-2" style="background: #f8f9fa; border-radius: 5px;">
+                            <div class="p-2" style="border-radius: 5px;">
                                 <ul class="small mb-0" style="padding-left: 20px;">
                                     <li><strong>2 cách nạp JSON:</strong></li>
                                     <li style="list-style: none; padding-left: 15px;">
@@ -804,8 +770,6 @@ Output yêu cầu:
         let uploadedExcelFilename  = null;
         let extractedFilesData     = null;
         let extractedDedupData     = null;  // Dedup files từ server
-        let currentGlossary        = {};
-        let currentTM              = {};
         let currentLangCode        = 'ja';
         let currentLangName        = 'tiếng Nhật';
         let currentTemplateContent = '';
@@ -817,11 +781,6 @@ Output yêu cầu:
 
         function updatePrompt(langName) {
             let promptText = currentTemplateContent.replace(/{TARGET_LANG}/g, langName);
-            const entries = Object.entries(currentGlossary);
-            if (entries.length > 0) {
-                promptText += '\n\n📖 GLOSSARY (dùng bản dịch đã quy định):\n' +
-                    entries.map(([k, v]) => `- "${k}" → "${v}"`).join('\n');
-            }
             document.getElementById('aiPrompt').textContent = promptText;
         }
 
@@ -845,8 +804,7 @@ Output yêu cầu:
                     currentLangCode = def.value;
                     currentLangName = def.dataset.name;
                     updatePrompt(currentLangName);
-                    updateTMHeader(currentLangName);
-                    await Promise.all([loadGlossary(currentLangCode), loadTM(currentLangCode), loadTemplates(currentLangCode)]);
+                    await loadTemplates(currentLangCode);
                 }
             } catch (e) {
                 select.innerHTML = '<option value="ja" data-name="tiếng Nhật">🇯🇵 Tiếng Nhật (Japanese)</option>';
@@ -859,8 +817,7 @@ Output yêu cầu:
                     currentLangCode = chosen.value;
                     currentLangName = chosen.dataset.name;
                     updatePrompt(currentLangName);
-                    updateTMHeader(currentLangName);
-                    await Promise.all([loadGlossary(currentLangCode), loadTM(currentLangCode), loadTemplates(currentLangCode)]);
+                    await loadTemplates(currentLangCode);
                 }
             });
         }
@@ -1421,9 +1378,6 @@ Output yêu cầu:
                     
                     showAlert(injectAlert, 'success', 'Nạp bản dịch thành công! File đang được tải về. Tất cả file tạm đã được xóa.');
                     
-                    // Tự động lưu cặp dịch vào TM
-                    await savePairsToTM();
-
                     // Reset form JSON
                     injectJsonFile.value = '';
                     injectJsonFileInfo.style.display = 'none';
@@ -1541,21 +1495,6 @@ Output yêu cầu:
         // copyPrompt() đã được thay thế bởi renderJsonFileRows() inline copy
         
 
-        // ==================== DARK MODE ====================
-        function toggleDarkMode() {
-            const isDark = document.body.classList.toggle('dark-mode');
-            localStorage.setItem('darkMode', isDark ? '1' : '0');
-            document.getElementById('darkModeIcon').className   = isDark ? 'fas fa-sun'  : 'fas fa-moon';
-            document.getElementById('darkModeLabel').textContent = isDark ? 'Light Mode' : 'Dark Mode';
-        }
-        (function() {
-            if (localStorage.getItem('darkMode') === '1') {
-                document.body.classList.add('dark-mode');
-                document.getElementById('darkModeIcon').className    = 'fas fa-sun';
-                document.getElementById('darkModeLabel').textContent = 'Light Mode';
-            }
-        })();
-
         // ==================== PROMPT TEMPLATES ====================
         let allTemplates = [];
 
@@ -1652,138 +1591,6 @@ Output yêu cầu:
             } catch(e) {}
             renderTemplateListInModal();
             renderTemplateSelect();
-        }
-
-        // ==================== GLOSSARY ====================
-        async function loadGlossary(lang) {
-            try {
-                const res = await fetch(`/api/glossary/${lang}`);
-                currentGlossary = res.ok ? await res.json() : {};
-            } catch(e) { currentGlossary = {}; }
-            updateGlossaryInfo();
-            updatePrompt(currentLangName);
-        }
-
-        function updateGlossaryInfo() {
-            const el = document.getElementById('glossaryInfo');
-            if (!el) return;
-            const count = Object.keys(currentGlossary).length;
-            if (count > 0) {
-                el.innerHTML = `<i class="fas fa-check-circle text-success"></i> ${count} từ trong glossary — sẽ tự động thêm vào prompt`;
-            } else {
-                el.innerHTML = `<i class="fas fa-circle text-secondary"></i> Chưa có glossary — upload CSV để thêm`;
-            }
-        }
-
-        async function uploadGlossary(input) {
-            if (!input.files.length) return;
-            const fd = new FormData();
-            fd.append('file', input.files[0]);
-            input.value = '';
-            try {
-                const res = await fetch(`/api/glossary/${currentLangCode}/upload`, {method: 'POST', body: fd});
-                const data = await res.json();
-                if (data.success) {
-                    alert(`✅ Đã upload ${data.count} từ vào glossary!`);
-                    await loadGlossary(currentLangCode);
-                } else {
-                    alert('❌ Lỗi: ' + data.error);
-                }
-            } catch(e) { alert('❌ Lỗi kết nối'); }
-        }
-
-        async function exportGlossary() {
-            window.location.href = `/api/glossary/${currentLangCode}/export`;
-        }
-
-        async function clearGlossary() {
-            const count = Object.keys(currentGlossary).length;
-            if (count === 0) { alert('Glossary đang trống.'); return; }
-            if (!confirm(`Xóa toàn bộ ${count} từ trong glossary ${currentLangName}?`)) return;
-            try {
-                await fetch(`/api/glossary/${currentLangCode}/clear`, {method: 'POST'});
-                currentGlossary = {};
-                updateGlossaryInfo();
-                updatePrompt(currentLangName);
-                alert('✅ Đã xóa glossary.');
-            } catch(e) { alert('❌ Lỗi kết nối'); }
-        }
-
-        // ==================== TRANSLATION MEMORY ====================
-        function updateTMHeader(langName) {
-            const h = document.getElementById('tmLangHeader');
-            if (h) h.textContent = `TM: ${langName}`;
-        }
-
-        async function loadTM(lang) {
-            try {
-                const res = await fetch(`/api/tm?lang=${lang}`);
-                currentTM = res.ok ? await res.json() : {};
-            } catch(e) { currentTM = {}; }
-        }
-
-        async function savePairsToTM() {
-            if (!extractedFilesData || pastedJsonData.length === 0) return;
-            // Gom source text từ extracted files
-            const sourceMap = {};
-            extractedFilesData.forEach(f => {
-                try { Object.assign(sourceMap, JSON.parse(f.content)); } catch(e) {}
-            });
-            // Gom translated text từ pasted data
-            const translatedMap = {};
-            pastedJsonData.forEach(obj => Object.assign(translatedMap, obj));
-            // Build pairs (chỉ lưu khi source ≠ translated)
-            const pairs = {};
-            for (const [key, src] of Object.entries(sourceMap)) {
-                if (translatedMap[key] && translatedMap[key] !== src) {
-                    pairs[src] = translatedMap[key];
-                }
-            }
-            if (Object.keys(pairs).length === 0) return;
-            try {
-                const res = await fetch('/api/tm', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({lang: currentLangCode, pairs})
-                });
-                const data = await res.json();
-                if (data.success) {
-                    await loadTM(currentLangCode);
-                    console.log(`TM: đã lưu ${data.saved} cặp (tổng ${data.total})`);
-                }
-            } catch(e) {}
-        }
-
-        async function exportTM() {
-            const count = Object.keys(currentTM).length;
-            if (count === 0) { alert('TM đang trống cho ngôn ngữ này.'); return; }
-            window.location.href = `/api/tm/export/${currentLangCode}`;
-        }
-
-        async function importTM(input) {
-            if (!input.files.length) return;
-            const fd = new FormData();
-            fd.append('file', input.files[0]);
-            input.value = '';
-            try {
-                const res = await fetch(`/api/tm/import/${currentLangCode}`, {method: 'POST', body: fd});
-                const data = await res.json();
-                if (data.success) {
-                    alert(`✅ Đã nhập ${data.imported} cặp vào TM (tổng: ${data.total})`);
-                    await loadTM(currentLangCode);
-                } else { alert('❌ ' + data.error); }
-            } catch(e) { alert('❌ Lỗi kết nối'); }
-        }
-
-        async function clearTM() {
-            const count = Object.keys(currentTM).length;
-            if (count === 0) { alert('TM đang trống.'); return; }
-            if (!confirm(`Xóa toàn bộ ${count} cặp trong TM cho ${currentLangName}?`)) return;
-            try {
-                await fetch(`/api/tm/clear/${currentLangCode}`, {method: 'POST'});
-                currentTM = {};
-                alert('✅ Đã xóa TM.');
-            } catch(e) { alert('❌ Lỗi kết nối'); }
         }
 
         // ==================== DUPLICATE DETECTION ====================
@@ -1900,10 +1707,12 @@ Output yêu cầu:
             document.getElementById('darkModeLabel').textContent = isDark ? 'Light Mode' : 'Dark Mode';
         }
         (function() {
-            if (localStorage.getItem('darkMode') === '1') {
-                document.body.classList.add('dark-mode');
-                document.getElementById('darkModeIcon').className    = 'fas fa-sun';
-                document.getElementById('darkModeLabel').textContent = 'Light Mode';
+            // Mặc định là Dark Mode (đã set class dark-mode trong <body>)
+            // Nếu user đã chủ động chọn Light Mode ('0'), thì mới chuyển về Light
+            if (localStorage.getItem('darkMode') === '0') {
+                document.body.classList.remove('dark-mode');
+                document.getElementById('darkModeIcon').className    = 'fas fa-moon';
+                document.getElementById('darkModeLabel').textContent = 'Dark Mode';
             }
         })();
 
