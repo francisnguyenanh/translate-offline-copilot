@@ -8,6 +8,8 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome cho icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- html2canvas: capture overlay as image -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
         body {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -420,14 +422,6 @@
         .rh-sw { bottom:-5px; left:-5px;            cursor:sw-resize; }
         .rh-w  { top:calc(50% - 5px); left:-5px;   cursor:w-resize;  }
         body.dark-mode .resize-handle { background:#5090d8; border-color:#1e3049; }
-        @media print {
-            .main-container > *:not(#mainTabContent),
-            .header, footer, #mainTab { display: none !important; }
-            #mainTab2 { display: block !important; }
-            #imgOverlayResult .function-card > :not(.text-center):first-of-type { display: none; }
-            #imgBlockList, h6 { display: none; }
-            .resize-handle { display: none !important; }
-        }
     </style>
 </head>
 <body class="dark-mode">
@@ -932,8 +926,8 @@ Output yêu cầu:
                             <button type="button" class="btn btn-outline-secondary btn-sm" id="toggleOriginalBtn" onclick="toggleImgOriginalText()">
                                 <i class="fas fa-eye-slash"></i> Ẩn/hiện chữ gốc
                             </button>
-                            <button type="button" class="btn btn-outline-success btn-sm" onclick="window.print()">
-                                <i class="fas fa-print"></i> In/Lưu
+                            <button type="button" id="saveImageBtn" class="btn btn-outline-success btn-sm" onclick="saveOverlayAsImage()">
+                                <i class="fas fa-download"></i> Lưu ảnh
                             </button>
                         </div>
                     </div>
@@ -2118,11 +2112,19 @@ Output yêu cầu:
         // Tạo Prompt
         genPromptBtn.addEventListener('click', async function() {
             const sourceLang = document.getElementById('imgSourceLang').value.trim();
+            // Pass actual image pixel dimensions so AI can anchor coordinates
+            const imgW = imgPreview.naturalWidth  || 0;
+            const imgH = imgPreview.naturalHeight || 0;
             try {
                 const resp = await fetch('/img-translate/prompt', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ target_lang: imgCurrentLangName, source_lang: sourceLang })
+                    body: JSON.stringify({
+                        target_lang: imgCurrentLangName,
+                        source_lang: sourceLang,
+                        image_width:  imgW,
+                        image_height: imgH
+                    })
                 });
                 const data = await resp.json();
                 document.getElementById('imgPromptText').value = data.prompt;
@@ -2223,7 +2225,13 @@ Output yêu cầu:
             div.dataset.idx = idx;
             const bg = block.bg_color || '#ffffff';
             const fg = block.text_color || '#000000';
-            const fs = (imgEl.naturalHeight * (block.font_size_pct || 2) / 100) + 'px';
+            // Derive font-size in px from font_size_pct (% of image height).
+            // If AI gave a value too small relative to block height, auto-scale up.
+            const blockHeightPx = imgEl.naturalHeight * (block.height_pct || 5) / 100;
+            let fsPx = imgEl.naturalHeight * (block.font_size_pct || 0) / 100;
+            // Fallback: font must be at least 45% of block height (single-line readable)
+            if (fsPx < blockHeightPx * 0.45) fsPx = blockHeightPx * 0.72;
+            const fs = fsPx + 'px';
             Object.assign(div.style, {
                 position: 'absolute',
                 top:    block.top_pct    + '%',
@@ -2232,7 +2240,6 @@ Output yêu cầu:
                 height: block.height_pct + '%',
                 backgroundColor: bg,
                 color: fg,
-                boxShadow: `0 0 6px 4px ${bg}`,
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'center',
@@ -2435,10 +2442,58 @@ Output yêu cầu:
                 container.querySelectorAll('.overlay-block').forEach(div => {
                     const idx = parseInt(div.dataset.idx);
                     const block = imgTextBlocks[idx];
-                    if (block) div.style.fontSize = (imgEl.naturalHeight * (block.font_size_pct || 2) / 100) + 'px';
+                    if (!block) return;
+                    const blockHeightPx = imgEl.naturalHeight * (block.height_pct || 5) / 100;
+                    let fsPx = imgEl.naturalHeight * (block.font_size_pct || 0) / 100;
+                    if (fsPx < blockHeightPx * 0.45) fsPx = blockHeightPx * 0.72;
+                    div.style.fontSize = fsPx + 'px';
                 });
             }
         });
+
+        // ========== SAVE AS IMAGE ==========
+        window.saveOverlayAsImage = async function() {
+            const container = document.getElementById('imgOverlayContainer');
+            const btn = document.getElementById('saveImageBtn');
+
+            // Temporarily reset zoom for full-resolution capture
+            const savedZoom = imgZoomLevel;
+            imgZoomLevel = 1.0;
+            container.style.transform = 'scale(1)';
+
+            // Hide resize handles & selection outline during capture
+            const captureStyle = document.createElement('style');
+            captureStyle.id = '__captureStyle';
+            captureStyle.textContent = '.resize-handle{display:none!important}.overlay-block{outline:none!important}';
+            document.head.appendChild(captureStyle);
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang lưu...';
+
+            try {
+                const canvas = await html2canvas(container, {
+                    useCORS: true,
+                    allowTaint: true,
+                    scale: window.devicePixelRatio || 1,
+                    backgroundColor: null,
+                });
+                const link = document.createElement('a');
+                const baseName = (imgCurrentFilename || 'overlay').replace(/\.[^.]+$/, '');
+                link.download = baseName + '_translated.png';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            } catch(e) {
+                console.error(e);
+                alert('Lỗi khi lưu ảnh: ' + e.message);
+            } finally {
+                // Restore
+                imgZoomLevel = savedZoom;
+                container.style.transform = `scale(${imgZoomLevel})`;
+                document.getElementById('__captureStyle')?.remove();
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-download"></i> Lưu ảnh';
+            }
+        };
     </script>
 </body>
 </html>

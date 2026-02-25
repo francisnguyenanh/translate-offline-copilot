@@ -1717,25 +1717,48 @@ def img_translate_prompt():
     data = request.get_json() or {}
     target_lang = data.get('target_lang', 'tiếng Nhật')
     source_lang = data.get('source_lang', '').strip()
+    img_w = int(data.get('image_width', 0))
+    img_h = int(data.get('image_height', 0))
+
     source_note = f" (ngôn ngữ gốc trong ảnh: {source_lang})" if source_lang else ""
 
-    prompt = f"""Bạn là chuyên gia OCR và dịch thuật chuyên nghiệp. Tôi sẽ gửi cho bạn một bức ảnh{source_note}.
+    if img_w > 0 and img_h > 0:
+        dim_note = f"\n\nKích thước ảnh CHÍNH XÁC: {img_w} × {img_h} pixel (rộng × cao).\n" \
+                   f"→ Quy đổi tọa độ pixel sang %: left_pct = pixel_x / {img_w} × 100, top_pct = pixel_y / {img_h} × 100\n" \
+                   f"→ Quy đổi kích thước sang %: width_pct = pixel_w / {img_w} × 100, height_pct = pixel_h / {img_h} × 100\n" \
+                   f"→ font_size_pct = chiều_cao_font_pixel / {img_h} × 100"
+        font_example = round(24 / img_h * 100, 2) if img_h else 2.5
+        dim_font_note = f"(ví dụ: chữ 24px trong ảnh {img_h}px cao → font_size_pct = {font_example})"
+    else:
+        dim_note = ""
+        font_example = 2.5
+        dim_font_note = "(ví dụ: 2.5)"
 
-Nhiệm vụ:
+    prompt = f"""Bạn là chuyên gia OCR và dịch thuật chuyên nghiệp. Tôi sẽ gửi cho bạn một bức ảnh{source_note}.{dim_note}
+
+NHIỆM VỤ:
 1. Nhận diện (OCR) TẤT CẢ các vùng có văn bản trong ảnh.
 2. Dịch toàn bộ sang {target_lang} một cách tự nhiên, chính xác.
-3. Với mỗi vùng văn bản, xác định:
-   • top_pct / left_pct / width_pct / height_pct : tọa độ tính theo % so với kích thước TOÀN ẢNH (0–100)
-   • bg_color  : mã HEX màu nền THỰC TẾ ngay phía sau văn bản đó (dùng để xóa chữ cũ)
-   • text_color: mã HEX màu chữ phù hợp để dễ đọc trên nền trên
-   • font_size_pct: cỡ chữ gợi ý tính bằng % chiều cao ảnh (ví dụ: 2.5)
+3. Với mỗi vùng văn bản, xác định CÁC GIÁ TRỊ SAU:
+
+   top_pct    : tọa độ mép TRÊN của text box, tính bằng % chiều CAO ảnh (0 = trên cùng, 100 = dưới cùng)
+   left_pct   : tọa độ mép TRÁI của text box, tính bằng % chiều RỘNG ảnh (0 = trái, 100 = phải)
+   width_pct  : chiều RỘNG text box, % chiều rộng ảnh
+   height_pct : chiều CAO text box, % chiều cao ảnh
+   bg_color   : mã HEX màu nền THỰC TẾ ngay phía sau văn bản (để che chữ cũ)
+   text_color : mã HEX màu chữ phù hợp để đọc được trên bg_color
+   font_size_pct : cỡ chữ tính bằng % chiều cao ảnh {dim_font_note}
+                   → PHẢI xấp xỉ bằng chiều cao thực tế của 1 dòng chữ trong ảnh
+                   → KHÔNG được nhỏ hơn 60% height_pct (nếu block là 1 dòng)
+                   → Với block nhiều dòng: font_size_pct ≈ height_pct / số_dòng × 0.8
 
 ⚠️ YÊU CẦU BẮT BUỘC:
-- Tọa độ phải bao phủ ĐÚNG vùng chứa văn bản, không cắt, không thừa nhiều
-- bg_color PHẢI lấy từ màu pixel thực tế trong ảnh, không tự đặt màu tùy ý
-- Chỉ trả về JSON thuần túy, TUYỆT ĐỐI không thêm giải thích, không bọc trong markdown code block
+- Tọa độ phải bao phủ CHÍNH XÁC vùng chứa văn bản, sai số không quá 1%
+- Các box KHÔNG được chồng lên nhau (trừ khi text thực sự chồng trong ảnh)
+- bg_color lấy từ màu nền thực trong ảnh, KHÔNG đặt màu tùy ý
+- Trả về JSON THUẦN TÚY — KHÔNG giải thích, KHÔNG bọc markdown code block ```
 
-Cấu trúc JSON trả về (giữ nguyên đúng format này):
+FORMAT JSON TRẢ VỀ (giữ đúng cấu trúc này):
 {{
   "text_blocks": [
     {{
@@ -1747,7 +1770,7 @@ Cấu trúc JSON trả về (giữ nguyên đúng format này):
       "height_pct": 5.0,
       "bg_color": "#FFFFFF",
       "text_color": "#000000",
-      "font_size_pct": 2.5
+      "font_size_pct": {font_example}
     }}
   ]
 }}"""
