@@ -9,21 +9,24 @@ import zipfile
 import uuid
 import shutil
 import io
+import re
 from datetime import datetime, timedelta
 from urllib.parse import quote
 from flask import Flask, render_template, request, send_file, jsonify, session, redirect, url_for
 from werkzeug.utils import secure_filename
+from copy import deepcopy
 from openpyxl import load_workbook
 from pptx import Presentation
 from docx import Document
 from functools import wraps
+from lxml import etree as _etree
 
 # Khởi tạo ứng dụng Flask
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 60 * 1024 * 1024  # Giới hạn 50MB
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['SECRET_KEY'] = os.urandom(24)  # Secret key cho session
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)  # Session timeout 8h
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=5)  # Session timeout 5h
 
 # Các định dạng file được phép
 ALLOWED_EXTENSIONS = {'xlsx', 'pptx', 'docx'}
@@ -432,6 +435,374 @@ def inject_text_to_pptx(filepath, json_data):
             continue
     
     return prs
+
+# ==================== XLSX SHAPE / OBJECT SUPPORT ====================
+# Namespaces dùng trong drawing XML của xlsx
+_NS_XDR = 'http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing'
+_NS_A   = 'http://schemas.openxmlformats.org/drawingml/2006/main'
+_NS_R   = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
+_NS_WB  = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
+
+
+def _xlsx_get_sheet_drawing_map(z):
+    """
+    Từ ZipFile đang mở, trả về dict: sheet_name → list các đường dẫn drawing XML
+    Ví dụ: {'Sheet1': ['xl/drawings/drawing1.xml']}
+    """
+    names_set = set(z.namelist())
+
+    # Đọc workbook.xml để lấy tên sheet và rId
+    wb_xml = z.read('xl/workbook.xml')
+    wb_root = _etree.fromstring(wb_xml)
+
+    # Đọc rels của workbook để map rId → target file
+    wb_rels_xml = z.read('xl/_rels/workbook.xml.rels')
+    wb_rels_root = _etree.fromstring(wb_rels_xml)
+    rid_to_target = {rel.get('Id'): rel.get('Target') for rel in wb_rels_root}
+
+    # Thu thập (sheet_name, sheet_path)
+    sheet_info = []
+    for sheet_el in wb_root.iter(f'{{{_NS_WB}}}sheet'):
+        name = sheet_el.get('name')
+        rid  = sheet_el.get(f'{{{_NS_R}}}id')
+        target = rid_to_target.get(rid, '')
+        # Chuẩn hóa path: "worksheets/sheet1.xml" → "xl/worksheets/sheet1.xml"
+        if target.startswith('../'):
+            sheet_path = 'xl/' + target[3:]
+        elif not target.startswith('xl/'):
+            sheet_path = 'xl/' + target
+        else:
+            sheet_path = target
+        sheet_info.append((name, sheet_path))
+
+    result = {}
+    for sheet_name, sheet_path in sheet_info:
+        if sheet_path not in names_set:
+            continue
+        parts = sheet_path.rsplit('/', 1)
+        sheet_dir  = parts[0] if len(parts) > 1 else ''
+        sheet_file = parts[-1]
+        rels_path  = f"{sheet_dir}/_rels/{sheet_file}.rels"
+        if rels_path not in names_set:
+            continue
+
+        rels_xml  = z.read(rels_path)
+        rels_root = _etree.fromstring(rels_xml)
+
+        drawing_paths = []
+        for rel in rels_root:
+            if 'drawing' in rel.get('Type', '').lower():
+                tgt = rel.get('Target', '')
+                if tgt.startswith('../'):
+                    draw_path = 'xl/' + tgt[3:]
+                elif tgt.startswith('/'):
+                    draw_path = tgt.lstrip('/')
+                else:
+                    draw_path = f"{sheet_dir}/{tgt.lstrip('./')}"
+                if draw_path in names_set:
+                    drawing_paths.append(draw_path)
+        if drawing_paths:
+            result[sheet_name] = drawing_paths
+
+    return result
+
+
+def _collect_sp_elements(drawing_root):
+    """
+    Thu thập tất cả phần tử <xdr:sp> (shape/text-box) theo thứ tự cây (tree-order),
+    bao gồm cả sp bên trong group-shapes (xdr:grpSp).
+    """
+    sp_list = []
+    _walk_tags = {
+        f'{{{_NS_XDR}}}grpSp',
+        f'{{{_NS_XDR}}}twoCellAnchor',
+        f'{{{_NS_XDR}}}oneCellAnchor',
+        f'{{{_NS_XDR}}}absoluteAnchor',
+    }
+
+    def walk(el):
+        for child in el:
+            if child.tag == f'{{{_NS_XDR}}}sp':
+                sp_list.append(child)
+            elif child.tag in _walk_tags:
+                walk(child)
+
+    walk(drawing_root)
+    return sp_list
+
+
+def _get_sp_text(sp):
+    """Lấy toàn bộ text trong txBody của một shape."""
+    txBody = sp.find(f'{{{_NS_XDR}}}txBody')
+    if txBody is None:
+        return ''
+    parts = []
+    for para in txBody.findall(f'{{{_NS_A}}}p'):
+        # Lấy tất cả a:t trong paragraph (bao gồm cả text trong a:fld)
+        para_text = ''.join((t.text or '') for t in para.findall(f'.//{{{_NS_A}}}t'))
+        if para_text:
+            parts.append(para_text)
+    return '\n'.join(parts)
+
+
+def _set_sp_text(sp, new_text):
+    """
+    Thay thế text trong txBody của shape theo cách tối thiểu để tương thích Excel:
+    - Giữ nguyên cấu trúc paragraph/run/fld hiện có
+    - Chỉ thay text ở node a:t đầu tiên, các node a:t còn lại set rỗng
+    - Nếu chưa có a:t thì tạo mới tối thiểu trong paragraph đầu
+    """
+    txBody = sp.find(f'{{{_NS_XDR}}}txBody')
+    if txBody is None:
+        return
+
+    paras = txBody.findall(f'{{{_NS_A}}}p')
+    if not paras:
+        return
+
+    all_t_nodes = txBody.findall(f'.//{{{_NS_A}}}t')
+    new_text = '' if new_text is None else str(new_text)
+
+    if all_t_nodes:
+        first_t = all_t_nodes[0]
+        first_t.text = new_text
+        if new_text != new_text.strip() or '\n' in new_text:
+            first_t.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
+        else:
+            first_t.attrib.pop('{http://www.w3.org/XML/1998/namespace}space', None)
+
+        for t in all_t_nodes[1:]:
+            t.text = ''
+        return
+
+    # Không có a:t nào, tạo tối thiểu trong paragraph đầu
+    first_para = paras[0]
+    first_run = _etree.SubElement(first_para, f'{{{_NS_A}}}r')
+    first_t = _etree.SubElement(first_run, f'{{{_NS_A}}}t')
+    first_t.text = new_text
+    if new_text != new_text.strip() or '\n' in new_text:
+        first_t.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
+
+
+def extract_xlsx_shapes(filepath):
+    """
+    Trích xuất text từ tất cả shape/object (text-box) trong file xlsx.
+    Trả về dict: {"SheetName!XLShape{n}": "text"}
+    - n là thứ tự shape (đếm TẤT CẢ sp, bao gồm cả sp không có text) → index ổn định.
+    """
+    shapes_data = {}
+    try:
+        with zipfile.ZipFile(filepath, 'r') as z:
+            sheet_drawing_map = _xlsx_get_sheet_drawing_map(z)
+            for sheet_name, drawing_paths in sheet_drawing_map.items():
+                for drawing_path in drawing_paths:
+                    drawing_xml  = z.read(drawing_path)
+                    drawing_root = _etree.fromstring(drawing_xml)
+                    for shape_idx, sp in enumerate(_collect_sp_elements(drawing_root), start=1):
+                        text = _get_sp_text(sp)
+                        if text.strip():
+                            key = f"{sheet_name}!XLShape{shape_idx}"
+                            shapes_data[key] = text.strip()
+    except Exception as e:
+        print(f"Warning: Không thể trích xuất shapes từ xlsx: {e}")
+    return shapes_data
+
+
+def _xlsx_sheet_path_map(files):
+    """Trả về map: sheet_name -> sheet_xml_path từ workbook + workbook.rels."""
+    workbook_root = _etree.fromstring(files['xl/workbook.xml'])
+    rels_root = _etree.fromstring(files['xl/_rels/workbook.xml.rels'])
+    rid_to_target = {rel.get('Id'): rel.get('Target') for rel in rels_root}
+
+    sheet_map = {}
+    for sheet_el in workbook_root.iter(f'{{{_NS_WB}}}sheet'):
+        sheet_name = sheet_el.get('name')
+        rid = sheet_el.get(f'{{{_NS_R}}}id')
+        target = rid_to_target.get(rid, '')
+        if target.startswith('/'):
+            path = target.lstrip('/')
+        elif target.startswith('xl/'):
+            path = target
+        else:
+            path = f'xl/{target}'
+        sheet_map[sheet_name] = path
+    return sheet_map
+
+
+def _xlsx_sheet_drawing_map_from_files(files, sheet_map):
+    """Trả về map: sheet_name -> [drawing_xml_paths]."""
+    result = {}
+    names_set = set(files.keys())
+
+    for sheet_name, sheet_path in sheet_map.items():
+        parts = sheet_path.rsplit('/', 1)
+        sheet_dir = parts[0] if len(parts) > 1 else ''
+        sheet_file = parts[-1]
+        rels_path = f"{sheet_dir}/_rels/{sheet_file}.rels"
+        if rels_path not in names_set:
+            continue
+
+        rels_root = _etree.fromstring(files[rels_path])
+        drawing_paths = []
+        for rel in rels_root:
+            if 'drawing' in (rel.get('Type') or '').lower():
+                tgt = rel.get('Target', '')
+                if tgt.startswith('/'):
+                    draw_path = tgt.lstrip('/')
+                else:
+                    draw_path = os.path.normpath(os.path.join(sheet_dir, tgt)).replace('\\', '/')
+                if draw_path in names_set:
+                    drawing_paths.append(draw_path)
+
+        if drawing_paths:
+            result[sheet_name] = drawing_paths
+
+    return result
+
+
+def _xlsx_set_cell_inline_text(sheet_root, cell_ref, text_value):
+    """Gán text vào một cell theo kiểu inlineStr, giữ nguyên style của cell nếu có."""
+    m = re.fullmatch(r'([A-Za-z]+)(\d+)', cell_ref or '')
+    if not m:
+        return
+
+    row_num = int(m.group(2))
+    sheet_data = sheet_root.find(f'{{{_NS_WB}}}sheetData')
+    if sheet_data is None:
+        return
+
+    row_elem = None
+    rows = sheet_data.findall(f'{{{_NS_WB}}}row')
+    for row in rows:
+        if int(row.get('r', '0') or 0) == row_num:
+            row_elem = row
+            break
+
+    if row_elem is None:
+        row_elem = _etree.Element(f'{{{_NS_WB}}}row', r=str(row_num))
+        inserted = False
+        for idx, row in enumerate(rows):
+            existing = int(row.get('r', '0') or 0)
+            if existing > row_num:
+                sheet_data.insert(idx, row_elem)
+                inserted = True
+                break
+        if not inserted:
+            sheet_data.append(row_elem)
+
+    cell_elem = None
+    for cell in row_elem.findall(f'{{{_NS_WB}}}c'):
+        if (cell.get('r') or '').upper() == cell_ref.upper():
+            cell_elem = cell
+            break
+
+    if cell_elem is None:
+        cell_elem = _etree.Element(f'{{{_NS_WB}}}c', r=cell_ref.upper())
+        row_elem.append(cell_elem)
+
+    cell_elem.set('t', 'inlineStr')
+    for child in list(cell_elem):
+        if child.tag in {
+            f'{{{_NS_WB}}}v',
+            f'{{{_NS_WB}}}f',
+            f'{{{_NS_WB}}}is',
+        }:
+            cell_elem.remove(child)
+
+    is_elem = _etree.SubElement(cell_elem, f'{{{_NS_WB}}}is')
+    t_elem = _etree.SubElement(is_elem, f'{{{_NS_WB}}}t')
+    text_str = '' if text_value is None else str(text_value)
+    t_elem.text = text_str
+    if text_str != text_str.strip() or '\n' in text_str:
+        t_elem.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
+
+
+def inject_xlsx_shapes(source_filepath, output_filepath, json_data):
+    """
+    ZIP-level patch cho XLSX:
+    - Không dùng openpyxl.save
+    - Patch trực tiếp cell XML
+    - Patch trực tiếp drawing XML (shape text)
+    - Giữ nguyên toàn bộ parts khác của file gốc
+    """
+    with zipfile.ZipFile(source_filepath, 'r') as z_src:
+        infos = {info.filename: info for info in z_src.infolist()}
+        order = [info.filename for info in z_src.infolist()]
+        files = {name: z_src.read(name) for name in order}
+
+    sheet_map = _xlsx_sheet_path_map(files)
+
+    cell_updates = {}
+    shape_updates = {}
+    for key, translated_value in json_data.items():
+        if '!' not in key:
+            continue
+        sheet_name, second_part = key.split('!', 1)
+        if sheet_name not in sheet_map:
+            continue
+
+        if second_part.startswith('XLShape'):
+            try:
+                shape_idx = int(second_part.replace('XLShape', ''))
+                shape_updates[(sheet_name, shape_idx)] = '' if translated_value is None else str(translated_value)
+            except ValueError:
+                continue
+        else:
+            cell_updates.setdefault(sheet_name, {})[second_part] = translated_value
+
+    for sheet_name, updates in cell_updates.items():
+        sheet_path = sheet_map.get(sheet_name)
+        if not sheet_path or sheet_path not in files:
+            continue
+        sheet_root = _etree.fromstring(files[sheet_path])
+        for cell_ref, value in updates.items():
+            _xlsx_set_cell_inline_text(sheet_root, cell_ref, value)
+        files[sheet_path] = _etree.tostring(sheet_root, xml_declaration=True, encoding='UTF-8', standalone=True)
+
+    if shape_updates:
+        drawing_map = _xlsx_sheet_drawing_map_from_files(files, sheet_map)
+        for sheet_name, drawing_paths in drawing_map.items():
+            wanted = {
+                idx: val
+                for (sn, idx), val in shape_updates.items()
+                if sn == sheet_name
+            }
+            if not wanted:
+                continue
+
+            for drawing_path in drawing_paths:
+                if drawing_path not in files:
+                    continue
+                drawing_root = _etree.fromstring(files[drawing_path])
+                for shape_idx, sp in enumerate(_collect_sp_elements(drawing_root), start=1):
+                    if shape_idx in wanted:
+                        _set_sp_text(sp, wanted[shape_idx])
+                files[drawing_path] = _etree.tostring(
+                    drawing_root,
+                    xml_declaration=True,
+                    encoding='UTF-8',
+                    standalone=True,
+                )
+
+    with zipfile.ZipFile(output_filepath, 'w') as z_out:
+        written = set()
+        for name in order:
+            content = files.get(name)
+            if content is None:
+                continue
+            original = infos[name]
+            zi = zipfile.ZipInfo(name, original.date_time)
+            zi.compress_type = original.compress_type
+            zi.external_attr = original.external_attr
+            zi.create_system = original.create_system
+            z_out.writestr(zi, content)
+            written.add(name)
+
+        for name, content in files.items():
+            if name in written:
+                continue
+            z_out.writestr(name, content)
+
 
 def extract_text_from_docx(filepath):
     """
@@ -850,6 +1221,10 @@ def extract():
                                 key = f"{sheet_name}!{cell.coordinate}"
                                 extracted_data[key] = cell.value
             
+            # Trích xuất text từ shapes/objects (text-box) trong xlsx
+            shapes_from_xlsx = extract_xlsx_shapes(filepath)
+            extracted_data.update(shapes_from_xlsx)
+
             # Đóng workbook
             workbook.close()
         
@@ -1155,39 +1530,15 @@ def inject():
         file_ext = original_excel_filename.rsplit('.', 1)[1].lower()
         
         if file_ext == 'xlsx':
-            # Mở file Excel bằng openpyxl
-            workbook = load_workbook(excel_filepath)
-            
-            # Duyệt qua từng entry trong JSON
-            for key, translated_value in json_data.items():
-                # Parse key theo format "SheetName!CellCoordinate"
-                if '!' not in key:
-                    continue
-                
-                sheet_name, cell_coordinate = key.split('!', 1)
-                
-                # Kiểm tra xem sheet có tồn tại không
-                if sheet_name not in workbook.sheetnames:
-                    continue
-                
-                # Lấy sheet
-                sheet = workbook[sheet_name]
-                
-                # Nạp dữ liệu đã dịch vào cell
-                # openpyxl tự động giữ nguyên định dạng của cell
-                sheet[cell_coordinate] = translated_value
-            
             # Tạo tên file output
             base_filename = os.path.splitext(original_excel_filename)[0]  # Tên gốc với tiếng Nhật
             
             output_display_name = f"{base_filename}_translated.xlsx"  # Tên hiển thị
             safe_output_filename = f"output_{timestamp}.xlsx"  # Tên file trong filesystem
             output_filepath = os.path.join(session_folder, safe_output_filename)
-            
-            # Lưu file Excel đã được nạp dữ liệu
-            workbook.save(output_filepath)
-            workbook.close()
-            del workbook  # Giải phóng memory
+
+            # ZIP-level patch: nạp cả cell + shape trực tiếp trên package gốc
+            inject_xlsx_shapes(excel_filepath, output_filepath, json_data)
             
             output_mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         
