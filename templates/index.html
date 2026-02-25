@@ -373,6 +373,61 @@
             background: #1b2d3e;
             border-color: #2d5080 #2d5080 transparent;
         }
+
+        /* ===== IMAGE OVERLAY ===== */
+        .overlay-block {
+            box-sizing: border-box;
+            transition: outline 0.1s;
+        }
+        .overlay-block.selected {
+            outline: 2px solid #667eea !important;
+            z-index: 15 !important;
+        }
+        .overlay-block:hover { z-index: 14 !important; }
+        .overlay-translated {
+            display: block;
+            width: 100%;
+            text-align: center;
+            line-height: 1.2;
+            word-break: break-word;
+            overflow: hidden;
+        }
+        .overlay-original {
+            font-size: 0.6em;
+            opacity: 0.7;
+            text-align: center;
+        }
+        /* Resize handles */
+        .resize-handle {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: #667eea;
+            border: 1.5px solid #fff;
+            border-radius: 2px;
+            z-index: 40;
+            display: none;
+            box-shadow: 0 0 2px rgba(0,0,0,0.5);
+        }
+        .overlay-block:hover .resize-handle,
+        .overlay-block.selected .resize-handle { display: block; }
+        .rh-nw { top:-5px;  left:-5px;              cursor:nw-resize; }
+        .rh-n  { top:-5px;  left:calc(50% - 5px);   cursor:n-resize;  }
+        .rh-ne { top:-5px;  right:-5px;             cursor:ne-resize; }
+        .rh-e  { top:calc(50% - 5px); right:-5px;  cursor:e-resize;  }
+        .rh-se { bottom:-5px; right:-5px;           cursor:se-resize; }
+        .rh-s  { bottom:-5px; left:calc(50% - 5px); cursor:s-resize;  }
+        .rh-sw { bottom:-5px; left:-5px;            cursor:sw-resize; }
+        .rh-w  { top:calc(50% - 5px); left:-5px;   cursor:w-resize;  }
+        body.dark-mode .resize-handle { background:#5090d8; border-color:#1e3049; }
+        @media print {
+            .main-container > *:not(#mainTabContent),
+            .header, footer, #mainTab { display: none !important; }
+            #mainTab2 { display: block !important; }
+            #imgOverlayResult .function-card > :not(.text-center):first-of-type { display: none; }
+            #imgBlockList, h6 { display: none; }
+            .resize-handle { display: none !important; }
+        }
     </style>
 </head>
 <body class="dark-mode">
@@ -393,7 +448,22 @@
 
             </div>
         </div>
-        
+
+        <!-- Main Tabs -->
+        <ul class="nav nav-tabs mb-4" id="mainTab" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="main-tab1" data-bs-toggle="tab" data-bs-target="#mainTab1" type="button" role="tab" aria-selected="true">
+                    <i class="fas fa-exchange-alt"></i> Dịch tài liệu
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="main-tab2" data-bs-toggle="tab" data-bs-target="#mainTab2" type="button" role="tab" aria-selected="false">
+                    <i class="fas fa-image"></i> Dịch ảnh
+                </button>
+            </li>
+        </ul>
+        <div class="tab-content" id="mainTabContent">
+        <div class="tab-pane fade show active" id="mainTab1" role="tabpanel" aria-labelledby="main-tab1">
         <!-- 3 Bước theo hàng ngang -->
         <div class="row g-3">
             <!-- Bước 1: Upload file -->
@@ -705,6 +775,195 @@ Output yêu cầu:
                 </div>
             </div>
         </div>
+        </div><!-- /tab-pane tab1 -->
+        <div class="tab-pane fade" id="mainTab2" role="tabpanel" aria-labelledby="main-tab2">
+            <div class="row g-3">
+                <!-- Bước 1: Upload ảnh -->
+                <div class="col-lg-4">
+                    <div class="function-card">
+                        <div class="text-center">
+                            <span class="step-number">1</span>
+                            <h3 class="d-inline">Upload Ảnh</h3>
+                            <p class="text-muted small mt-2">Chọn ảnh cần dịch</p>
+                        </div>
+                        <div class="upload-area compact" id="imgUploadArea">
+                            <i class="fas fa-image"></i>
+                            <p class="mb-2 small"><strong>Kéo thả ảnh vào đây</strong></p>
+                            <input type="file" id="imgFileInput" accept=".png,.jpg,.jpeg,.gif,.webp,.bmp" style="display:none;">
+                            <label for="imgFileInput" class="btn btn-custom btn-sm">
+                                <i class="fas fa-folder-open"></i> Chọn ảnh
+                            </label>
+                        </div>
+                        <div id="imgPreviewWrap" style="display:none;" class="mt-2 text-center">
+                            <img id="imgPreview" src="" style="max-width:100%; border-radius:8px; max-height:150px; object-fit:contain;" alt="Preview">
+                            <div class="file-info mt-1 d-flex align-items-center gap-2">
+                                <span id="imgFileName" class="small flex-grow-1"></span>
+                                <button type="button" class="btn btn-sm btn-outline-danger" id="imgRemoveBtn"><i class="fas fa-times"></i></button>
+                            </div>
+                        </div>
+                        <div id="imgUploadAlert" class="mt-2"></div>
+                        <div class="mt-3">
+                            <label class="form-label small mb-1"><i class="fas fa-font"></i> <strong>Ngôn ngữ nguồn (tùy chọn):</strong></label>
+                            <input type="text" class="form-control form-control-sm" id="imgSourceLang" placeholder="Ví dụ: tiếng Anh, tiếng Trung...">
+                        </div>
+                        <div class="mt-2">
+                            <label class="form-label small mb-1"><i class="fas fa-globe"></i> <strong>Ngôn ngữ đích:</strong></label>
+                            <select class="form-select form-select-sm" id="imgTargetLangSelect">
+                                <option value="" disabled>Đang tải...</option>
+                            </select>
+                        </div>
+                        <div class="text-center mt-3">
+                            <button type="button" class="btn btn-custom btn-sm" id="genPromptBtn" disabled>
+                                <i class="fas fa-magic"></i> Tạo Prompt
+                            </button>
+                        </div>
+                        <div class="mt-3">
+                            <div class="collapse-toggle p-2" style="background:#f8f9fa;border-radius:5px;" data-bs-toggle="collapse" data-bs-target="#imgStep1Guide">
+                                <i class="fas fa-info-circle text-info"></i>
+                                <small><strong>Hướng dẫn</strong></small>
+                                <i class="fas fa-chevron-down float-end"></i>
+                            </div>
+                            <div class="collapse mt-2" id="imgStep1Guide">
+                                <div class="p-2" style="border-radius:5px;">
+                                    <ul class="small mb-0" style="padding-left:20px;">
+                                        <li>Hỗ trợ: PNG, JPG, JPEG, GIF, WEBP, BMP</li>
+                                        <li>Ngôn ngữ nguồn có thể bỏ trống</li>
+                                        <li>Chọn ngôn ngữ đích cần dịch sang</li>
+                                        <li>Nhấn <b>Tạo Prompt</b> để chuyển sang bước 2</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bước 2: Prompt AI -->
+                <div class="col-lg-4">
+                    <div class="function-card">
+                        <div class="text-center">
+                            <span class="step-number">2</span>
+                            <h3 class="d-inline">Prompt AI</h3>
+                            <p class="text-muted small mt-2">Copy &amp; gửi cho AI cùng ảnh</p>
+                        </div>
+                        <div id="imgPromptEmpty" class="text-center text-muted mt-4">
+                            <i class="fas fa-arrow-left" style="font-size:2rem;opacity:0.3;"></i>
+                            <p class="mt-2 small">Upload ảnh và nhấn <br><b>Tạo Prompt</b> ở bước 1</p>
+                        </div>
+                        <div id="imgPromptWrap" style="display:none;">
+                            <div class="alert alert-info small py-2 mb-2">
+                                <i class="fas fa-lightbulb"></i> Copy prompt, mở <strong>Gemini / Grok / ChatGPT</strong>, đính kèm ảnh + prompt rồi gửi.
+                            </div>
+                            <textarea class="form-control" id="imgPromptText" rows="12" readonly style="font-size:0.75rem;font-family:monospace;resize:vertical;"></textarea>
+                            <div class="text-center mt-2">
+                                <button type="button" class="btn btn-outline-primary btn-sm" id="copyImgPromptBtn">
+                                    <i class="fas fa-copy"></i> Copy Prompt
+                                </button>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <div class="collapse-toggle p-2" style="background:#f8f9fa;border-radius:5px;" data-bs-toggle="collapse" data-bs-target="#imgStep2Guide">
+                                <i class="fas fa-info-circle text-info"></i>
+                                <small><strong>Hướng dẫn</strong></small>
+                                <i class="fas fa-chevron-down float-end"></i>
+                            </div>
+                            <div class="collapse mt-2" id="imgStep2Guide">
+                                <div class="p-2" style="border-radius:5px;">
+                                    <ul class="small mb-0" style="padding-left:20px;">
+                                        <li>Copy prompt và mở AI (Gemini, Grok...)</li>
+                                        <li>Đính kèm ảnh + paste prompt rồi gửi</li>
+                                        <li>AI trả về JSON chứa tọa độ và bản dịch</li>
+                                        <li>Copy toàn bộ JSON đó → sang Bước 3</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bước 3: Paste JSON & Render -->
+                <div class="col-lg-4">
+                    <div class="function-card">
+                        <div class="text-center">
+                            <span class="step-number">3</span>
+                            <h3 class="d-inline">Dán JSON &amp; Render</h3>
+                            <p class="text-muted small mt-2">Paste JSON từ AI để xem kết quả</p>
+                        </div>
+                        <div>
+                            <label class="form-label small mb-1"><strong>Paste JSON từ AI:</strong></label>
+                            <textarea class="form-control" id="imgJsonTextarea" rows="10"
+                                placeholder='{"text_blocks": [{"original":"...","translated":"...","top_pct":10,"left_pct":5,"width_pct":30,"height_pct":5,"bg_color":"#ffffff","text_color":"#000000","font_size_pct":2.5}]}'
+                                style="font-family:monospace;font-size:0.75rem;resize:vertical;"></textarea>
+                        </div>
+                        <div id="imgJsonAlert" class="mt-2"></div>
+                        <div class="text-center mt-2">
+                            <button type="button" class="btn btn-custom btn-sm" id="renderOverlayBtn" disabled>
+                                <i class="fas fa-layer-group"></i> Render Overlay
+                            </button>
+                        </div>
+                        <div class="mt-3">
+                            <div class="collapse-toggle p-2" style="background:#f8f9fa;border-radius:5px;" data-bs-toggle="collapse" data-bs-target="#imgStep3Guide">
+                                <i class="fas fa-info-circle text-info"></i>
+                                <small><strong>Hướng dẫn</strong></small>
+                                <i class="fas fa-chevron-down float-end"></i>
+                            </div>
+                            <div class="collapse mt-2" id="imgStep3Guide">
+                                <div class="p-2" style="border-radius:5px;">
+                                    <ul class="small mb-0" style="padding-left:20px;">
+                                        <li>Paste JSON trả về từ AI</li>
+                                        <li>Nhấn <b>Render Overlay</b> để hiển thị</li>
+                                        <li><b>Click</b> vào khối → chỉnh sửa nội dung, màu</li>
+                                        <li><b>Kéo thả</b> khối → di chuyển vị trí</li>
+                                        <li><b>Kéo giãn góc/cạnh</b> → thay đổi kích thước</li>
+                                        <li><b>Delete / Backspace</b> → xóa khối đã chọn</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Kết quả Overlay -->
+            <div id="imgOverlayResult" class="mt-4" style="display:none;">
+                <div class="function-card">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h3 class="mb-0"><i class="fas fa-eye"></i> Kết quả Overlay</h3>
+                        <div class="d-flex gap-2 flex-wrap">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" id="toggleOriginalBtn" onclick="toggleImgOriginalText()">
+                                <i class="fas fa-eye-slash"></i> Ẩn/hiện chữ gốc
+                            </button>
+                            <button type="button" class="btn btn-outline-success btn-sm" onclick="window.print()">
+                                <i class="fas fa-print"></i> In/Lưu
+                            </button>
+                        </div>
+                    </div>
+                    <div class="alert alert-secondary small py-2 mb-2" style="font-size:0.75rem;">
+                        <i class="fas fa-hand-pointer"></i> <b>Click</b> = chỉnh sửa &ensp;
+                        <i class="fas fa-arrows-alt"></i> <b>Kéo khối</b> = di chuyển &ensp;
+                        <i class="fas fa-expand-alt"></i> <b>Kéo góc/cạnh</b> = kích thước &ensp;
+                        <kbd>Delete</kbd> = xóa
+                    </div>
+                    <!-- Zoom controls -->
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <span class="small text-muted"><i class="fas fa-search"></i> Zoom:</span>
+                        <button type="button" class="btn btn-outline-secondary btn-sm px-2 py-0" onclick="imgZoom(-0.15)" title="Thu nhỏ"><i class="fas fa-search-minus"></i></button>
+                        <span id="imgZoomLabel" class="small" style="min-width:40px;text-align:center;">100%</span>
+                        <button type="button" class="btn btn-outline-secondary btn-sm px-2 py-0" onclick="imgZoom(+0.15)" title="Phóng to"><i class="fas fa-search-plus"></i></button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm px-2 py-0" onclick="imgZoomReset()" title="Khôi phục">↺</button>
+                    </div>
+                    <div style="overflow:auto;max-height:75vh;">
+                        <div id="imgOverlayContainer" style="position:relative;display:inline-block;user-select:none;transform-origin:top left;">
+                            <img id="imgOverlayBase" src="" style="display:block;max-width:none;" alt="Ảnh gốc">
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <h6><i class="fas fa-list"></i> Danh sách vùng dịch <small class="text-muted">(click để chỉnh sửa)</small></h6>
+                        <div id="imgBlockList"></div>
+                    </div>
+                </div>
+            </div>
+        </div><!-- /tab-pane tab2 -->
+        </div><!-- /tab-content -->
     </div>
     
     <!-- Footer -->
@@ -719,6 +978,47 @@ Output yêu cầu:
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Modal: Edit Overlay Block -->
+    <div class="modal fade" id="overlayEditModal" tabindex="-1">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title mb-0"><i class="fas fa-palette"></i> Chỉnh sửa khối</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="editBlockIdx">
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small mb-1"><strong>Màu nền</strong></label>
+                            <div class="d-flex gap-1 align-items-center">
+                                <input type="color" class="form-control form-control-sm" id="editBgColor" style="width:38px;padding:2px;">
+                                <input type="text" class="form-control form-control-sm" id="editBgColorHex" maxlength="7" placeholder="#ffffff">
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small mb-1"><strong>Màu chữ</strong></label>
+                            <div class="d-flex gap-1 align-items-center">
+                                <input type="color" class="form-control form-control-sm" id="editTextColor" style="width:38px;padding:2px;">
+                                <input type="text" class="form-control form-control-sm" id="editTextColorHex" maxlength="7" placeholder="#000000">
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="form-label small mb-1"><strong>Cỡ chữ</strong> <span class="text-muted">(% chiều cao ảnh)</span></label>
+                        <input type="number" class="form-control form-control-sm" id="editFontSize" min="0.3" max="30" step="0.1">
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Hủy</button>
+                    <button type="button" class="btn btn-primary btn-sm" id="saveBlockBtn">
+                        <i class="fas fa-save"></i> Lưu
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Modal: Template Editor -->
     <div class="modal fade" id="templateModal" tabindex="-1">
@@ -1724,6 +2024,421 @@ Output yêu cầu:
                 </div>
             `;
         }
+
+        // ==================== DỊCH ẢNH (IMAGE OVERLAY) ====================
+        let imgCurrentFilename = null;
+        let imgCurrentLangName = 'tiếng Nhật';
+        let imgTextBlocks = [];
+        let imgShowOriginal = false;
+
+        // Populate imgTargetLangSelect từ cùng API languages
+        async function loadImgLanguages() {
+            const select = document.getElementById('imgTargetLangSelect');
+            try {
+                const resp = await fetch('/api/languages');
+                if (!resp.ok) throw new Error();
+                const langs = await resp.json();
+                select.innerHTML = '';
+                langs.forEach(lang => {
+                    const opt = document.createElement('option');
+                    opt.value = lang.code || lang.name;
+                    opt.textContent = lang.name;
+                    opt.dataset.langName = lang.name;
+                    select.appendChild(opt);
+                });
+                if (langs.length > 0) imgCurrentLangName = langs[0].name;
+            } catch(e) {
+                select.innerHTML = '<option value="ja">tiếng Nhật</option>';
+            }
+            select.addEventListener('change', function() {
+                const opt = this.selectedOptions[0];
+                imgCurrentLangName = opt.dataset.langName || opt.textContent;
+            });
+        }
+        loadImgLanguages();
+
+        const imgFileInput    = document.getElementById('imgFileInput');
+        const imgUploadArea   = document.getElementById('imgUploadArea');
+        const imgPreviewWrap  = document.getElementById('imgPreviewWrap');
+        const imgPreview      = document.getElementById('imgPreview');
+        const imgFileNameEl   = document.getElementById('imgFileName');
+        const imgRemoveBtn    = document.getElementById('imgRemoveBtn');
+        const imgUploadAlert  = document.getElementById('imgUploadAlert');
+        const genPromptBtn    = document.getElementById('genPromptBtn');
+        const renderOverlayBtn = document.getElementById('renderOverlayBtn');
+
+        imgFileInput.addEventListener('change', e => { if (e.target.files.length > 0) handleImgFile(e.target.files[0]); });
+
+        imgUploadArea.addEventListener('dragover',  e => { e.preventDefault(); imgUploadArea.style.borderColor = '#764ba2'; });
+        imgUploadArea.addEventListener('dragleave', e => { e.preventDefault(); imgUploadArea.style.borderColor = '#667eea'; });
+        imgUploadArea.addEventListener('drop', e => {
+            e.preventDefault();
+            imgUploadArea.style.borderColor = '#667eea';
+            if (e.dataTransfer.files.length > 0) handleImgFile(e.dataTransfer.files[0]);
+        });
+
+        imgRemoveBtn.addEventListener('click', function() {
+            imgFileInput.value = '';
+            imgCurrentFilename = null;
+            imgPreviewWrap.style.display = 'none';
+            genPromptBtn.disabled = true;
+            renderOverlayBtn.disabled = true;
+            document.getElementById('imgPromptWrap').style.display = 'none';
+            document.getElementById('imgPromptEmpty').style.display = 'block';
+            document.getElementById('imgOverlayResult').style.display = 'none';
+            imgUploadAlert.innerHTML = '';
+        });
+
+        async function handleImgFile(file) {
+            const allowed = ['image/png','image/jpeg','image/jpg','image/gif','image/webp','image/bmp'];
+            if (!allowed.includes(file.type)) {
+                imgUploadAlert.innerHTML = '<div class="alert alert-danger small py-2">Định dạng không hỗ trợ. Chỉ nhận PNG, JPG, GIF, WEBP, BMP.</div>';
+                return;
+            }
+            imgUploadAlert.innerHTML = '<div class="alert alert-info small py-2"><i class="fas fa-spinner fa-spin"></i> Đang upload...</div>';
+            const fd = new FormData();
+            fd.append('image', file);
+            try {
+                const resp = await fetch('/img-translate/upload', { method: 'POST', body: fd });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.error || 'Upload thất bại');
+                imgCurrentFilename = data.filename;
+                imgPreview.src = `/img-translate/image/${data.filename}`;
+                imgFileNameEl.textContent = file.name;
+                imgPreviewWrap.style.display = 'block';
+                genPromptBtn.disabled = false;
+                renderOverlayBtn.disabled = false;
+                imgUploadAlert.innerHTML = '<div class="alert alert-success small py-2"><i class="fas fa-check"></i> Upload thành công!</div>';
+                setTimeout(() => { imgUploadAlert.innerHTML = ''; }, 2500);
+            } catch(err) {
+                imgUploadAlert.innerHTML = `<div class="alert alert-danger small py-2">${err.message}</div>`;
+            }
+        }
+
+        // Tạo Prompt
+        genPromptBtn.addEventListener('click', async function() {
+            const sourceLang = document.getElementById('imgSourceLang').value.trim();
+            try {
+                const resp = await fetch('/img-translate/prompt', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ target_lang: imgCurrentLangName, source_lang: sourceLang })
+                });
+                const data = await resp.json();
+                document.getElementById('imgPromptText').value = data.prompt;
+                document.getElementById('imgPromptWrap').style.display = 'block';
+                document.getElementById('imgPromptEmpty').style.display = 'none';
+            } catch(err) {
+                alert('Lỗi tạo prompt: ' + err.message);
+            }
+        });
+
+        // Copy Prompt
+        document.getElementById('copyImgPromptBtn').addEventListener('click', function() {
+            const text = document.getElementById('imgPromptText').value;
+            navigator.clipboard.writeText(text).then(() => {
+                this.innerHTML = '<i class="fas fa-check"></i> Đã copy!';
+                this.classList.replace('btn-outline-primary', 'btn-success');
+                setTimeout(() => {
+                    this.innerHTML = '<i class="fas fa-copy"></i> Copy Prompt';
+                    this.classList.replace('btn-success', 'btn-outline-primary');
+                }, 2000);
+            });
+        });
+
+        // Render Overlay
+        renderOverlayBtn.addEventListener('click', function() {
+            const jsonText = document.getElementById('imgJsonTextarea').value.trim();
+            const imgJsonAlert = document.getElementById('imgJsonAlert');
+            if (!jsonText) { imgJsonAlert.innerHTML = '<div class="alert alert-warning small py-2">Vui lòng paste JSON từ AI.</div>'; return; }
+            if (!imgCurrentFilename) { imgJsonAlert.innerHTML = '<div class="alert alert-warning small py-2">Vui lòng upload ảnh trước.</div>'; return; }
+            try {
+                const parsed = JSON.parse(jsonText);
+                if (!parsed.text_blocks || !Array.isArray(parsed.text_blocks)) throw new Error('thiếu trường "text_blocks"');
+                imgTextBlocks = parsed.text_blocks;
+                imgJsonAlert.innerHTML = '';
+                renderAllOverlays();
+            } catch(e) {
+                imgJsonAlert.innerHTML = `<div class="alert alert-danger small py-2">JSON không hợp lệ: ${e.message}</div>`;
+            }
+        });
+
+        function renderAllOverlays() {
+            const container = document.getElementById('imgOverlayContainer');
+            const imgEl     = document.getElementById('imgOverlayBase');
+            const result    = document.getElementById('imgOverlayResult');
+            const blockList = document.getElementById('imgBlockList');
+
+            imgEl.src = `/img-translate/image/${imgCurrentFilename}`;
+            result.style.display = 'block';
+            setTimeout(() => result.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+
+            container.querySelectorAll('.overlay-block').forEach(el => el.remove());
+            blockList.innerHTML = '';
+            selectedBlockIdx = -1;
+
+            function doRender() {
+                imgTextBlocks.forEach((block, idx) => {
+                    createOverlayBlock(block, idx, container, imgEl);
+                    appendBlockListRow(block, idx, blockList);
+                });
+            }
+            if (imgEl.complete && imgEl.naturalWidth > 0) doRender();
+            else imgEl.onload = doRender;
+        }
+
+        let selectedBlockIdx = -1;
+
+        function selectBlock(idx) {
+            const container = document.getElementById('imgOverlayContainer');
+            container.querySelectorAll('.overlay-block').forEach(el => el.classList.remove('selected'));
+            selectedBlockIdx = idx;
+            if (idx >= 0) {
+                const el = container.querySelector(`.overlay-block[data-idx="${idx}"]`);
+                if (el) el.classList.add('selected');
+            }
+        }
+
+        // Delete / Backspace to remove selected block
+        document.addEventListener('keydown', function(e) {
+            if (selectedBlockIdx < 0) return;
+            const tag = document.activeElement ? document.activeElement.tagName : '';
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                e.preventDefault();
+                imgTextBlocks.splice(selectedBlockIdx, 1);
+                selectedBlockIdx = -1;
+                renderAllOverlays();
+            }
+        });
+
+        // Click outside → deselect
+        document.getElementById('imgOverlayContainer').addEventListener('mousedown', function(e) {
+            if (!e.target.closest('.overlay-block')) selectBlock(-1);
+        });
+
+        function createOverlayBlock(block, idx, container, imgEl) {
+            const div = document.createElement('div');
+            div.className = 'overlay-block';
+            div.dataset.idx = idx;
+            const bg = block.bg_color || '#ffffff';
+            const fg = block.text_color || '#000000';
+            const fs = (imgEl.naturalHeight * (block.font_size_pct || 2) / 100) + 'px';
+            Object.assign(div.style, {
+                position: 'absolute',
+                top:    block.top_pct    + '%',
+                left:   block.left_pct   + '%',
+                width:  block.width_pct  + '%',
+                height: block.height_pct + '%',
+                backgroundColor: bg,
+                color: fg,
+                boxShadow: `0 0 6px 4px ${bg}`,
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                alignItems: 'center',
+                overflow: 'visible',
+                cursor: 'move',
+                fontSize: fs,
+                lineHeight: '1.2',
+                padding: '2px',
+                zIndex: '10',
+                boxSizing: 'border-box',
+                userSelect: 'none'
+            });
+
+            // Text content wrapper (clips text inside block)
+            const inner = document.createElement('div');
+            inner.style.cssText = 'display:flex;flex-direction:column;justify-content:center;align-items:center;width:100%;height:100%;overflow:hidden;pointer-events:none;';
+            const textSpan = document.createElement('span');
+            textSpan.className = 'overlay-translated';
+            textSpan.textContent = block.translated || '';
+            inner.appendChild(textSpan);
+            if (imgShowOriginal && block.original) {
+                const origDiv = document.createElement('div');
+                origDiv.className = 'overlay-original';
+                origDiv.textContent = '[' + block.original + ']';
+                inner.appendChild(origDiv);
+            }
+            div.appendChild(inner);
+
+            // Resize handles
+            ['nw','n','ne','e','se','s','sw','w'].forEach(dir => {
+                const h = document.createElement('div');
+                h.className = `resize-handle rh-${dir}`;
+                h.dataset.dir = dir;
+                div.appendChild(h);
+            });
+
+            // Interaction: drag (move) + resize
+            attachBlockInteraction(div, idx, container);
+            container.appendChild(div);
+        }
+
+        function attachBlockInteraction(div, idx, container) {
+            div.addEventListener('mousedown', function(e) {
+                // Check if we're clicking a resize handle
+                const handle = e.target.closest('.resize-handle');
+                const dir = handle ? handle.dataset.dir : null;
+
+                e.preventDefault();
+                e.stopPropagation();
+                selectBlock(idx);
+
+                const rect  = container.getBoundingClientRect();
+                const W     = rect.width;
+                const H     = rect.height;
+                const startX = e.clientX;
+                const startY = e.clientY;
+                const startTop    = imgTextBlocks[idx].top_pct;
+                const startLeft   = imgTextBlocks[idx].left_pct;
+                const startWidth  = imgTextBlocks[idx].width_pct;
+                const startHeight = imgTextBlocks[idx].height_pct;
+                let dragged = false;
+
+                function onMove(e) {
+                    const dx = (e.clientX - startX) / W * 100;
+                    const dy = (e.clientY - startY) / H * 100;
+                    if (Math.abs(dx) > 0.2 || Math.abs(dy) > 0.2) dragged = true;
+
+                    if (!dir) {
+                        // MOVE
+                        const newTop  = Math.max(0, Math.min(100 - startHeight, startTop  + dy));
+                        const newLeft = Math.max(0, Math.min(100 - startWidth,  startLeft + dx));
+                        div.style.top  = newTop  + '%';
+                        div.style.left = newLeft + '%';
+                        imgTextBlocks[idx].top_pct  = newTop;
+                        imgTextBlocks[idx].left_pct = newLeft;
+                    } else {
+                        // RESIZE
+                        let t = startTop, l = startLeft, w = startWidth, h = startHeight;
+                        if (dir.includes('s')) h = Math.max(1, startHeight + dy);
+                        if (dir.includes('n')) { h = Math.max(1, startHeight - dy); t = startTop + (startHeight - h); }
+                        if (dir.includes('e')) w = Math.max(2, startWidth  + dx);
+                        if (dir.includes('w')) { w = Math.max(2, startWidth  - dx); l = startLeft + (startWidth - w); }
+                        div.style.top    = t + '%';
+                        div.style.left   = l + '%';
+                        div.style.width  = w + '%';
+                        div.style.height = h + '%';
+                        imgTextBlocks[idx].top_pct    = t;
+                        imgTextBlocks[idx].left_pct   = l;
+                        imgTextBlocks[idx].width_pct  = w;
+                        imgTextBlocks[idx].height_pct = h;
+                    }
+                }
+
+                function onUp() {
+                    document.removeEventListener('mousemove', onMove);
+                    document.removeEventListener('mouseup', onUp);
+                    if (!dragged && !dir) {
+                        openImgEditModal(idx);
+                    }
+                }
+
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+            });
+        }
+
+        function appendBlockListRow(block, idx, listEl) {
+            const row = document.createElement('div');
+            row.className = 'json-file-row';
+            row.dataset.blockRow = idx;
+            row.innerHTML = `
+                <div class="file-name" style="flex:1;">
+                    <span style="background:${block.bg_color||'#fff'};color:${block.text_color||'#000'};
+                                 padding:1px 6px;border-radius:3px;font-size:0.8rem;margin-right:6px;">
+                        ${block.translated || '(trống)'}
+                    </span>
+                    <span class="text-muted" style="font-size:0.72rem;">${block.original || ''}</span>
+                </div>
+                <button class="btn btn-outline-secondary btn-sm me-1" style="font-size:0.72rem;padding:3px 8px;" onclick="openImgEditModal(${idx})">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn btn-outline-danger btn-sm" style="font-size:0.72rem;padding:3px 8px;" onclick="deleteImgBlock(${idx})">
+                    <i class="fas fa-trash"></i>
+                </button>`;
+            listEl.appendChild(row);
+        }
+
+        window.deleteImgBlock = function(idx) {
+            if (!confirm('Xóa block này?')) return;
+            imgTextBlocks.splice(idx, 1);
+            renderAllOverlays();
+        };
+
+        window.toggleImgOriginalText = function() {
+            imgShowOriginal = !imgShowOriginal;
+            renderAllOverlays();
+        };
+
+        // ========== EDIT MODAL ==========
+        window.openImgEditModal = function(idx) {
+            const block = imgTextBlocks[idx];
+            document.getElementById('editBlockIdx').value = idx;
+            const bg = block.bg_color || '#ffffff';
+            const fg = block.text_color || '#000000';
+            document.getElementById('editBgColor').value    = bg;
+            document.getElementById('editBgColorHex').value = bg;
+            document.getElementById('editTextColor').value    = fg;
+            document.getElementById('editTextColorHex').value = fg;
+            document.getElementById('editFontSize').value  = block.font_size_pct || 2;
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('overlayEditModal')).show();
+        };
+
+        // Color picker ↔ hex text sync
+        ['Bg','Text'].forEach(which => {
+            const picker   = document.getElementById(`edit${which}Color`);
+            const hexInput = document.getElementById(`edit${which}ColorHex`);
+            picker.addEventListener('input', () => { hexInput.value = picker.value; });
+            hexInput.addEventListener('input', () => {
+                if (/^#[0-9a-fA-F]{6}$/.test(hexInput.value)) picker.value = hexInput.value;
+            });
+        });
+
+        document.getElementById('saveBlockBtn').addEventListener('click', function() {
+            const idx = parseInt(document.getElementById('editBlockIdx').value);
+            imgTextBlocks[idx].bg_color      = document.getElementById('editBgColorHex').value || document.getElementById('editBgColor').value;
+            imgTextBlocks[idx].text_color    = document.getElementById('editTextColorHex').value || document.getElementById('editTextColor').value;
+            imgTextBlocks[idx].font_size_pct = parseFloat(document.getElementById('editFontSize').value) || 2;
+            renderAllOverlays();
+            bootstrap.Modal.getInstance(document.getElementById('overlayEditModal')).hide();
+        });
+
+        // ========== ZOOM ==========
+        let imgZoomLevel = 1.0;
+        window.imgZoom = function(delta) {
+            imgZoomLevel = Math.max(0.2, Math.min(5, imgZoomLevel + delta));
+            applyZoom();
+        };
+        window.imgZoomReset = function() {
+            imgZoomLevel = 1.0;
+            applyZoom();
+        };
+        function applyZoom() {
+            const container = document.getElementById('imgOverlayContainer');
+            container.style.transform = `scale(${imgZoomLevel})`;
+            container.style.transformOrigin = 'top left';
+            // Update scroll container height so scrollbar reflects scaled size
+            const imgEl = document.getElementById('imgOverlayBase');
+            const wrapper = container.parentElement;
+            wrapper.style.height = (imgEl.naturalHeight * imgZoomLevel) + 'px';
+            const lbl = document.getElementById('imgZoomLabel');
+            if (lbl) lbl.textContent = Math.round(imgZoomLevel * 100) + '%';
+        }
+
+        // Font-size recalc on window resize
+        window.addEventListener('resize', () => {
+            if (imgTextBlocks.length > 0 && document.getElementById('imgOverlayResult').style.display !== 'none') {
+                const container = document.getElementById('imgOverlayContainer');
+                const imgEl = document.getElementById('imgOverlayBase');
+                container.querySelectorAll('.overlay-block').forEach(div => {
+                    const idx = parseInt(div.dataset.idx);
+                    const block = imgTextBlocks[idx];
+                    if (block) div.style.fontSize = (imgEl.naturalHeight * (block.font_size_pct || 2) / 100) + 'px';
+                });
+            }
+        });
     </script>
 </body>
 </html>

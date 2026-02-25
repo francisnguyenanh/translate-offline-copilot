@@ -1668,6 +1668,93 @@ def clear_uploads():
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
     os.makedirs(app.config['UPLOAD_FOLDER'])
 
+
+# ==================== IMAGE TRANSLATION ====================
+ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'}
+
+def allowed_image(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS
+
+
+@app.route('/img-translate/upload', methods=['POST'])
+@login_required
+def img_translate_upload():
+    """Upload ảnh vào session folder, trả về filename."""
+    if 'image' not in request.files:
+        return jsonify({'error': 'Không tìm thấy file ảnh'}), 400
+    file = request.files['image']
+    if file.filename == '':
+        return jsonify({'error': 'Chưa chọn file'}), 400
+    if not allowed_image(file.filename):
+        return jsonify({'error': 'Định dạng không hỗ trợ. Chỉ nhận: PNG, JPG, JPEG, GIF, WEBP, BMP'}), 400
+
+    session_folder = get_session_folder()
+    filename = secure_filename(file.filename)
+    ts = datetime.now().strftime('%H%M%S')
+    name, ext = os.path.splitext(filename)
+    safe_filename = f"img_{ts}_{name[:30]}{ext}"
+    filepath = os.path.join(session_folder, safe_filename)
+    file.save(filepath)
+    return jsonify({'success': True, 'filename': safe_filename}), 200
+
+
+@app.route('/img-translate/image/<filename>', methods=['GET'])
+@login_required
+def img_translate_serve(filename):
+    """Serve ảnh đã upload từ session folder."""
+    session_folder = get_session_folder()
+    safe = secure_filename(filename)
+    filepath = os.path.join(session_folder, safe)
+    if not os.path.exists(filepath):
+        return jsonify({'error': 'File không tồn tại'}), 404
+    return send_file(filepath)
+
+
+@app.route('/img-translate/prompt', methods=['POST'])
+@login_required
+def img_translate_prompt():
+    """Sinh Instruction Prompt yêu cầu AI phân tích ảnh và trả JSON overlay."""
+    data = request.get_json() or {}
+    target_lang = data.get('target_lang', 'tiếng Nhật')
+    source_lang = data.get('source_lang', '').strip()
+    source_note = f" (ngôn ngữ gốc trong ảnh: {source_lang})" if source_lang else ""
+
+    prompt = f"""Bạn là chuyên gia OCR và dịch thuật chuyên nghiệp. Tôi sẽ gửi cho bạn một bức ảnh{source_note}.
+
+Nhiệm vụ:
+1. Nhận diện (OCR) TẤT CẢ các vùng có văn bản trong ảnh.
+2. Dịch toàn bộ sang {target_lang} một cách tự nhiên, chính xác.
+3. Với mỗi vùng văn bản, xác định:
+   • top_pct / left_pct / width_pct / height_pct : tọa độ tính theo % so với kích thước TOÀN ẢNH (0–100)
+   • bg_color  : mã HEX màu nền THỰC TẾ ngay phía sau văn bản đó (dùng để xóa chữ cũ)
+   • text_color: mã HEX màu chữ phù hợp để dễ đọc trên nền trên
+   • font_size_pct: cỡ chữ gợi ý tính bằng % chiều cao ảnh (ví dụ: 2.5)
+
+⚠️ YÊU CẦU BẮT BUỘC:
+- Tọa độ phải bao phủ ĐÚNG vùng chứa văn bản, không cắt, không thừa nhiều
+- bg_color PHẢI lấy từ màu pixel thực tế trong ảnh, không tự đặt màu tùy ý
+- Chỉ trả về JSON thuần túy, TUYỆT ĐỐI không thêm giải thích, không bọc trong markdown code block
+
+Cấu trúc JSON trả về (giữ nguyên đúng format này):
+{{
+  "text_blocks": [
+    {{
+      "original": "Văn bản gốc trong ảnh",
+      "translated": "Bản dịch sang {target_lang}",
+      "top_pct": 10.5,
+      "left_pct": 5.2,
+      "width_pct": 30.0,
+      "height_pct": 5.0,
+      "bg_color": "#FFFFFF",
+      "text_color": "#000000",
+      "font_size_pct": 2.5
+    }}
+  ]
+}}"""
+
+    return jsonify({'prompt': prompt}), 200
+
+
 if __name__ == '__main__':
     # Chạy ứng dụng Flask ở chế độ debug
     app.run(debug=True, host='0.0.0.0', port=5001)
