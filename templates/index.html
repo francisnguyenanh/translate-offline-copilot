@@ -935,7 +935,9 @@ Output yêu cầu:
                         <i class="fas fa-hand-pointer"></i> <b>Click</b> = chỉnh sửa &ensp;
                         <i class="fas fa-arrows-alt"></i> <b>Kéo khối</b> = di chuyển &ensp;
                         <i class="fas fa-expand-alt"></i> <b>Kéo góc/cạnh</b> = kích thước &ensp;
-                        <kbd>Delete</kbd> = xóa
+                        <kbd>Delete</kbd> = xóa &ensp;
+                        <kbd>Ctrl</kbd>+<b>Click</b> = chọn nhiều &ensp;
+                        <i class="fas fa-object-group"></i> <b>Kéo khi chọn nhiều</b> = di chuyển đồng loạt
                     </div>
                     <!-- Zoom controls -->
                     <div class="d-flex align-items-center gap-2 mb-2">
@@ -2178,6 +2180,7 @@ Output yêu cầu:
             container.querySelectorAll('.overlay-block').forEach(el => el.remove());
             blockList.innerHTML = '';
             selectedBlockIdx = -1;
+            selectedBlockIdxSet.clear();
 
             function doRender() {
                 imgTextBlocks.forEach((block, idx) => {
@@ -2189,34 +2192,61 @@ Output yêu cầu:
             else imgEl.onload = doRender;
         }
 
-        let selectedBlockIdx = -1;
+        let selectedBlockIdx  = -1;
+        let selectedBlockIdxSet = new Set();   // multi-select set
 
-        function selectBlock(idx) {
+        /**
+         * selectBlock(idx, ctrlKey)
+         * - ctrlKey=false (default): single-select – clears all, selects only idx
+         * - ctrlKey=true:           toggle idx in/out of the selection set
+         */
+        function selectBlock(idx, ctrlKey) {
             const container = document.getElementById('imgOverlayContainer');
-            container.querySelectorAll('.overlay-block').forEach(el => el.classList.remove('selected'));
-            selectedBlockIdx = idx;
-            if (idx >= 0) {
-                const el = container.querySelector(`.overlay-block[data-idx="${idx}"]`);
-                if (el) el.classList.add('selected');
+            if (ctrlKey && idx >= 0) {
+                // Toggle
+                if (selectedBlockIdxSet.has(idx)) {
+                    selectedBlockIdxSet.delete(idx);
+                    const el = container.querySelector(`.overlay-block[data-idx="${idx}"]`);
+                    if (el) el.classList.remove('selected');
+                } else {
+                    selectedBlockIdxSet.add(idx);
+                    const el = container.querySelector(`.overlay-block[data-idx="${idx}"]`);
+                    if (el) el.classList.add('selected');
+                }
+                // Keep selectedBlockIdx pointing at the most-recently toggled block
+                selectedBlockIdx = selectedBlockIdxSet.size > 0 ? idx : -1;
+            } else {
+                // Single select
+                container.querySelectorAll('.overlay-block').forEach(el => el.classList.remove('selected'));
+                selectedBlockIdxSet.clear();
+                selectedBlockIdx = idx;
+                if (idx >= 0) {
+                    selectedBlockIdxSet.add(idx);
+                    const el = container.querySelector(`.overlay-block[data-idx="${idx}"]`);
+                    if (el) el.classList.add('selected');
+                }
             }
         }
 
-        // Delete / Backspace to remove selected block
+        // Delete / Backspace to remove selected block(s)
         document.addEventListener('keydown', function(e) {
-            if (selectedBlockIdx < 0) return;
+            if (selectedBlockIdxSet.size === 0) return;
             const tag = document.activeElement ? document.activeElement.tagName : '';
             if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
             if (e.key === 'Delete' || e.key === 'Backspace') {
                 e.preventDefault();
-                imgTextBlocks.splice(selectedBlockIdx, 1);
+                // Remove in descending order so splicing does not shift remaining indices
+                const toDelete = Array.from(selectedBlockIdxSet).sort((a, b) => b - a);
+                toDelete.forEach(i => imgTextBlocks.splice(i, 1));
+                selectedBlockIdxSet.clear();
                 selectedBlockIdx = -1;
                 renderAllOverlays();
             }
         });
 
-        // Click outside → deselect
+        // Click outside → deselect all
         document.getElementById('imgOverlayContainer').addEventListener('mousedown', function(e) {
-            if (!e.target.closest('.overlay-block')) selectBlock(-1);
+            if (!e.target.closest('.overlay-block')) selectBlock(-1, false);
         });
 
         function createOverlayBlock(block, idx, container, imgEl) {
@@ -2290,7 +2320,26 @@ Output yêu cầu:
 
                 e.preventDefault();
                 e.stopPropagation();
-                selectBlock(idx);
+
+                const isCtrl = e.ctrlKey || e.metaKey;
+                // Track whether this block was already in selection BEFORE mousedown
+                const wasAlreadySelected = selectedBlockIdxSet.has(idx);
+
+                if (isCtrl) {
+                    // Always ADD to selection on mousedown (never remove yet).
+                    // Removal of an already-selected block is deferred to mouseup,
+                    // but only if the user didn't drag (plain Ctrl+click = deselect).
+                    if (!wasAlreadySelected) {
+                        selectedBlockIdxSet.add(idx);
+                        selectedBlockIdx = idx;
+                        div.classList.add('selected');
+                    }
+                    // if already selected → keep it selected during potential drag
+                } else if (!wasAlreadySelected) {
+                    // Plain click on a block NOT in current selection → single-select
+                    selectBlock(idx, false);
+                }
+                // Plain click on an already-selected block (no Ctrl) → keep selection for drag
 
                 const rect  = container.getBoundingClientRect();
                 const W     = rect.width;
@@ -2301,23 +2350,53 @@ Output yêu cầu:
                 const startLeft   = imgTextBlocks[idx].left_pct;
                 const startWidth  = imgTextBlocks[idx].width_pct;
                 const startHeight = imgTextBlocks[idx].height_pct;
+
+                // Snapshot starting positions for ALL currently-selected blocks
+                const startPositions = {};
+                selectedBlockIdxSet.forEach(i => {
+                    if (imgTextBlocks[i]) {
+                        startPositions[i] = {
+                            top_pct:  imgTextBlocks[i].top_pct,
+                            left_pct: imgTextBlocks[i].left_pct
+                        };
+                    }
+                });
+
                 let dragged = false;
 
-                function onMove(e) {
-                    const dx = (e.clientX - startX) / W * 100;
-                    const dy = (e.clientY - startY) / H * 100;
+                function onMove(ev) {
+                    const dx = (ev.clientX - startX) / W * 100;
+                    const dy = (ev.clientY - startY) / H * 100;
                     if (Math.abs(dx) > 0.2 || Math.abs(dy) > 0.2) dragged = true;
 
                     if (!dir) {
-                        // MOVE
-                        const newTop  = Math.max(0, Math.min(100 - startHeight, startTop  + dy));
-                        const newLeft = Math.max(0, Math.min(100 - startWidth,  startLeft + dx));
-                        div.style.top  = newTop  + '%';
-                        div.style.left = newLeft + '%';
-                        imgTextBlocks[idx].top_pct  = newTop;
-                        imgTextBlocks[idx].left_pct = newLeft;
+                        if (selectedBlockIdxSet.size > 1) {
+                            // MULTI-MOVE: move every selected block by the same delta
+                            selectedBlockIdxSet.forEach(i => {
+                                const sp = startPositions[i];
+                                const block = imgTextBlocks[i];
+                                if (!sp || !block) return;
+                                const newTop  = Math.max(0, Math.min(100 - block.height_pct, sp.top_pct  + dy));
+                                const newLeft = Math.max(0, Math.min(100 - block.width_pct,  sp.left_pct + dx));
+                                block.top_pct  = newTop;
+                                block.left_pct = newLeft;
+                                const blockEl = container.querySelector(`.overlay-block[data-idx="${i}"]`);
+                                if (blockEl) {
+                                    blockEl.style.top  = newTop  + '%';
+                                    blockEl.style.left = newLeft + '%';
+                                }
+                            });
+                        } else {
+                            // Single-block MOVE
+                            const newTop  = Math.max(0, Math.min(100 - startHeight, startTop  + dy));
+                            const newLeft = Math.max(0, Math.min(100 - startWidth,  startLeft + dx));
+                            div.style.top  = newTop  + '%';
+                            div.style.left = newLeft + '%';
+                            imgTextBlocks[idx].top_pct  = newTop;
+                            imgTextBlocks[idx].left_pct = newLeft;
+                        }
                     } else {
-                        // RESIZE
+                        // RESIZE (always single-block)
                         let t = startTop, l = startLeft, w = startWidth, h = startHeight;
                         if (dir.includes('s')) h = Math.max(1, startHeight + dy);
                         if (dir.includes('n')) { h = Math.max(1, startHeight - dy); t = startTop + (startHeight - h); }
@@ -2337,7 +2416,13 @@ Output yêu cầu:
                 function onUp() {
                     document.removeEventListener('mousemove', onMove);
                     document.removeEventListener('mouseup', onUp);
-                    if (!dragged && !dir) {
+                    if (isCtrl && wasAlreadySelected && !dragged) {
+                        // Deferred deselect: Ctrl+click (no drag) on already-selected block → remove it
+                        selectedBlockIdxSet.delete(idx);
+                        selectedBlockIdx = selectedBlockIdxSet.size > 0 ? [...selectedBlockIdxSet].at(-1) : -1;
+                        div.classList.remove('selected');
+                    } else if (!dragged && !dir && !isCtrl) {
+                        // Plain click with no drag → open edit modal
                         openImgEditModal(idx);
                     }
                 }
