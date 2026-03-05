@@ -1297,6 +1297,29 @@ Output yêu cầu:
         // Chạy ngay khi trang load
         loadLanguages();
 
+        // Khôi phục trạng thái từ sessionStorage (nếu có)
+        document.addEventListener('DOMContentLoaded', function() {
+            const storedFileName = sessionStorage.getItem('uploadedFileName');
+            const fromSmartUpdate = sessionStorage.getItem('fromSmartUpdate');
+            
+            if (storedFileName && fromSmartUpdate === 'true') {
+                uploadedExcelFilename = storedFileName;
+                window._fromSmartUpdate = true;
+                
+                // Restore UI state
+                const nameEl = document.getElementById('mainFileName');
+                if (nameEl) nameEl.textContent = storedFileName;
+                
+                const fileInfo = document.getElementById('mainFileInfo');
+                if (fileInfo) fileInfo.style.display = 'block';
+                
+                const extractBtn = document.getElementById('extractBtn');
+                const injectBtn = document.getElementById('injectBtn');
+                if (extractBtn) extractBtn.disabled = false;
+                if (injectBtn) injectBtn.disabled = false;
+            }
+        });
+
         // ==================== UPLOAD EXCEL CHUNG ====================
         const mainExcelFile = document.getElementById('mainExcelFile');
         const mainFileInfo = document.getElementById('mainFileInfo');
@@ -1343,9 +1366,14 @@ Output yêu cầu:
             mainExcelFile.value = '';
             mainFileInfo.style.display = 'none';
             uploadedExcelFilename = null;
+            window._fromSmartUpdate = false;
             extractBtn.disabled = true;
             injectBtn.disabled = true;
             mainAlert.innerHTML = '';
+            
+            // Xóa sessionStorage
+            sessionStorage.removeItem('uploadedFileName');
+            sessionStorage.removeItem('fromSmartUpdate');
         });
         
         // Xử lý drag and drop
@@ -2912,9 +2940,13 @@ Output yêu cầu:
                 if (extractBtn) extractBtn.disabled = false;
                 if (injectBtn)  injectBtn.disabled  = false;
 
-                // Lưu tên file để JS Tab 1 biết
-                window.uploadedExcelFilename = data.display_name;
+                // Lưu tên file để JS Tab 1 biết (đúng scope)
+                uploadedExcelFilename = data.display_name;
                 window._fromSmartUpdate = true;
+                
+                // Lưu vào sessionStorage để tránh mất khi reload
+                sessionStorage.setItem('uploadedFileName', data.display_name);
+                sessionStorage.setItem('fromSmartUpdate', 'true');
 
                 // Chuyển sang Tab 1
                 const tab1Trigger = document.getElementById('main-tab1');

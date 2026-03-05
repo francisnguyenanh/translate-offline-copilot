@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 from urllib.parse import quote
 from flask import Flask, render_template, request, send_file, jsonify, session, redirect, url_for
 from werkzeug.utils import secure_filename
-from copy import deepcopy
+from copy import deepcopy, copy
 from openpyxl import load_workbook
 from pptx import Presentation
 from docx import Document
@@ -210,6 +210,38 @@ def _safe_set_value(ws, coord, value):
     cell.value = value
 
 
+def _copy_cell_format(src_cell, dst_cell):
+    """
+    Copy định dạng (format) từ ô nguồn sang ô đích.
+    Bao gồm: number_format, font, alignment, fill, border.
+    Dùng để bảo toàn định dạng khi kế thừa giá trị dịch từ JP_1.0 sang JP_1.1.
+    """
+    if src_cell is None or dst_cell is None:
+        return
+    try:
+        # Copy number format (định dạng ngày/số)
+        if src_cell.number_format:
+            dst_cell.number_format = src_cell.number_format
+        
+        # Copy font
+        if src_cell.font:
+            dst_cell.font = copy(src_cell.font)
+        
+        # Copy alignment
+        if src_cell.alignment:
+            dst_cell.alignment = copy(src_cell.alignment)
+        
+        # Copy fill (màu nền)
+        if src_cell.fill:
+            dst_cell.fill = copy(src_cell.fill)
+        
+        # Copy border
+        if src_cell.border:
+            dst_cell.border = copy(src_cell.border)
+    except Exception:
+        pass  # Bỏ qua nếu copy format thất bại
+
+
 def _build_coord_content_map(ws_vn10, ws_jp10) -> dict:
     """
     Map: { (coordinate, vn_text) → jp_text }
@@ -240,7 +272,7 @@ def _build_coord_content_map(ws_vn10, ws_jp10) -> dict:
 
 def _build_vn_jp_content_map(ws_vn10, ws_jp10) -> dict:
     """
-    Map: { vn_text → jp_text } — fallback khi tọa độ đã thay đổi.
+    Map: { vn_text → (jp_text, coord) } — fallback khi tọa độ đã thay đổi.
 
     Với mỗi VN text, đếm số lần xuất hiện của từng bản dịch JP tương ứng,
     rồi chọn JP xuất hiện NHIỀU NHẤT (dominant).
@@ -248,12 +280,11 @@ def _build_vn_jp_content_map(ws_vn10, ws_jp10) -> dict:
     Lý do dùng dominant thay vì loại bỏ conflict: bản dịch JP xuất hiện
     nhiều nhất là bản khách đã chấp nhận nhiều lần — đáng tin cậy hơn.
 
-    Ví dụ:
-      "Varchar" → {"varchar": 6, "数値": 1} → trả về "varchar"  (dominant)
-      "Label"   → {"ラベル": 5}              → trả về "ラベル"
+    Returns: {vn_text: (jp_text, coord_đầu_tiên_có_jp_text_này)}
     """
     from collections import defaultdict
     vn_to_jp_counter = defaultdict(lambda: defaultdict(int))
+    vn_to_jp_coord = {}  # {vn_text: {jp_text: coord_đầu_tiên}}
 
     for row in ws_vn10.iter_rows():
         for cell_vn in row:
@@ -268,11 +299,19 @@ def _build_vn_jp_content_map(ws_vn10, ws_jp10) -> dict:
             jp_text = str(jp_cell.value).strip()
             if jp_text:
                 vn_to_jp_counter[vn_text][jp_text] += 1
+                # Lưu coordinate của jp_cell (lần đầu tiên gặp cặp này)
+                if vn_text not in vn_to_jp_coord:
+                    vn_to_jp_coord[vn_text] = {}
+                if jp_text not in vn_to_jp_coord[vn_text]:
+                    vn_to_jp_coord[vn_text][jp_text] = jp_cell.coordinate
 
-    return {
-        vn_text: max(jp_counter, key=jp_counter.get)
-        for vn_text, jp_counter in vn_to_jp_counter.items()
-    }
+    result = {}
+    for vn_text, jp_counter in vn_to_jp_counter.items():
+        dominant_jp = max(jp_counter, key=jp_counter.get)
+        coord = vn_to_jp_coord[vn_text][dominant_jp]
+        result[vn_text] = (dominant_jp, coord)  # (value, coordinate)
+    
+    return result
 
 
 def _clone_vn11_as_base(path_vn11: str, tmp_path: str) -> None:
@@ -395,14 +434,22 @@ def smart_update_excel(path_vn10, path_vn11, path_jp10, new_colors=None, red_col
                 jp_val = coord_content_map.get((coord, text_vn11))
                 if jp_val:
                     _safe_set_value(ws_jp11, coord, jp_val)
+                    # Copy định dạng từ JP_1.0 sang JP_1.1
+                    src_cell = ws_jp10[coord]
+                    dst_cell = ws_jp11[coord]
+                    _copy_cell_format(src_cell, dst_cell)
                     inherited += 1
                     sh_inherited += 1
                     continue
 
                 # Tầng 2: vn_text có trong VN_1.0 → lấy JP dominant (bản khách đã chấp nhận)
-                jp_val = vn_jp_content_map.get(text_vn11)
-                if jp_val:
+                if text_vn11 in vn_jp_content_map:
+                    jp_val, jp_coord = vn_jp_content_map[text_vn11]
                     _safe_set_value(ws_jp11, coord, jp_val)
+                    # Copy định dạng từ JP_1.0[jp_coord] sang JP_1.1[coord]
+                    src_cell = ws_jp10[jp_coord]
+                    dst_cell = ws_jp11[coord]
+                    _copy_cell_format(src_cell, dst_cell)
                     inherited += 1
                     sh_inherited += 1
                     continue
