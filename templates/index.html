@@ -971,70 +971,71 @@ Output yêu cầu:
             <div class="row g-3">
 
                 <!-- Upload 3 file -->
-                <div class="col-lg-6">
+                <div class="col-lg-9">
                     <div class="function-card">
-                        <div class="text-center mb-2">
-                            <i class="fas fa-code-branch" style="font-size:2rem;color:#667eea;"></i>
-                            <h3 class="mt-1">Smart Update <small class="text-muted" style="font-size:0.75rem;">Kế thừa bản dịch Excel</small></h3>
-                            <p class="text-muted small mb-0">So sánh VN 1.0 ⇔ VN 1.1, đắp bản dịch từ JP 1.0 cho các ô giống nhau</p>
-                        </div>
-
-                        <div class="alert alert-info small py-2 mb-3">
-                            <i class="fas fa-lightbulb"></i>
-                            <strong>Cơ chế:</strong> Ô giống VN 1.0 → lấy từ JP 1.0 &bull; Ô khác/mới → giữ VN 1.1 (cần dịch)
-                        </div>
-
                         <form id="smartUpdateForm" enctype="multipart/form-data">
-
-                            <!-- File 1: VN 1.0 -->
-                            <div class="mb-3">
-                                <label class="form-label small mb-1">
-                                    <span class="badge bg-secondary me-1">1</span>
-                                    <strong>File VN cũ (chưa dịch)</strong> &ndash; VN 1.0
-                                </label>
-                                <div class="upload-area compact" id="suArea1">
-                                    <i class="fas fa-file-excel" style="color:#1D6F42;"></i>
-                                    <p class="mb-1 small">Kéo thả hoặc chọn file .xlsx</p>
-                                    <input type="file" id="suFile1" name="file_vn10" accept=".xlsx" style="display:none;">
-                                    <label for="suFile1" class="btn btn-outline-secondary btn-sm">
-                                        <i class="fas fa-folder-open"></i> Chọn
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                <!-- File 1: VN 1.0 -->
+                                <div class="mb-3">
+                                    <label class="form-label small mb-1">
+                                        <span class="badge bg-secondary me-1">1</span>
+                                        <strong>File cũ (chưa dịch)</strong> &ndash; ver 1.0
                                     </label>
+                                    <div class="upload-area compact" id="suArea1">                                    
+                                        <div class="d-flex align-items-center gap-2 justify-content-center">
+                                        <i class="fas fa-file-excel" style="color:#1D6F42;"></i>
+                                        <p class="mb-1 small">Kéo thả hoặc chọn file .xlsx</p>
+                                        <input type="file" id="suFile1" name="file_vn10" accept=".xlsx" style="display:none;">
+                                        <label for="suFile1" class="btn btn-outline-secondary btn-sm">
+                                            <i class="fas fa-folder-open"></i> Chọn
+                                        </label>
+                                        </div>
+                                    </div>
+                                    <div id="suInfo1" class="file-info" style="display:none;"></div>
                                 </div>
-                                <div id="suInfo1" class="file-info" style="display:none;"></div>
-                            </div>
-
-                            <!-- File 2: VN 1.1 -->
-                            <div class="mb-3">
-                                <label class="form-label small mb-1">
-                                    <span class="badge bg-primary me-1">2</span>
-                                    <strong>File VN mới (chưa dịch)</strong> &ndash; VN 1.1
-                                </label>
-                                <div class="upload-area compact" id="suArea2">
-                                    <i class="fas fa-file-excel" style="color:#1D6F42;"></i>
-                                    <p class="mb-1 small">Kéo thả hoặc chọn file .xlsx</p>
-                                    <input type="file" id="suFile2" name="file_vn11" accept=".xlsx" style="display:none;">
-                                    <label for="suFile2" class="btn btn-outline-primary btn-sm">
-                                        <i class="fas fa-folder-open"></i> Chọn
+                                </div>
+                                <div class="col-md-4">
+                                <!-- File 2: VN 1.1 -->
+                                <div class="mb-3">
+                                    <label class="form-label small mb-1">
+                                        <span class="badge bg-primary me-1">2</span>
+                                        <strong>File mới (chưa dịch)</strong> &ndash; ver 1.1
                                     </label>
+                                    <div class="upload-area compact" id="suArea2">
+                                        <div class="d-flex align-items-center gap-2 justify-content-center">
+                                        <i class="fas fa-file-excel" style="color:#1D6F42;"></i>
+                                        <p class="mb-1 small">Kéo thả hoặc chọn file .xlsx</p>
+                                        <input type="file" id="suFile2" name="file_vn11" accept=".xlsx" style="display:none;">
+                                        <label for="suFile2" class="btn btn-outline-primary btn-sm">
+                                            <i class="fas fa-folder-open"></i> Chọn
+                                        </label>
+                                        </div>
+                                    </div>
+                                    <div id="suInfo2" class="file-info" style="display:none;"></div>
+                                    </div>
                                 </div>
-                                <div id="suInfo2" class="file-info" style="display:none;"></div>
-                            </div>
-
+                            
                             <!-- File 3: JP 1.0 -->
+                             <div class="col-md-4">
                             <div class="mb-3">
                                 <label class="form-label small mb-1">
                                     <span class="badge bg-danger me-1">3</span>
-                                    <strong>File JP cũ (đã dịch)</strong> &ndash; JP 1.0
+                                    <strong>File cũ (đã dịch)</strong> &ndash; ver 1.0
                                 </label>
                                 <div class="upload-area compact" id="suArea3">
+                                    <div class="d-flex align-items-center gap-2 justify-content-center">
                                     <i class="fas fa-file-excel" style="color:#1D6F42;"></i>
                                     <p class="mb-1 small">Kéo thả hoặc chọn file .xlsx</p>
                                     <input type="file" id="suFile3" name="file_jp10" accept=".xlsx" style="display:none;">
                                     <label for="suFile3" class="btn btn-outline-danger btn-sm">
                                         <i class="fas fa-folder-open"></i> Chọn
                                     </label>
+                                    </div>
                                 </div>
                                 <div id="suInfo3" class="file-info" style="display:none;"></div>
+                            </div>
+                            </div>
                             </div>
 
                             <!-- Tùy chỉnh màu chữ "nội dung mới" -->
@@ -1048,7 +1049,7 @@ Output yêu cầu:
                                     style="font-family:monospace;font-size:0.8rem;">
                                 <div class="text-muted" style="font-size:0.72rem;margin-top:3px;">
                                     <i class="fas fa-info-circle"></i>
-                                    Nhập các mã RGB6 cách nhau dấu phẩy. Ô có màu này → <code>[NEED_TRANSLATE]</code>. Ô đen/auto → kế thừa JP.
+                                    Nhập các mã RGB6 cách nhau dấu phẩy. Ô có màu này → <code>được xem là nội dung thêm mới/chỉnh sửa</code>.
                                 </div>
                             </div>
 
@@ -1069,7 +1070,7 @@ Output yêu cầu:
                 </div>
 
                 <!-- Kết quả -->
-                <div class="col-lg-6">
+                <div class="col-lg-3">
                     <div class="function-card">
                         <div class="text-center mb-2">
                             <i class="fas fa-download" style="font-size:2rem;color:#28a745;"></i>
@@ -1083,14 +1084,20 @@ Output yêu cầu:
                         </div>
 
                         <div id="suResultWrap" style="display:none;">
-                            <!-- Thống kê -->
-                            <div class="alert alert-success small py-2 mb-3" id="suStats"></div>
-
+                            <!-- Nút chuyển sang Tab 1 để tiếp tục dịch -->
+                            <div class="mt-3 p-3 rounded" style="background: linear-gradient(135deg,#e8f5e9,#e3f2fd); border: 1px solid #a5d6a7;">
+                                <div class="text-dark" style="font-size:0.72rem;">
+                                    Chuyển file kết quả sang Tab Dịch tài liệu để trích xuất JSON, dịch và nạp bản dịch.
+                                </div>
+                                <div class="text-end mt-2">
+                                    <button class="btn btn-success btn-sm w-100" id="suContinueBtn" onclick="smartUpdateContinue()">
+                                        <i class="fas fa-arrow-right"></i> Dùng file này
+                                    </button>
+                                </div>
+                            </div>
+                            <hr class="my-2">
                             <!-- Download JP 1.1 -->
                             <div class="mb-3">
-                                <p class="small mb-1"><strong><i class="fas fa-file-excel text-success"></i> File JP 1.1</strong>
-                                    <span class="badge bg-secondary" style="font-size:0.65rem;">kế thừa JP_1.0 + giữ text VN mới</span>:
-                                </p>
                                 <div class="d-flex align-items-center gap-2">
                                     <span id="suExcelName" class="small text-muted flex-grow-1" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
                                     <a id="suDownloadExcel" href="/download-smart-excel" class="btn btn-success btn-sm flex-shrink-0" target="_blank">
@@ -1098,40 +1105,7 @@ Output yêu cầu:
                                     </a>
                                 </div>
                             </div>
-
                             <hr class="my-2">
-
-                            <!-- Download ZIP JSON cần dịch -->
-                            <div class="mb-3">
-                                <p class="small mb-1"><strong><i class="fas fa-file-archive text-warning"></i> JSON các ô cần dịch mới</strong>:</p>
-                                <div class="d-flex align-items-center gap-2">
-                                    <span id="suZipName" class="small text-muted flex-grow-1" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
-                                    <a id="suDownloadZip" href="/download-smart-zip" class="btn btn-warning btn-sm flex-shrink-0">
-                                        <i class="fas fa-file-archive"></i> Tải ZIP
-                                    </a>
-                                </div>
-                            </div>
-
-                            <!-- Nút chuyển sang Tab 1 để tiếp tục dịch -->
-                            <div class="mt-3 p-3 rounded" style="background: linear-gradient(135deg,#e8f5e9,#e3f2fd); border: 1px solid #a5d6a7;">
-                                <div class="d-flex align-items-center gap-3">
-                                    <div class="flex-grow-1">
-                                        <div class="small fw-bold mb-1">
-                                            <i class="fas fa-arrow-circle-right text-success"></i>
-                                            Tiếp tục với file JP 1.1
-                                        </div>
-                                        <div class="text-muted" style="font-size:0.72rem;">
-                                            Chuyển file kết quả sang Tab Dịch tài liệu để trích xuất JSON, dịch và nạp bản dịch.
-                                        </div>
-                                    </div>
-                                    <button class="btn btn-success btn-sm flex-shrink-0" id="suContinueBtn" onclick="smartUpdateContinue()">
-                                        <i class="fas fa-arrow-right"></i> Dùng file này
-                                    </button>
-                                </div>
-                            </div>
-
-                            <!-- Danh sách JSON files -->
-                            <div id="suJsonFileList" class="mt-2"></div>
                         </div>
 
                         <!-- Hướng dẫn -->
@@ -2892,37 +2866,10 @@ Output yêu cầu:
                         }
                         sheetRows += '</div>';
                     }
-                    document.getElementById('suStats').innerHTML =
-                        `<i class="fas fa-check-circle"></i> <strong>Xử lý xong!</strong> &nbsp;
-                         <span class="me-3">✅ Kế thừa: <strong>${s.inherited}</strong> ô</span>
-                         <span>🆕 Cần dịch mới: <strong>${s.to_translate}</strong> ô (${s.total} tổng)</span>
-                         ${sheetRows}`;
 
                     // Download links
                     document.getElementById('suExcelName').textContent = data.result_display_name;
                     document.getElementById('suDownloadExcel').href = '/download-smart-excel';
-                    document.getElementById('suZipName').textContent = data.zip_display_name;
-                    document.getElementById('suDownloadZip').href = '/download-smart-zip';
-
-                    // JSON file list
-                    const listEl = document.getElementById('suJsonFileList');
-                    listEl.innerHTML = '';
-                    if (data.files && data.files.length) {
-                        data.files.forEach((f, idx) => {
-                            const row = document.createElement('div');
-                            row.className = 'json-file-row';
-                            const promptText = (window.currentPromptContent || '')
-                                .replace('{TARGET_LANG}', document.getElementById('targetLangSelect')?.options[document.getElementById('targetLangSelect')?.selectedIndex]?.dataset?.name || 'tiếng Nhật');
-                            row.innerHTML = `
-                                <span class="file-name">${f.name}</span>
-                                <button class="btn btn-outline-primary btn-sm btn-copy-json"
-                                    data-content="${encodeURIComponent(promptText + '\n\n' + f.content)}"
-                                    onclick="copySuJson(this)">
-                                    <i class="fas fa-copy"></i> Copy
-                                </button>`;
-                            listEl.appendChild(row);
-                        });
-                    }
 
                     resultEmpty.style.display = 'none';
                     resultWrap.style.display = 'block';
