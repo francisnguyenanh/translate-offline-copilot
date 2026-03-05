@@ -414,6 +414,15 @@ def smart_update_excel(path_vn10, path_vn11, path_jp10, new_colors=None, red_col
                 text_vn11 = str(cell_vn11.value).strip()
                 key       = f"{sheet_name}!{coord}"
 
+                # ── Non-string cells: int, float, datetime, bool ──
+                # Không cần dịch, không cần tra maps — giữ nguyên native type.
+                # Maps chỉ xử lý str; ghi str vào cell sẽ làm mất kiểu và format Excel.
+                if not isinstance(cell_vn11.value, str):
+                    _safe_set_value(ws_jp11, coord, cell_vn11.value)
+                    inherited += 1
+                    sh_inherited += 1
+                    continue
+
                 color_result = is_new_or_modified_cell(cell_vn11, new_colors, red_colors)
 
                 if color_result is False:
