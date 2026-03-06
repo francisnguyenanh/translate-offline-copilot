@@ -520,6 +520,15 @@
                         </div>
                     </div>
 
+                    <!-- Giữ nguyên ngôn ngữ -->
+                    <div id="keep-langs-section" class="mt-2">
+                        <label class="form-label small mb-1" style="font-weight: bold;">
+                            <i class="fas fa-lock"></i> Giữ nguyên ngôn ngữ (không dịch):
+                        </label>
+                        <div id="keep-langs-checkboxes" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px;">
+                            <!-- dynamically rendered by JS -->
+                        </div>
+                    </div>
 
                     
                     <!-- Hướng dẫn collapse -->
@@ -1287,6 +1296,43 @@ Output yêu cầu:
         let currentTemplateContent = '';
         let editingTemplateIdx     = -1;
 
+        // ==================== GIỮ NGUYÊN NGÔN NGỮ ====================
+        const AVAILABLE_LANGUAGES = [
+            { code: "vi", label: "Tiếng Việt" },
+            { code: "en", label: "Tiếng Anh" },
+            { code: "ja", label: "Tiếng Nhật" },
+            { code: "ko", label: "Tiếng Hàn" },
+            { code: "zh", label: "Tiếng Trung" }
+        ];
+        window.keepLangs = [];
+
+        function renderKeepLangsCheckboxes() {
+            const container = document.getElementById('keep-langs-checkboxes');
+            if (!container) return;
+            const selectedCode = document.getElementById('targetLangSelect').value;
+            // Remove target language from keepLangs if it was previously checked
+            const targetLang = AVAILABLE_LANGUAGES.find(l => l.code === selectedCode);
+            if (targetLang) {
+                window.keepLangs = window.keepLangs.filter(l => l !== targetLang.label);
+            }
+            container.innerHTML = '';
+            AVAILABLE_LANGUAGES.forEach(function(lang) {
+                if (lang.code === selectedCode) return;
+                const checked = window.keepLangs.includes(lang.label);
+                const label = document.createElement('label');
+                label.style.cssText = 'display:flex;align-items:center;gap:4px;font-size:0.8rem;cursor:pointer;';
+                label.innerHTML = '<input type="checkbox"' + (checked ? ' checked' : '') + ' value="' + lang.label + '" style="cursor:pointer;"> ' + lang.label;
+                label.querySelector('input').addEventListener('change', function() {
+                    if (this.checked) {
+                        if (!window.keepLangs.includes(lang.label)) window.keepLangs.push(lang.label);
+                    } else {
+                        window.keepLangs = window.keepLangs.filter(function(l) { return l !== lang.label; });
+                    }
+                });
+                container.appendChild(label);
+            });
+        }
+
         // ==================== NGÔN NGỮ ĐÍCH ====================
         const INITIAL_PROMPT = document.getElementById('aiPrompt').textContent;
         currentTemplateContent = INITIAL_PROMPT;
@@ -1317,6 +1363,7 @@ Output yêu cầu:
                     currentLangName = def.dataset.name;
                     updatePrompt(currentLangName);
                     await loadTemplates(currentLangCode);
+                    renderKeepLangsCheckboxes();
                 }
             } catch (e) {
                 select.innerHTML = '<option value="ja" data-name="tiếng Nhật">🇯🇵 Tiếng Nhật (Japanese)</option>';
@@ -1330,6 +1377,7 @@ Output yêu cầu:
                     currentLangName = chosen.dataset.name;
                     updatePrompt(currentLangName);
                     await loadTemplates(currentLangCode);
+                    renderKeepLangsCheckboxes();
                 }
             });
         }
@@ -1583,7 +1631,13 @@ Output yêu cầu:
                 row.querySelector('.btn-copy-json').addEventListener('click', function() {
                     const btnEl = this;
                     // Đọc prompt tại thời điểm click để luôn dùng ngôn ngữ hiện tại
-                    const promptText = document.getElementById('aiPrompt').textContent;
+                    let promptText = document.getElementById('aiPrompt').textContent;
+                    let keepInstruction = '';
+                    if (window.keepLangs && window.keepLangs.length > 0) {
+                        const langList = window.keepLangs.join(', ');
+                        keepInstruction = '\n⛔ NGÔN NGỮ KHÔNG ĐƯỢC DỊCH — giữ nguyên 100%, không chuyển đổi: ' + langList + '\n- Nếu một value chứa hỗn hợp nhiều ngôn ngữ, chỉ dịch phần KHÔNG thuộc danh sách trên.\n- Ví dụ: nếu giữ Tiếng Nhật và Tiếng Anh → "注文 confirmed đã gửi" chỉ dịch "đã gửi".';
+                    }
+                    promptText = promptText.replace('{KEEP_LANGS_INSTRUCTION}', keepInstruction);
                     const textToCopy = promptText + '\n\n' + file.content;
                     
                     navigator.clipboard.writeText(textToCopy).then(function() {
@@ -1660,7 +1714,13 @@ Output yêu cầu:
                     const btnEl = this;
                     const idx   = parseInt(this.dataset.dedupIdx);
                     const file  = extractedDedupData[idx];
-                    const promptText = document.getElementById('aiPrompt').textContent;
+                    let promptText = document.getElementById('aiPrompt').textContent;
+                    let keepInstruction = '';
+                    if (window.keepLangs && window.keepLangs.length > 0) {
+                        const langList = window.keepLangs.join(', ');
+                        keepInstruction = '\n⛔ NGÔN NGỮ KHÔNG ĐƯỢC DỊCH — giữ nguyên 100%, không chuyển đổi: ' + langList + '\n- Nếu một value chứa hỗn hợp nhiều ngôn ngữ, chỉ dịch phần KHÔNG thuộc danh sách trên.\n- Ví dụ: nếu giữ Tiếng Nhật và Tiếng Anh → "注文 confirmed đã gửi" chỉ dịch "đã gửi".';
+                    }
+                    promptText = promptText.replace('{KEEP_LANGS_INSTRUCTION}', keepInstruction);
                     const textToCopy = promptText + '\n\n' + file.content;
 
                     navigator.clipboard.writeText(textToCopy).then(() => {

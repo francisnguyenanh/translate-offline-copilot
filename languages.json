@@ -3,10 +3,5 @@
   {"code": "vi", "name": "Tiếng Việt",            "label": "🇻🇳 Tiếng Việt (Vietnamese)"},
   {"code": "en", "name": "English",               "label": "🇺🇸 Tiếng Anh (English)"},
   {"code": "zh", "name": "中文",                  "label": "🇨🇳 Tiếng Trung (Chinese)"},
-  {"code": "ko", "name": "한국어",                "label": "🇰🇷 Tiếng Hàn (Korean)"},
-  {"code": "fr", "name": "Français",              "label": "🇫🇷 Tiếng Pháp (French)"},
-  {"code": "de", "name": "Deutsch",               "label": "🇩🇪 Tiếng Đức (German)"},
-  {"code": "es", "name": "Español",               "label": "🇪🇸 Tiếng Tây Ban Nha (Spanish)"},
-  {"code": "th", "name": "ไทย",                   "label": "🇹🇭 Tiếng Thái (Thai)"},
-  {"code": "id", "name": "Bahasa Indonesia",      "label": "🇮🇩 Tiếng Indonesia (Indonesian)"}
+  {"code": "ko", "name": "한국어",                "label": "🇰🇷 Tiếng Hàn (Korean)"}
 ]
