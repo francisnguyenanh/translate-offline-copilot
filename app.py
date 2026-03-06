@@ -2531,4 +2531,4 @@ FORMAT JSON TRẢ VỀ (giữ đúng cấu trúc này):
 
 if __name__ == '__main__':
     # Chạy ứng dụng Flask ở chế độ debug
-    app.run(debug=True, host='0.0.0.0', port=5001)
+    app.run(host='0.0.0.0', port=5000)
