@@ -191,6 +191,23 @@
             color: white !important;
         }
 
+        /* ===== INPUT MODE TOGGLE ===== */
+        .btn-mode {
+            border: 2px solid #667eea;
+            color: #667eea;
+            background: transparent;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .btn-mode.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: transparent;
+        }
+        body.dark-mode .btn-mode { border-color: #7a9fd4; color: #7a9fd4; }
+        body.dark-mode .btn-mode.active { color: white; border-color: transparent; }
+
         /* ===== DARK MODE ===== */
         body.dark-mode {
             background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
@@ -484,28 +501,85 @@
                         <h3 class="d-inline">Upload File</h3>
                         <p class="text-muted small mt-2">File gốc (.xlsx/.pptx/.docx)</p>
                     </div>
-                    
-                    <form id="uploadExcelForm" enctype="multipart/form-data">
-                        <div class="upload-area compact" id="mainUploadArea">
-                            <i class="fas fa-cloud-upload-alt"></i>
-                            <p class="mb-2 small"><strong>Kéo thả file vào đây</strong></p>
-                            <input type="file" class="form-control" id="mainExcelFile" name="file" accept=".xlsx,.pptx,.docx" style="display: none;">
-                            <label for="mainExcelFile" class="btn btn-custom btn-sm">
-                                <i class="fas fa-folder-open"></i> Chọn file
+
+                    <!-- Mode toggle -->
+                    <div class="d-flex gap-2 mb-3" id="inputModeToggle">
+                        <button type="button" class="btn btn-sm flex-fill btn-mode active" id="modeUploadBtn" onclick="setInputMode('upload')">
+                            <i class="fas fa-upload"></i> Upload File
+                        </button>
+                        <button type="button" class="btn btn-sm flex-fill btn-mode" id="modeSheetBtn" onclick="setInputMode('sheet')">
+                            <i class="fab fa-google"></i> Google Sheet
+                        </button>
+                    </div>
+
+                    <!-- Panel A: Upload -->
+                    <div id="panelUpload">
+                        <form id="uploadExcelForm" enctype="multipart/form-data">
+                            <div class="upload-area compact" id="mainUploadArea">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                                <p class="mb-2 small"><strong>Kéo thả file vào đây</strong></p>
+                                <input type="file" class="form-control" id="mainExcelFile" name="file" accept=".xlsx,.pptx,.docx" style="display: none;">
+                                <label for="mainExcelFile" class="btn btn-custom btn-sm">
+                                    <i class="fas fa-folder-open"></i> Chọn file
+                                </label>
+                            </div>
+                            
+                            <div id="mainFileInfo" class="file-info" style="display: none;">
+                                <i id="mainFileIcon" class="fas fa-file text-secondary"></i>
+                                <span id="mainFileName" class="small"></span>
+                                <button type="button" class="btn btn-sm btn-outline-danger float-end" id="mainFileRemove">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            
+                            <div id="mainAlert"></div>
+                        </form>
+                        <div id="mainUploadAlert"></div>
+                    </div>
+
+                    <!-- Panel B: Google Sheet -->
+                    <div id="panelSheet" style="display:none;">
+                        <div class="mb-2">
+                            <label class="form-label small mb-1">
+                                <i class="fab fa-google" style="color:#0F9D58;"></i>
+                                <strong>Link Google Sheet:</strong>
                             </label>
+                            <input type="url" class="form-control form-control-sm" id="googleSheetUrl"
+                                   placeholder="https://docs.google.com/spreadsheets/d/..." />
+                            <div class="text-muted mt-1" style="font-size:0.72rem;">
+                                <i class="fas fa-info-circle"></i>
+                                File phải được share "Anyone with the link" → View
+                            </div>
                         </div>
-                        
-                        <div id="mainFileInfo" class="file-info" style="display: none;">
-                            <i id="mainFileIcon" class="fas fa-file text-secondary"></i>
-                            <span id="mainFileName" class="small"></span>
-                            <button type="button" class="btn btn-sm btn-outline-danger float-end" id="mainFileRemove">
-                                <i class="fas fa-times"></i>
+
+                        <div class="mb-2">
+                            <label class="form-label small mb-1">
+                                <i class="fas fa-table-columns"></i>
+                                <strong>Chọn Sheet (tùy chọn):</strong>
+                            </label>
+                            <select class="form-select form-select-sm" id="googleSheetTabSelect">
+                                <option value="">-- Tải sheet sau khi nhập link --</option>
+                            </select>
+                        </div>
+
+                        <div class="text-center">
+                            <button type="button" class="btn btn-custom btn-sm" id="loadSheetBtn" onclick="loadGoogleSheet()">
+                                <i class="fas fa-cloud-download-alt"></i> Tải Sheet
                             </button>
                         </div>
-                        
-                        <div id="mainAlert"></div>
-                    </form>
-                    <div id="mainUploadAlert"></div>
+
+                        <div id="sheetLoadAlert" class="mt-2"></div>
+
+                        <div id="sheetPreview" style="display:none;" class="mt-2">
+                            <div class="file-info d-flex align-items-center gap-2">
+                                <i class="fas fa-table text-success"></i>
+                                <span id="sheetFileName" class="small flex-grow-1"></span>
+                                <button type="button" class="btn btn-sm btn-outline-danger" id="sheetRemoveBtn" onclick="clearSheetInput()">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
 
                     <!-- Chọn ngôn ngữ đích -->
                     <div class="mt-3">
@@ -1295,6 +1369,61 @@ Output yêu cầu:
         let currentLangName        = 'tiếng Nhật';
         let currentTemplateContent = '';
         let editingTemplateIdx     = -1;
+        let currentInputMode       = 'upload'; // 'upload' | 'sheet'
+        window.sheetSessionKey     = null;
+
+        // ==================== INPUT MODE TOGGLE ====================
+        function setInputMode(mode) {
+            currentInputMode = mode;
+            document.getElementById('panelUpload').style.display = mode === 'upload' ? '' : 'none';
+            document.getElementById('panelSheet').style.display  = mode === 'sheet'  ? '' : 'none';
+            document.getElementById('modeUploadBtn').classList.toggle('active', mode === 'upload');
+            document.getElementById('modeSheetBtn').classList.toggle('active',  mode === 'sheet');
+        }
+
+        async function loadGoogleSheet() {
+            const url = document.getElementById('googleSheetUrl').value.trim();
+            if (!url) {
+                showAlert(document.getElementById('sheetLoadAlert'), 'warning', 'Vui lòng nhập link Google Sheet.');
+                return;
+            }
+            showAlert(document.getElementById('sheetLoadAlert'), 'info', '<i class="fas fa-spinner fa-spin"></i> Đang tải sheet...');
+            document.getElementById('loadSheetBtn').disabled = true;
+            try {
+                const res = await fetch('/load-google-sheet', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ url: url })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Lỗi không xác định');
+
+                const tabSelect = document.getElementById('googleSheetTabSelect');
+                tabSelect.innerHTML = '';
+                (data.sheets || ['Sheet1']).forEach(function(name) {
+                    const opt = document.createElement('option');
+                    opt.value = name; opt.textContent = name;
+                    tabSelect.appendChild(opt);
+                });
+
+                window.sheetSessionKey = data.session_key;
+                document.getElementById('sheetFileName').textContent = data.display_name;
+                document.getElementById('sheetPreview').style.display = '';
+                showAlert(document.getElementById('sheetLoadAlert'), 'success', '<i class="fas fa-check-circle"></i> Tải thành công! Chọn sheet và nhấn Trích xuất.');
+            } catch (e) {
+                showAlert(document.getElementById('sheetLoadAlert'), 'danger', '<i class="fas fa-exclamation-circle"></i> ' + e.message);
+            } finally {
+                document.getElementById('loadSheetBtn').disabled = false;
+            }
+        }
+
+        function clearSheetInput() {
+            window.sheetSessionKey = null;
+            document.getElementById('googleSheetUrl').value = '';
+            document.getElementById('sheetPreview').style.display = 'none';
+            document.getElementById('googleSheetTabSelect').innerHTML = '<option value="">-- Tải sheet sau khi nhập link --</option>';
+            document.getElementById('sheetLoadAlert').innerHTML = '';
+        }
 
         // ==================== GIỮ NGUYÊN NGÔN NGỮ ====================
         const AVAILABLE_LANGUAGES = [
@@ -1506,7 +1635,65 @@ Output yêu cầu:
         // Xử lý submit form Extract
         extractForm.addEventListener('submit', async function(e) {
             e.preventDefault();
-            
+
+            // ---- Sheet mode ----
+            if (currentInputMode === 'sheet') {
+                if (!window.sheetSessionKey) {
+                    showAlert(extractAlert, 'warning', 'Vui lòng tải Google Sheet trước!');
+                    return;
+                }
+                extractResult.style.display = 'none';
+                jsonFileList.innerHTML = '';
+                extractedDedupData = null;
+                const dedupPanel = document.getElementById('dedupPanel');
+                if (dedupPanel) { dedupPanel.style.display = 'none'; dedupPanel.innerHTML = ''; }
+                extractLoading.style.display = 'block';
+                extractAlert.innerHTML = '';
+
+                const glossaryIds = [];
+                if (document.getElementById('glossaryToggle').checked) {
+                    glossaryIds.push(...getSelectedGlossaryIds());
+                }
+                try {
+                    const response = await fetch('/extract-from-sheet', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            session_key: window.sheetSessionKey,
+                            sheet_name: document.getElementById('googleSheetTabSelect').value,
+                            glossary_ids: glossaryIds
+                        })
+                    });
+                    extractLoading.style.display = 'none';
+                    const contentType = response.headers.get('content-type');
+                    if (response.ok && contentType && contentType.includes('application/json')) {
+                        const data = await response.json();
+                        if (data.success) {
+                            extractedFilesData = data.files;
+                            extractedDedupData = data.dedup_files || null;
+                            renderJsonFileRows(data.files);
+                            if (extractedDedupData && data.dedup_stats) renderDedupPanel(extractedDedupData, data.dedup_stats);
+                            const ds = data.dedup_stats;
+                            extractSummary.textContent = (ds && ds.saved > 0)
+                                ? `${data.total_files} file · ${data.total_items} keys (${ds.unique} unique)`
+                                : `${data.total_files} file · ${data.total_items} keys`;
+                            detectDuplicatesInFiles(data.files);
+                            extractResult.style.display = 'block';
+                        } else {
+                            showAlert(extractAlert, 'danger', data.error || 'Có lỗi xảy ra!');
+                        }
+                    } else {
+                        const errData = await response.json().catch(() => ({}));
+                        showAlert(extractAlert, 'danger', errData.error || 'Có lỗi xảy ra!');
+                    }
+                } catch (error) {
+                    extractLoading.style.display = 'none';
+                    showAlert(extractAlert, 'danger', 'Lỗi kết nối: ' + error.message);
+                }
+                return;
+            }
+
+            // ---- Upload mode (giữ nguyên) ----
             // Kiểm tra xem có file được upload chưa (hoặc đến từ Smart Update)
             // Chặn chỉ khi CẢ HAI đều thiếu: không có filename và không có file thực
             if (!uploadedExcelFilename && mainExcelFile.files.length === 0) {

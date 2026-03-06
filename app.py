@@ -11,6 +11,7 @@ import shutil
 import io
 import re
 import csv
+import requests as _requests
 from datetime import datetime, timedelta
 from urllib.parse import quote
 from flask import Flask, render_template, request, send_file, jsonify, session, redirect, url_for
@@ -40,6 +41,27 @@ TEMPLATES_FILE = 'prompt_templates.json'
 
 GLOSSARY_DIR = 'glossaries'   # thư mục lưu các file CSV chuyên ngành
 os.makedirs(GLOSSARY_DIR, exist_ok=True)
+
+# ==================== GOOGLE SHEET HELPERS ====================
+
+def parse_google_sheet_url(url: str):
+    """
+    Trả về (spreadsheet_id, gid) từ link Google Sheet bất kỳ.
+    Hỗ trợ: .../spreadsheets/d/{ID}/edit#gid={GID} hoặc dạng khác.
+    """
+    match = re.search(r'/spreadsheets/d/([a-zA-Z0-9_-]+)', url)
+    if not match:
+        raise ValueError('URL không hợp lệ. Vui lòng dùng link Google Sheet.')
+    spreadsheet_id = match.group(1)
+    gid_match = re.search(r'[#&?]gid=(\d+)', url)
+    gid = gid_match.group(1) if gid_match else '0'
+    return spreadsheet_id, gid
+
+
+def build_sheet_export_url(spreadsheet_id: str) -> str:
+    """Tạo URL export toàn bộ file sang .xlsx (không cần auth nếu file public)."""
+    return (f'https://docs.google.com/spreadsheets/d/{spreadsheet_id}'
+            f'/export?format=xlsx&id={spreadsheet_id}')
 
 # ==================== HELPER: PROMPT TEMPLATES ====================
 def get_default_templates():
@@ -1880,6 +1902,185 @@ def extract():
     except Exception as e:
         # Xử lý lỗi
         return jsonify({'error': f'Lỗi khi xử lý file: {str(e)}'}), 500
+
+
+# ==================== HELPER: core extract logic ====================
+
+def _run_extract(filepath, original_filename, glossary_ids, session_folder):
+    """
+    Chạy toàn bộ logic extract từ cột filepath.
+    Trả về dict cho jsonify (cùng format như route /extract).
+    Ném Exception nếu có lỗi.
+    """
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    original_ext = original_filename.rsplit('.', 1)[-1].lower() if '.' in original_filename else 'xlsx'
+
+    if original_ext == 'xlsx':
+        workbook = load_workbook(filepath)
+        extracted_data = {}
+        for sheet_name in workbook.sheetnames:
+            sheet = workbook[sheet_name]
+            for row in sheet.iter_rows():
+                for cell in row:
+                    if cell.value is None:
+                        continue
+                    if isinstance(cell.value, str) and not cell.value.startswith('='):
+                        extracted_data[f"{sheet_name}!{cell.coordinate}"] = cell.value
+        extracted_data.update(extract_xlsx_shapes(filepath))
+        workbook.close()
+    elif original_ext == 'pptx':
+        extracted_data = extract_text_from_pptx(filepath)
+    elif original_ext == 'docx':
+        extracted_data = extract_text_from_docx(filepath)
+    else:
+        raise ValueError(f'Không hỗ trợ định dạng .{original_ext}')
+
+    if glossary_ids:
+        extracted_data = apply_glossary(extracted_data, glossary_ids)
+
+    CHUNK_SIZE = 400
+    data_items  = list(extracted_data.items())
+    total_items = len(data_items)
+    num_files   = max(1, (total_items + CHUNK_SIZE - 1) // CHUNK_SIZE)
+
+    base_filename = os.path.splitext(original_filename)[0] or f'file_{timestamp}'
+    safe_base     = f'extracted_{timestamp}'
+    folder_name   = f'{base_filename}_json_to_translate'
+    temp_dir      = os.path.join(session_folder, f'{safe_base}_temp_{timestamp}')
+    os.makedirs(temp_dir, exist_ok=True)
+
+    json_files = []
+    json_display_names = []
+    for i in range(num_files):
+        chunk_data  = dict(data_items[i*CHUNK_SIZE:(i+1)*CHUNK_SIZE])
+        disp_name   = f'{base_filename}_part{i+1:02d}_of_{num_files:02d}.json'
+        safe_name   = f'{safe_base}_part{i+1:02d}.json'
+        jpath       = os.path.join(temp_dir, safe_name)
+        with open(jpath, 'w', encoding='utf-8') as jf:
+            json.dump(chunk_data, jf, ensure_ascii=False, indent=2)
+        json_files.append(jpath)
+        json_display_names.append(disp_name)
+
+    files_data = []
+    for idx, jpath in enumerate(json_files):
+        with open(jpath, 'r', encoding='utf-8') as f:
+            files_data.append({'name': json_display_names[idx], 'content': f.read()})
+
+    zip_display = f'{base_filename}_json_to_translate.zip'
+    safe_zip    = f'{safe_base}_json_{timestamp}.zip'
+    zip_path    = os.path.join(session_folder, safe_zip)
+    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_STORED) as zf:
+        for idx, jpath in enumerate(json_files):
+            zf.write(jpath, os.path.join(folder_name, json_display_names[idx]))
+
+    session['extract_zip'] = {
+        'path': zip_path,
+        'display_name': zip_display,
+        'input_path': filepath,
+        'json_files': json_files,
+        'temp_dir': temp_dir,
+    }
+
+    dedup_files, dedup_mapping, dedup_stats = build_dedup_data(extracted_data, CHUNK_SIZE)
+    dedup_map_path = os.path.join(session_folder, 'dedup_mapping.json')
+    with open(dedup_map_path, 'w', encoding='utf-8') as f:
+        json.dump(dedup_mapping, f, ensure_ascii=False, indent=2)
+
+    return {
+        'success': True,
+        'total_files': num_files,
+        'total_items': total_items,
+        'files': files_data,
+        'zip_display_name': zip_display,
+        'dedup_files': dedup_files,
+        'dedup_stats': dedup_stats,
+    }
+
+
+@app.route('/load-google-sheet', methods=['POST'])
+@login_required
+def load_google_sheet():
+    """
+    Nhận link Google Sheet, tải file xlsx về, lưu vào session folder.
+    Trả về: { session_key, display_name, sheets }
+    """
+    data = request.get_json() or {}
+    url  = data.get('url', '').strip()
+    if not url:
+        return jsonify({'error': 'Thiếu link Google Sheet'}), 400
+
+    try:
+        spreadsheet_id, _ = parse_google_sheet_url(url)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
+    export_url = build_sheet_export_url(spreadsheet_id)
+    try:
+        resp = _requests.get(export_url, timeout=30, allow_redirects=True)
+        ct   = resp.headers.get('Content-Type', '')
+        if resp.status_code != 200 or (
+            'spreadsheet' not in ct and 'officedocument' not in ct and len(resp.content) < 1000
+        ):
+            return jsonify({'error': (
+                'Không thể tải file. Hãy kiểm tra file đã được share công khai '
+                '(Anyone with link → View).'
+            )}), 400
+    except Exception as e:
+        return jsonify({'error': f'Lỗi kết nối: {e}'}), 500
+
+    session_folder = get_session_folder()
+    filename = f'gsheet_{spreadsheet_id[:12]}.xlsx'
+    filepath = os.path.join(session_folder, filename)
+    with open(filepath, 'wb') as f:
+        f.write(resp.content)
+
+    try:
+        wb = load_workbook(filepath, read_only=True)
+        sheet_names = wb.sheetnames
+        wb.close()
+    except Exception:
+        sheet_names = []
+
+    session_key = f'gsheet_{uuid.uuid4().hex[:8]}'
+    session[session_key] = {
+        'filepath':     filepath,
+        'display_name': f'GoogleSheet_{spreadsheet_id[:12]}.xlsx',
+        'sheets':       sheet_names,
+    }
+
+    return jsonify({
+        'session_key':  session_key,
+        'display_name': f'GoogleSheet_{spreadsheet_id[:12]}.xlsx',
+        'sheets':       sheet_names,
+    })
+
+
+@app.route('/extract-from-sheet', methods=['POST'])
+@login_required
+def extract_from_sheet():
+    """
+    Extract nội dung từ Google Sheet đã tải về (lưu trong session).
+    Nhận: { session_key, sheet_name, glossary_ids }
+    """
+    data         = request.get_json() or {}
+    session_key  = data.get('session_key')
+    glossary_ids = data.get('glossary_ids', [])
+
+    if not session_key or session_key not in session:
+        return jsonify({'error': 'Phiên làm việc hết hạn. Vui lòng tải lại Google Sheet.'}), 400
+
+    info     = session[session_key]
+    filepath = info['filepath']
+    if not os.path.exists(filepath):
+        return jsonify({'error': 'File tạm không còn tồn tại. Vui lòng tải lại Google Sheet.'}), 400
+
+    try:
+        session_folder = get_session_folder()
+        result = _run_extract(filepath, info['display_name'], glossary_ids, session_folder)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': f'Lỗi khi xử lý sheet: {str(e)}'}), 500
+
 
 @app.route('/download-zip', methods=['GET'])
 @login_required
