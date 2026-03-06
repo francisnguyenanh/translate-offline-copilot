@@ -10,11 +10,12 @@ import uuid
 import shutil
 import io
 import re
+import csv
 from datetime import datetime, timedelta
 from urllib.parse import quote
 from flask import Flask, render_template, request, send_file, jsonify, session, redirect, url_for
 from werkzeug.utils import secure_filename
-from copy import deepcopy
+from copy import deepcopy, copy
 from openpyxl import load_workbook
 from pptx import Presentation
 from docx import Document
@@ -26,7 +27,7 @@ app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 60 * 1024 * 1024  # Giới hạn 50MB
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['SECRET_KEY'] = os.urandom(24)  # Secret key cho session
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)  # Session timeout 8h
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=5)  # Session timeout 5h
 
 # Các định dạng file được phép
 ALLOWED_EXTENSIONS = {'xlsx', 'pptx', 'docx'}
@@ -36,6 +37,9 @@ PASSWORD_FILE = 'password.txt'
 
 # File lưu Prompt Templates
 TEMPLATES_FILE = 'prompt_templates.json'
+
+GLOSSARY_DIR = 'glossaries'   # thư mục lưu các file CSV chuyên ngành
+os.makedirs(GLOSSARY_DIR, exist_ok=True)
 
 # ==================== HELPER: PROMPT TEMPLATES ====================
 def get_default_templates():
@@ -69,6 +73,67 @@ def load_templates(lang='default'):
         return data.get(lang) or data.get('default') or get_default_templates()
     except Exception:
         return get_default_templates()
+
+
+def apply_glossary(extracted_data: dict, glossary_ids: list) -> dict:
+    """
+    Thay thế các cụm từ trong extracted_data theo các file glossary được chọn.
+
+    Logic:
+    - Với mỗi cặp (src, dst) trong glossary: tìm src (case-insensitive, exact match)
+      trong từng value của extracted_data, thay bằng dst.
+    - "Exact match" = cụm từ đứng độc lập, không phải substring nằm giữa ký tự chữ.
+      Dùng regex word-boundary \\b kết hợp re.IGNORECASE.
+    - Ưu tiên thay thế cụm dài trước (tránh thay một phần của cụm dài hơn).
+    - Nếu glossary_ids rỗng hoặc không có file nào, trả về nguyên extracted_data.
+
+    CSV format: cột A = ngôn ngữ đích (dst), cột B = ngôn ngữ gốc (src)
+    """
+    if not glossary_ids:
+        return extracted_data
+
+    # Thu thập tất cả cặp (src, dst) từ các file glossary được chọn
+    pairs = []
+    for gid in glossary_ids:
+        filepath = os.path.join(GLOSSARY_DIR, f'{gid}.csv')
+        if not os.path.exists(filepath):
+            continue
+        with open(filepath, 'r', encoding='utf-8-sig') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                if len(row) >= 2:
+                    dst = row[0].strip()   # cột A: ngôn ngữ đích
+                    src = row[1].strip()   # cột B: ngôn ngữ gốc
+                    if src and dst:
+                        pairs.append((src, dst))
+
+    if not pairs:
+        return extracted_data
+
+    # Sắp xếp: cụm dài trước để tránh thay nhầm phần của cụm dài
+    pairs.sort(key=lambda x: len(x[0]), reverse=True)
+
+    # Build regex patterns (một lần, tái sử dụng)
+    # Dùng \b nếu src bắt đầu/kết thúc bằng ký tự word; fallback lookaround nếu không
+    def make_pattern(src: str):
+        escaped = re.escape(src)
+        prefix = r'\b' if re.match(r'\w', src[0])  else r'(?<![^\s])'
+        suffix = r'\b' if re.match(r'\w', src[-1]) else r'(?![^\s])'
+        return re.compile(prefix + escaped + suffix, re.IGNORECASE)
+
+    compiled = [(make_pattern(src), dst) for src, dst in pairs]
+
+    # Áp dụng thay thế lên từng value
+    result = {}
+    for key, value in extracted_data.items():
+        if not isinstance(value, str):
+            result[key] = value
+            continue
+        for pattern, dst in compiled:
+            value = pattern.sub(dst, value)
+        result[key] = value
+
+    return result
 
 
 def build_dedup_data(extracted_data, chunk_size=400):
@@ -135,6 +200,365 @@ def expand_dedup_data(json_data, session_folder):
         return expanded
     except Exception:
         return json_data
+
+
+# ==================== SMART UPDATE (MATRIX MAPPING INHERITANCE) ====================
+
+import tempfile as _tempfile
+from openpyxl.cell import MergedCell as _MergedCell
+
+# Mặc định: màu xanh lá trong VN_1.1 = nội dung mới/sửa
+DEFAULT_NEW_COLORS = {'38761D', '00FF00', '008000', '006100', '00B050'}
+DEFAULT_RED_COLORS  = {'FF0000', 'FF0000'}
+
+
+def _get_rgb6(cell) -> str:
+    """Đọc mã RGB 6 ký tự từ font.color, trả rỗng nếu không xác định được."""
+    try:
+        color = cell.font.color if (cell.font and cell.font.color) else None
+        if color and color.type == 'rgb' and color.rgb:
+            return str(color.rgb).upper().lstrip('F')[-6:].zfill(6)
+    except Exception:
+        pass
+    return ''
+
+
+def is_new_or_modified_cell(cell_vn11, new_colors=None, red_colors=None) -> bool:
+    """
+    Trả về True nếu ô được đánh dấu màu xanh lá (nội dung mới/sửa).
+    Trả về False nếu màu đỏ (marker) hoặc đen/auto (nội dung cũ).
+    None → không xác định qua màu, cần dng fallback.
+    """
+    if new_colors is None:
+        new_colors = DEFAULT_NEW_COLORS
+    if red_colors is None:
+        red_colors = DEFAULT_RED_COLORS
+    rgb = _get_rgb6(cell_vn11)
+    if not rgb:
+        return None  # không có màu rõ ràng → fallback
+    if rgb in new_colors:
+        return True
+    if rgb in red_colors:
+        return False  # marker, bỏ qua
+    return None  # màu khác → fallback sang so sánh nội dung
+
+
+def is_content_changed(cell_vn10, cell_vn11) -> bool:
+    """Fallback: so sánh nội dung text giữa VN_1.0 và VN_1.1 tại cùng tọa độ."""
+    v0 = str(cell_vn10.value).strip() if cell_vn10.value is not None else ''
+    v1 = str(cell_vn11.value).strip() if cell_vn11.value is not None else ''
+    return bool(v1) and v1 != v0
+
+
+def _should_skip_cell(cell) -> bool:
+    """Bỏ qua ô công thức, merged non-top-left, hoặc rỗng."""
+    if isinstance(cell, _MergedCell):
+        return True
+    if cell.value is None:
+        return True
+    if isinstance(cell.value, str):
+        if cell.value.strip() == '':
+            return True
+        if cell.value.startswith('='):
+            return True
+    return False
+
+
+def _safe_set_value(ws, coord, value):
+    """
+    Ghi giá trị vào ô worksheet, bỏ qua nếu ô đó là MergedCell (non-top-left).
+    Tránh lỗi ‘MergedCell’ object attribute ‘value’ is read-only.
+    """
+    cell = ws[coord]
+    if isinstance(cell, _MergedCell):
+        return  # chỉ top-left của merge mới ghi được
+    cell.value = value
+
+
+def _copy_cell_format(src_cell, dst_cell):
+    """
+    Copy định dạng (format) từ ô nguồn sang ô đích.
+    Bao gồm: number_format, font, alignment, fill, border.
+    Dùng để bảo toàn định dạng khi kế thừa giá trị dịch từ JP_1.0 sang JP_1.1.
+    """
+    if src_cell is None or dst_cell is None:
+        return
+    try:
+        # Copy number format (định dạng ngày/số)
+        if src_cell.number_format:
+            dst_cell.number_format = src_cell.number_format
+        
+        # Copy font
+        if src_cell.font:
+            dst_cell.font = copy(src_cell.font)
+        
+        # Copy alignment
+        if src_cell.alignment:
+            dst_cell.alignment = copy(src_cell.alignment)
+        
+        # Copy fill (màu nền)
+        if src_cell.fill:
+            dst_cell.fill = copy(src_cell.fill)
+        
+        # Copy border
+        if src_cell.border:
+            dst_cell.border = copy(src_cell.border)
+    except Exception:
+        pass  # Bỏ qua nếu copy format thất bại
+
+
+def _build_coord_content_map(ws_vn10, ws_jp10) -> dict:
+    """
+    Map: { (coordinate, vn_text) → jp_text }
+
+    Key là TUPLE (tọa độ, nội dung VN) — chỉ kế thừa JP khi CẢ HAI đều khớp:
+    - Tọa độ giống nhau (coord)
+    - Nội dung VN tại tọa độ đó không thay đổi (vn_text)
+
+    Đây là tầng chính xác nhất: nếu VN_1.1[A5] == VN_1.0[A5] thì JP_1.0[A5]
+    chắc chắn là bản dịch đúng cho ô đó, bất kể text có trùng với ô khác không.
+    """
+    result = {}
+    for row in ws_vn10.iter_rows():
+        for cell_vn in row:
+            if isinstance(cell_vn, _MergedCell) or not cell_vn.value:
+                continue
+            vn_text = str(cell_vn.value).strip()
+            if not vn_text or vn_text.startswith('='):
+                continue
+            jp_cell = ws_jp10[cell_vn.coordinate]
+            if isinstance(jp_cell, _MergedCell) or not jp_cell.value:
+                continue
+            jp_text = str(jp_cell.value).strip()
+            if jp_text:
+                result[(cell_vn.coordinate, vn_text)] = jp_text
+    return result
+
+
+def _build_vn_jp_content_map(ws_vn10, ws_jp10) -> dict:
+    """
+    Map: { vn_text → (jp_text, coord) } — fallback khi tọa độ đã thay đổi.
+
+    Với mỗi VN text, đếm số lần xuất hiện của từng bản dịch JP tương ứng,
+    rồi chọn JP xuất hiện NHIỀU NHẤT (dominant).
+
+    Lý do dùng dominant thay vì loại bỏ conflict: bản dịch JP xuất hiện
+    nhiều nhất là bản khách đã chấp nhận nhiều lần — đáng tin cậy hơn.
+
+    Returns: {vn_text: (jp_text, coord_đầu_tiên_có_jp_text_này)}
+    """
+    from collections import defaultdict
+    vn_to_jp_counter = defaultdict(lambda: defaultdict(int))
+    vn_to_jp_coord = {}  # {vn_text: {jp_text: coord_đầu_tiên}}
+
+    for row in ws_vn10.iter_rows():
+        for cell_vn in row:
+            if isinstance(cell_vn, _MergedCell) or not cell_vn.value:
+                continue
+            vn_text = str(cell_vn.value).strip()
+            if not vn_text or vn_text.startswith('='):
+                continue
+            jp_cell = ws_jp10[cell_vn.coordinate]
+            if isinstance(jp_cell, _MergedCell) or not jp_cell.value:
+                continue
+            jp_text = str(jp_cell.value).strip()
+            if jp_text:
+                vn_to_jp_counter[vn_text][jp_text] += 1
+                # Lưu coordinate của jp_cell (lần đầu tiên gặp cặp này)
+                if vn_text not in vn_to_jp_coord:
+                    vn_to_jp_coord[vn_text] = {}
+                if jp_text not in vn_to_jp_coord[vn_text]:
+                    vn_to_jp_coord[vn_text][jp_text] = jp_cell.coordinate
+
+    result = {}
+    for vn_text, jp_counter in vn_to_jp_counter.items():
+        dominant_jp = max(jp_counter, key=jp_counter.get)
+        coord = vn_to_jp_coord[vn_text][dominant_jp]
+        result[vn_text] = (dominant_jp, coord)  # (value, coordinate)
+    
+    return result
+
+
+def _clone_vn11_as_base(path_vn11: str, tmp_path: str) -> None:
+    """
+    Clone VN_1.1 thành file base cho JP_1.1.
+    Giữ nguyên TOÀN BỘ cấu trúc (merge cells, row heights, col widths, styles).
+    Sau đó xóa sạch text trong các cell (giữ format) để điền JP vào.
+    """
+    import shutil
+    shutil.copy2(path_vn11, tmp_path)
+    wb = load_workbook(tmp_path)
+    for ws in wb.worksheets:
+        for row in ws.iter_rows():
+            for cell in row:
+                if isinstance(cell, _MergedCell):
+                    continue
+                if cell.value is not None:
+                    cell.value = None
+    wb.save(tmp_path)
+    wb.close()
+
+
+def _copy_sheet_structure(ws_source, ws_dest):
+    """Copy column widths, row heights, merge cells từ source sang dest."""
+    for merge in ws_source.merged_cells.ranges:
+        try:
+            ws_dest.merge_cells(str(merge))
+        except Exception:
+            pass
+    for col_letter, col_dim in ws_source.column_dimensions.items():
+        ws_dest.column_dimensions[col_letter].width = col_dim.width
+    for row_num, row_dim in ws_source.row_dimensions.items():
+        ws_dest.row_dimensions[row_num].height = row_dim.height
+
+
+def smart_update_excel(path_vn10, path_vn11, path_jp10, new_colors=None, red_colors=None):
+    """
+    Tạo JP_1.1 bằng cách:
+      - Clone VN_1.1 làm base (cấu trúc đúng nhất: merge, rows, cols)
+      - Ô màu đỏ (marker)       → giữ text VN gốc
+      - Ô màu xanh (new/sửa)    → giữ text VN_1.1, thêm vào to_translate
+      - Ô đen/auto               → tầng 1 (coord+text) → tầng 2 (dominant JP) → giữ text VN_1.1
+      - Sheet mới trong VN_1.1   → toàn bộ giữ text VN_1.1 + to_translate
+      - Sheet bỏ trong VN_1.1    → bỏ qua (JP_1.1 theo cấu trúc VN_1.1)
+      - Sheet có trong VN nhưng JP_1.0 thiếu → dùng text VN_1.1 thức đẩy to_translate
+    Returns: (wb_jp11, to_translate_dict, stats_dict)
+    """
+    import shutil
+
+    wb_vn10 = load_workbook(path_vn10, data_only=True)
+    wb_vn11 = load_workbook(path_vn11, data_only=True)
+    wb_jp10 = load_workbook(path_jp10, data_only=True)
+
+    # Clone VN_1.1 → base của JP_1.1 (cấu trúc đúng nhất)
+    tmp_path = _tempfile.mktemp(suffix='_jp11.xlsx')
+    _clone_vn11_as_base(path_vn11, tmp_path)
+    wb_jp11 = load_workbook(tmp_path)
+
+    to_translate = {}
+    inherited = 0
+    sheet_stats = {}   # per-sheet breakdown
+
+    for sheet_name in wb_vn11.sheetnames:
+        ws_vn11 = wb_vn11[sheet_name]
+        ws_vn10 = wb_vn10[sheet_name] if sheet_name in wb_vn10.sheetnames else None
+        ws_jp10 = wb_jp10[sheet_name] if sheet_name in wb_jp10.sheetnames else None
+        ws_jp11 = wb_jp11[sheet_name] if sheet_name in wb_jp11.sheetnames \
+            else wb_jp11.create_sheet(sheet_name)
+
+        sh_inherited   = 0
+        sh_to_translate = 0
+
+        # Case A: Sheet mới trong VN_1.1 (không có trong VN_1.0 và/hoặc JP_1.0)
+        #         → toàn bộ ô giữ text VN_1.1 và được đánh dấu cần dịch
+        if ws_vn10 is None:
+            for row in ws_vn11.iter_rows():
+                for cell in row:
+                    if _should_skip_cell(cell):
+                        continue
+                    key = f"{sheet_name}!{cell.coordinate}"
+                    to_translate[key] = str(cell.value).strip()
+                    _safe_set_value(ws_jp11, cell.coordinate, cell.value)  # giữ text VN_1.1
+                    sh_to_translate += 1
+            sheet_stats[sheet_name] = {'inherited': 0, 'to_translate': sh_to_translate, 'status': 'new_sheet'}
+            continue
+
+        # Case B: Sheet tồn tại trong cả VN_1.0 và VN_1.1 → xử lý kế thừa
+        # ws_jp10 có thể là None (sheet chưa tồn tại trong JP_1.0) → map rỗng → tất cả đen→translate
+        coord_content_map = _build_coord_content_map(ws_vn10, ws_jp10) \
+            if (ws_vn10 and ws_jp10) else {}
+        vn_jp_content_map = _build_vn_jp_content_map(ws_vn10, ws_jp10) \
+            if (ws_vn10 and ws_jp10) else {}
+
+        for row in ws_vn11.iter_rows():
+            for cell_vn11 in row:
+                if _should_skip_cell(cell_vn11):
+                    continue
+
+                coord     = cell_vn11.coordinate
+                text_vn11 = str(cell_vn11.value).strip()
+                key       = f"{sheet_name}!{coord}"
+
+                # ── Non-string cells: int, float, datetime, bool ──
+                # Không cần dịch, không cần tra maps — giữ nguyên native type.
+                # Maps chỉ xử lý str; ghi str vào cell sẽ làm mất kiểu và format Excel.
+                if not isinstance(cell_vn11.value, str):
+                    _safe_set_value(ws_jp11, coord, cell_vn11.value)
+                    inherited += 1
+                    sh_inherited += 1
+                    continue
+
+                color_result = is_new_or_modified_cell(cell_vn11, new_colors, red_colors)
+
+                if color_result is False:
+                    # Màu đỏ = marker (①②...) → giữ nguyên text VN trong JP_1.1
+                    _safe_set_value(ws_jp11, coord, cell_vn11.value)
+                    continue
+
+                if color_result is True:
+                    # Màu xanh = nội dung mới/sửa → cần dịch mới
+                    to_translate[key] = text_vn11
+                    _safe_set_value(ws_jp11, coord, cell_vn11.value)  # giữ text VN_1.1
+                    sh_to_translate += 1
+                    continue
+
+                # Không màu rõ ràng → fallback theo 2 tầng
+
+                # Tầng 1: coord + vn_text đều khớp VN_1.0 → JP_1.0[coord] chắc chắn đúng
+                jp_val = coord_content_map.get((coord, text_vn11))
+                if jp_val:
+                    _safe_set_value(ws_jp11, coord, jp_val)
+                    # Copy định dạng từ JP_1.0 sang JP_1.1
+                    src_cell = ws_jp10[coord]
+                    dst_cell = ws_jp11[coord]
+                    _copy_cell_format(src_cell, dst_cell)
+                    inherited += 1
+                    sh_inherited += 1
+                    continue
+
+                # Tầng 2: vn_text có trong VN_1.0 → lấy JP dominant (bản khách đã chấp nhận)
+                if text_vn11 in vn_jp_content_map:
+                    jp_val, jp_coord = vn_jp_content_map[text_vn11]
+                    _safe_set_value(ws_jp11, coord, jp_val)
+                    # Copy định dạng từ JP_1.0[jp_coord] sang JP_1.1[coord]
+                    src_cell = ws_jp10[jp_coord]
+                    dst_cell = ws_jp11[coord]
+                    _copy_cell_format(src_cell, dst_cell)
+                    inherited += 1
+                    sh_inherited += 1
+                    continue
+
+                # Không tìm được → text mới hoàn toàn → cần dịch mới
+                to_translate[key] = text_vn11
+                _safe_set_value(ws_jp11, coord, cell_vn11.value)  # giữ text VN_1.1
+                sh_to_translate += 1
+
+        sheet_stats[sheet_name] = {
+            'inherited': sh_inherited,
+            'to_translate': sh_to_translate,
+            'status': 'updated' if ws_jp10 else 'no_jp10',
+        }
+
+    wb_vn10.close()
+    wb_vn11.close()
+    wb_jp10.close()
+
+    try:
+        os.remove(tmp_path)
+    except Exception:
+        pass
+
+    stats = {
+        'inherited': inherited,
+        'to_translate': len(to_translate),
+        'total': inherited + len(to_translate),
+        'sheets': sheet_stats,
+    }
+    return wb_jp11, to_translate, stats
+
+
+# giữ alias để bảo tương thích ngược với code cũ (nếu có chỗ nào gọi)
+compare_and_inherit_excel = smart_update_excel
 
 
 def get_password():
@@ -1151,6 +1575,116 @@ def api_save_templates():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
+# ==================== API: GLOSSARY ====================
+
+@app.route('/api/glossaries', methods=['GET'])
+@login_required
+def api_list_glossaries():
+    """Trả về danh sách tất cả file glossary đã lưu."""
+    result = []
+    for fname in sorted(os.listdir(GLOSSARY_DIR)):
+        if not fname.endswith('.csv'):
+            continue
+        gid = fname[:-4]
+        meta_path = os.path.join(GLOSSARY_DIR, f'{gid}.meta.json')
+        display_name = gid
+        if os.path.exists(meta_path):
+            with open(meta_path, 'r', encoding='utf-8') as f:
+                meta = json.load(f)
+                display_name = meta.get('name', gid)
+        # Đếm số dòng
+        try:
+            with open(os.path.join(GLOSSARY_DIR, fname), 'r', encoding='utf-8-sig') as f:
+                row_count = sum(1 for r in csv.reader(f) if any(r))
+        except Exception:
+            row_count = 0
+        result.append({'id': gid, 'name': display_name, 'rows': row_count})
+    return jsonify(result)
+
+
+@app.route('/api/glossaries', methods=['POST'])
+@login_required
+def api_upload_glossary():
+    """Upload file CSV mới. Form fields: file (CSV), name (tên hiển thị)."""
+    import time
+    if 'file' not in request.files:
+        return jsonify({'error': 'Không có file'}), 400
+    f = request.files['file']
+    if not f.filename.endswith('.csv'):
+        return jsonify({'error': 'Chỉ chấp nhận file .csv'}), 400
+    display_name = request.form.get('name', '').strip() or os.path.splitext(f.filename)[0]
+    gid = f'glossary_{int(time.time())}'
+    csv_path  = os.path.join(GLOSSARY_DIR, f'{gid}.csv')
+    meta_path = os.path.join(GLOSSARY_DIR, f'{gid}.meta.json')
+    f.save(csv_path)
+    with open(meta_path, 'w', encoding='utf-8') as mf:
+        json.dump({'name': display_name}, mf, ensure_ascii=False)
+    # Đếm dòng
+    with open(csv_path, 'r', encoding='utf-8-sig') as cf:
+        row_count = sum(1 for r in csv.reader(cf) if any(r))
+    return jsonify({'success': True, 'id': gid, 'name': display_name, 'rows': row_count})
+
+
+@app.route('/api/glossaries/<gid>', methods=['GET'])
+@login_required
+def api_get_glossary(gid):
+    """Trả về toàn bộ nội dung glossary dưới dạng list of {src, dst}."""
+    csv_path = os.path.join(GLOSSARY_DIR, f'{gid}.csv')
+    if not os.path.exists(csv_path):
+        return jsonify({'error': 'Không tìm thấy'}), 404
+    rows = []
+    with open(csv_path, 'r', encoding='utf-8-sig') as f:
+        for r in csv.reader(f):
+            if len(r) >= 2:
+                rows.append({'dst': r[0].strip(), 'src': r[1].strip()})
+            elif len(r) == 1 and r[0].strip():
+                rows.append({'dst': r[0].strip(), 'src': ''})
+    return jsonify(rows)
+
+
+@app.route('/api/glossaries/<gid>', methods=['PUT'])
+@login_required
+def api_update_glossary(gid):
+    """
+    Cập nhật nội dung glossary.
+    Body JSON: { "name": "...", "rows": [{"src": "...", "dst": "..."}, ...] }
+    """
+    csv_path  = os.path.join(GLOSSARY_DIR, f'{gid}.csv')
+    meta_path = os.path.join(GLOSSARY_DIR, f'{gid}.meta.json')
+    if not os.path.exists(csv_path):
+        return jsonify({'error': 'Không tìm thấy'}), 404
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Body rỗng'}), 400
+    # Cập nhật tên
+    if 'name' in data:
+        with open(meta_path, 'w', encoding='utf-8') as mf:
+            json.dump({'name': data['name']}, mf, ensure_ascii=False)
+    # Cập nhật rows
+    if 'rows' in data:
+        with open(csv_path, 'w', encoding='utf-8-sig', newline='') as f:
+            w = csv.writer(f)
+            for row in data['rows']:
+                if row.get('src') or row.get('dst'):
+                    w.writerow([row.get('dst', ''), row.get('src', '')])
+    return jsonify({'success': True})
+
+
+@app.route('/api/glossaries/<gid>', methods=['DELETE'])
+@login_required
+def api_delete_glossary(gid):
+    """Xóa glossary và meta file."""
+    csv_path  = os.path.join(GLOSSARY_DIR, f'{gid}.csv')
+    meta_path = os.path.join(GLOSSARY_DIR, f'{gid}.meta.json')
+    for p in [csv_path, meta_path]:
+        try:
+            os.remove(p)
+        except FileNotFoundError:
+            pass
+    return jsonify({'success': True})
+
+
 @app.route('/extract', methods=['POST'])
 @login_required
 def extract():
@@ -1159,39 +1693,45 @@ def extract():
     Bỏ qua các cell chứa số và công thức (bắt đầu bằng '=') trong Excel
     Trả về file JSON với format: {"SheetName!CellCoordinate": "Content"} hoặc {"SlideX!ShapeY": "Content"} hoặc {"ParagraphX": "Content"}
     """
-    # Kiểm tra xem có file được upload không
-    if 'file' not in request.files:
+    # Kiểm tra file upload hoặc fallback từ Smart Update
+    su_info = session.get('tab1_from_smart_update')
+    if 'file' in request.files and request.files['file'].filename:
+        file = request.files['file']
+        use_session_file = False
+        if not allowed_file(file.filename):
+            return jsonify({'error': 'Chỉ chấp nhận file .xlsx, .pptx hoặc .docx'}), 400
+    elif su_info and os.path.exists(su_info.get('filepath', '')):
+        file = None
+        use_session_file = True
+    else:
         return jsonify({'error': 'Không có file được upload'}), 400
-    
-    file = request.files['file']
-    
-    # Kiểm tra xem file có được chọn không
-    if file.filename == '':
-        return jsonify({'error': 'Không có file được chọn'}), 400
-    
-    # Kiểm tra định dạng file
-    if not allowed_file(file.filename):
-        return jsonify({'error': 'Chỉ chấp nhận file .xlsx, .pptx hoặc .docx'}), 400
-    
+
     try:
         # Lấy session folder
         session_folder = get_session_folder()
         
-        # Lưu tên file gốc (giữ nguyên tiếng Nhật, ký tự đặc biệt)
-        original_filename = file.filename
-        
-        # Lấy extension từ tên file gốc
-        if '.' in original_filename:
-            original_ext = original_filename.rsplit('.', 1)[1].lower()
+        if not use_session_file:
+            # Lưu tên file gốc (giữ nguyên tiếng Nhật, ký tự đặc biệt)
+            original_filename = file.filename
+
+            # Lấy extension từ tên file gốc
+            if '.' in original_filename:
+                original_ext = original_filename.rsplit('.', 1)[1].lower()
+            else:
+                return jsonify({'error': 'Tên file phải có đuôi mở rộng (.xlsx hoặc .pptx)'}), 400
+
+            # Tạo tên file tạm an toàn hoàn toàn từ timestamp (không dùng tên gốc)
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            safe_temp_filename = f"temp_{timestamp}.{original_ext}"
+            filepath = os.path.join(session_folder, safe_temp_filename)
+            file.save(filepath)
         else:
-            return jsonify({'error': 'Tên file phải có đuôi mở rộng (.xlsx hoặc .pptx)'}), 400
-        
-        # Tạo tên file tạm an toàn hoàn toàn từ timestamp (không dùng tên gốc)
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        safe_temp_filename = f"temp_{timestamp}.{original_ext}"
-        filepath = os.path.join(session_folder, safe_temp_filename)
-        file.save(filepath)
-        
+            original_filename = su_info['display_name']
+            original_ext = original_filename.rsplit('.', 1)[1].lower() if '.' in original_filename else 'xlsx'
+            filepath = su_info['filepath']
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            # Không pop session ở đây — giữ lại để /inject vẫn dùng được cùng file
+
         # Xác định loại file và trích xuất
         file_ext = original_ext
         
@@ -1236,6 +1776,12 @@ def extract():
             # Trích xuất text từ DOCX
             extracted_data = extract_text_from_docx(filepath)
         
+        # Áp dụng glossary nếu có
+        glossary_ids_raw = request.form.get('glossary_ids', '')
+        glossary_ids = [g.strip() for g in glossary_ids_raw.split(',') if g.strip()]
+        if glossary_ids:
+            extracted_data = apply_glossary(extracted_data, glossary_ids)
+
         # Tách dữ liệu thành nhiều file, mỗi file 400 cặp key-value
         CHUNK_SIZE = 400
         data_items = list(extracted_data.items())
@@ -1406,52 +1952,58 @@ def inject():
     Giữ nguyên định dạng, màu sắc của file gốc
     Hỗ trợ nhiều file JSON riêng lẻ hoặc file ZIP chứa nhiều file JSON
     """
-    # Kiểm tra xem có file được upload không
-    if 'excel_file' not in request.files:
+    # Kiểm tra file upload hoặc fallback từ Smart Update
+    su_info_inject = session.get('tab1_from_smart_update')
+    if 'excel_file' in request.files and request.files['excel_file'].filename:
+        excel_file = request.files['excel_file']
+        use_session_file_inject = False
+        if not allowed_file(excel_file.filename):
+            return jsonify({'error': 'File phải có định dạng .xlsx, .pptx hoặc .docx'}), 400
+    elif su_info_inject and os.path.exists(su_info_inject.get('filepath', '')):
+        excel_file = None
+        use_session_file_inject = True
+    else:
         return jsonify({'error': 'Cần upload file Excel, PPTX hoặc DOCX'}), 400
-    
-    excel_file = request.files['excel_file']
-    
+
     # Lấy pasted JSON data nếu có
     pasted_json_data = request.form.get('pasted_json_data', None)
-    
+
     # Kiểm tra xem có file JSON được upload hoặc có pasted JSON không
     json_files = request.files.getlist('json_files') if 'json_files' in request.files else []
-    
+
     # Kiểm tra xem có ít nhất một nguồn JSON
     has_json_files = len(json_files) > 0 and any(f.filename != '' for f in json_files)
     has_pasted_json = pasted_json_data is not None and pasted_json_data.strip() != ''
-    
+
     if not has_json_files and not has_pasted_json:
         return jsonify({'error': 'Cần upload ít nhất 1 file JSON/ZIP hoặc paste JSON'}), 400
-    
-    # Kiểm tra xem file excel có được chọn không
-    if excel_file.filename == '':
-        return jsonify({'error': 'Cần chọn file Excel/PowerPoint/Word'}), 400
-    
-    # Kiểm tra định dạng file
-    if not allowed_file(excel_file.filename):
-        return jsonify({'error': 'File phải có định dạng .xlsx, .pptx hoặc .docx'}), 400
-    
+
     try:
         # Lấy session folder
         session_folder = get_session_folder()
         
-        # Lưu tên file gốc (giữ nguyên tiếng Nhật, ký tự đặc biệt)
-        original_excel_filename = excel_file.filename
-        
-        # Lấy extension từ tên file gốc
-        if '.' in original_excel_filename:
-            original_ext = original_excel_filename.rsplit('.', 1)[1].lower()
+        if not use_session_file_inject:
+            # Lưu tên file gốc (giữ nguyên tiếng Nhật, ký tự đặc biệt)
+            original_excel_filename = excel_file.filename
+
+            # Lấy extension từ tên file gốc
+            if '.' in original_excel_filename:
+                original_ext = original_excel_filename.rsplit('.', 1)[1].lower()
+            else:
+                return jsonify({'error': 'Tên file phải có đuôi mở rộng (.xlsx hoặc .pptx)'}), 400
+
+            # Tạo tên file tạm an toàn hoàn toàn từ timestamp
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            safe_temp_filename = f"temp_{timestamp}.{original_ext}"
+            excel_filepath = os.path.join(session_folder, safe_temp_filename)
+            excel_file.save(excel_filepath)
         else:
-            return jsonify({'error': 'Tên file phải có đuôi mở rộng (.xlsx hoặc .pptx)'}), 400
-        
-        # Tạo tên file tạm an toàn hoàn toàn từ timestamp
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        safe_temp_filename = f"temp_{timestamp}.{original_ext}"
-        excel_filepath = os.path.join(session_folder, safe_temp_filename)
-        excel_file.save(excel_filepath)
-        
+            original_excel_filename = su_info_inject['display_name']
+            original_ext = original_excel_filename.rsplit('.', 1)[1].lower() if '.' in original_excel_filename else 'xlsx'
+            excel_filepath = su_info_inject['filepath']
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            session.pop('tab1_from_smart_update', None)
+
         # Đọc và gộp dữ liệu JSON từ tất cả các file
         json_data = {}
         temp_files = []
@@ -1664,10 +2216,319 @@ def clear_uploads():
     except Exception as e:
         return jsonify({'error': f'Lỗi khi xóa file: {str(e)}'}), 500
 
+# ==================== SMART UPDATE ROUTES ====================
+
+@app.route('/smart-update', methods=['POST'])
+@login_required
+def smart_update_route():
+    """
+    Smart Update: So sánh và kế thừa bản dịch Excel từ version cũ.
+    Input (form-data):
+        file_vn_old / file_vn10  : VN_1.0 (chưa dịch, phiên bản cũ)
+        file_vn_new / file_vn11  : VN_1.1 (chưa dịch, phiên bản mới)
+        file_jp_old / file_jp10  : JP_1.0 (đã dịch, phiên bản cũ)
+        new_colors (optional)    : danh sách RGB6 cách nhau dấu phẩy, VD "38761D,00B050"
+    Output JSON: stats + link tải file
+    """
+    # Hỗ trợ cả 2 bộ tên trường (cũ và mới)
+    def _get_file(new_name, old_name):
+        f = request.files.get(new_name) or request.files.get(old_name)
+        return f if (f and f.filename) else None
+
+    file_vn10 = _get_file('file_vn_old', 'file_vn10')
+    file_vn11 = _get_file('file_vn_new', 'file_vn11')
+    file_jp10 = _get_file('file_jp_old', 'file_jp10')
+
+    missing = [n for n, f in [('VN cũ', file_vn10), ('VN mới', file_vn11), ('JP cũ', file_jp10)] if not f]
+    if missing:
+        return jsonify({'error': f'Thiếu file: {", ".join(missing)}'}), 400
+
+    for f in [file_vn10, file_vn11, file_jp10]:
+        if not f.filename.lower().endswith('.xlsx'):
+            return jsonify({'error': 'Smart Update chỉ hỗ trợ file .xlsx'}), 400
+
+    # Parse màu xanh tùy chỉnh từ form (nếu có)
+    raw_colors = request.form.get('new_colors', '').strip()
+    custom_new_colors = None
+    if raw_colors:
+        custom_new_colors = set(
+            c.strip().upper().lstrip('#').lstrip('FF')[-6:].zfill(6)
+            for c in raw_colors.split(',') if c.strip()
+        ) | DEFAULT_NEW_COLORS  # merge với mặc định
+
+    try:
+        session_folder = get_session_folder()
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+        path_vn10 = os.path.join(session_folder, f'su_vn10_{timestamp}.xlsx')
+        path_vn11 = os.path.join(session_folder, f'su_vn11_{timestamp}.xlsx')
+        path_jp10 = os.path.join(session_folder, f'su_jp10_{timestamp}.xlsx')
+        file_vn10.save(path_vn10)
+        file_vn11.save(path_vn11)
+        file_jp10.save(path_jp10)
+
+        result_wb, to_translate, stats = smart_update_excel(
+            path_vn10, path_vn11, path_jp10,
+            new_colors=custom_new_colors
+        )
+
+        # Lưu workbook kết quả JP_1.1
+        original_name = os.path.splitext(file_vn11.filename)[0]
+        result_display_name = f"{original_name}_JP_1_1.xlsx"
+        safe_result_path = os.path.join(session_folder, f'su_result_{timestamp}.xlsx')
+        result_wb.save(safe_result_path)
+        result_wb.close()
+
+        # Chia các ô cần dịch thành JSON chunks (≤400/file)
+        CHUNK_SIZE = 400
+        items = list(to_translate.items())
+        num_chunks = max(1, (len(items) + CHUNK_SIZE - 1) // CHUNK_SIZE)
+
+        temp_json_dir = os.path.join(session_folder, f'su_json_{timestamp}')
+        os.makedirs(temp_json_dir, exist_ok=True)
+
+        json_display_names = []
+        json_paths = []
+        files_data = []
+
+        for i in range(num_chunks):
+            chunk = dict(items[i * CHUNK_SIZE:(i + 1) * CHUNK_SIZE])
+            jname_display = f"{original_name}_to_translate_part{i+1:02d}_of_{num_chunks:02d}.json"
+            jname_safe = f"su_json_part{i+1:02d}_{timestamp}.json"
+            jpath = os.path.join(temp_json_dir, jname_safe)
+            with open(jpath, 'w', encoding='utf-8') as jf:
+                json.dump(chunk, jf, ensure_ascii=False, indent=2)
+            json_display_names.append(jname_display)
+            json_paths.append(jpath)
+            with open(jpath, 'r', encoding='utf-8') as jf:
+                files_data.append({'name': jname_display, 'content': jf.read()})
+
+        # Tạo ZIP chứa tất cả JSON cần dịch
+        zip_display_name = f"{original_name}_to_translate.zip"
+        zip_path = os.path.join(session_folder, f'su_json_{timestamp}.zip')
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_STORED) as zf:
+            for idx, jpath_item in enumerate(json_paths):
+                zf.write(jpath_item, json_display_names[idx])
+
+        session['smart_update'] = {
+            'result_path': safe_result_path,
+            'result_display_name': result_display_name,
+            'result_filename': os.path.basename(safe_result_path),
+            'path_vn11': path_vn11,
+            'zip_path': zip_path,
+            'zip_display_name': zip_display_name,
+            'temp_files': [path_vn10, path_vn11, path_jp10] + json_paths,
+            'temp_dir': temp_json_dir,
+        }
+
+        return jsonify({
+            'success': True,
+            'stats': stats,
+            'result_display_name': result_display_name,
+            'zip_display_name': zip_display_name,
+            'files': files_data,
+        })
+
+    except Exception as e:
+        import traceback
+        return jsonify({'error': f'Lỗi xử lý: {str(e)}', 'detail': traceback.format_exc()}), 500
+
+
+@app.route('/download-smart-excel', methods=['GET'])
+@login_required
+def download_smart_excel():
+    """Tải file Excel JP 1.1 hỗn hợp từ Smart Update"""
+    info = session.get('smart_update')
+    if not info or not os.path.exists(info.get('result_path', '')):
+        return jsonify({'error': 'Không tìm thấy file. Vui lòng chạy Smart Update lại.'}), 404
+    response = send_file(
+        info['result_path'],
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response = set_download_headers(response, info['result_display_name'], 'result_mixed.xlsx')
+    return response
+
+
+@app.route('/download-smart-zip', methods=['GET'])
+@login_required
+def download_smart_zip():
+    """Tải ZIP các file JSON cần dịch từ Smart Update và dọn dẹp file tạm"""
+    info = session.get('smart_update')
+    if not info or not os.path.exists(info.get('zip_path', '')):
+        return jsonify({'error': 'Không tìm thấy file ZIP. Vui lòng chạy Smart Update lại.'}), 404
+
+    zip_path = info['zip_path']
+    zip_display_name = info['zip_display_name']
+    session.pop('smart_update', None)
+
+    response = send_file(zip_path, mimetype='application/zip')
+    response = set_download_headers(response, zip_display_name, 'new_strings.zip')
+
+    temp_files = info.get('temp_files', [])
+    temp_dir = info.get('temp_dir')
+    result_path = info.get('result_path')
+
+    @response.call_on_close
+    def cleanup():
+        import time
+        import gc
+        gc.collect()
+        time.sleep(0.1)
+        for p in [zip_path, result_path] + temp_files:
+            try:
+                if p and os.path.exists(p):
+                    os.remove(p)
+            except Exception:
+                pass
+        try:
+            if temp_dir and os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir)
+        except Exception:
+            pass
+
+    return response
+
+
+@app.route('/smart-update/use-as-input', methods=['POST'])
+@login_required
+def smart_update_use_as_input():
+    """
+    Chuyển file kết quả Smart Update (JP_1.1) thành file input cho Tab Dịch tài liệu.
+    Frontend gọi route này, sau đó chuyển sang Tab 1 — file đã sẵn sàng để Extract/Inject.
+    """
+    info = session.get('smart_update')
+    if not info or not os.path.exists(info.get('result_path', '')):
+        return jsonify({'error': 'Không tìm thấy file Smart Update. Vui lòng chạy lại.'}), 404
+
+    result_path  = info['result_path']
+    display_name = info['result_display_name']
+
+    # Ghi vào session của Tab 1 — giống như user vừa upload file này
+    session['tab1_from_smart_update'] = {
+        'filepath':     result_path,
+        'display_name': display_name,
+    }
+
+    return jsonify({
+        'success':      True,
+        'display_name': display_name,
+    })
+
+
 # Đảm bảo thư mục uploads tồn tại
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
     os.makedirs(app.config['UPLOAD_FOLDER'])
 
+
+# ==================== IMAGE TRANSLATION ====================
+ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'}
+
+def allowed_image(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS
+
+
+@app.route('/img-translate/upload', methods=['POST'])
+@login_required
+def img_translate_upload():
+    """Upload ảnh vào session folder, trả về filename."""
+    if 'image' not in request.files:
+        return jsonify({'error': 'Không tìm thấy file ảnh'}), 400
+    file = request.files['image']
+    if file.filename == '':
+        return jsonify({'error': 'Chưa chọn file'}), 400
+    if not allowed_image(file.filename):
+        return jsonify({'error': 'Định dạng không hỗ trợ. Chỉ nhận: PNG, JPG, JPEG, GIF, WEBP, BMP'}), 400
+
+    session_folder = get_session_folder()
+    filename = secure_filename(file.filename)
+    ts = datetime.now().strftime('%H%M%S')
+    name, ext = os.path.splitext(filename)
+    safe_filename = f"img_{ts}_{name[:30]}{ext}"
+    filepath = os.path.join(session_folder, safe_filename)
+    file.save(filepath)
+    return jsonify({'success': True, 'filename': safe_filename}), 200
+
+
+@app.route('/img-translate/image/<filename>', methods=['GET'])
+@login_required
+def img_translate_serve(filename):
+    """Serve ảnh đã upload từ session folder."""
+    session_folder = get_session_folder()
+    safe = secure_filename(filename)
+    filepath = os.path.join(session_folder, safe)
+    if not os.path.exists(filepath):
+        return jsonify({'error': 'File không tồn tại'}), 404
+    return send_file(filepath)
+
+
+@app.route('/img-translate/prompt', methods=['POST'])
+@login_required
+def img_translate_prompt():
+    """Sinh Instruction Prompt yêu cầu AI phân tích ảnh và trả JSON overlay."""
+    data = request.get_json() or {}
+    target_lang = data.get('target_lang', 'tiếng Nhật')
+    source_lang = data.get('source_lang', '').strip()
+    img_w = int(data.get('image_width', 0))
+    img_h = int(data.get('image_height', 0))
+
+    source_note = f" (ngôn ngữ gốc trong ảnh: {source_lang})" if source_lang else ""
+
+    if img_w > 0 and img_h > 0:
+        dim_note = f"\n\nKích thước ảnh CHÍNH XÁC: {img_w} × {img_h} pixel (rộng × cao).\n" \
+                   f"→ Quy đổi tọa độ pixel sang %: left_pct = pixel_x / {img_w} × 100, top_pct = pixel_y / {img_h} × 100\n" \
+                   f"→ Quy đổi kích thước sang %: width_pct = pixel_w / {img_w} × 100, height_pct = pixel_h / {img_h} × 100\n" \
+                   f"→ font_size_pct = chiều_cao_font_pixel / {img_h} × 100"
+        font_example = round(24 / img_h * 100, 2) if img_h else 2.5
+        dim_font_note = f"(ví dụ: chữ 24px trong ảnh {img_h}px cao → font_size_pct = {font_example})"
+    else:
+        dim_note = ""
+        font_example = 2.5
+        dim_font_note = "(ví dụ: 2.5)"
+
+    prompt = f"""Bạn là chuyên gia OCR và dịch thuật chuyên nghiệp. Tôi sẽ gửi cho bạn một bức ảnh{source_note}.{dim_note}
+
+NHIỆM VỤ:
+1. Nhận diện (OCR) TẤT CẢ các vùng có văn bản trong ảnh.
+2. Dịch toàn bộ sang {target_lang} một cách tự nhiên, chính xác.
+3. Với mỗi vùng văn bản, xác định CÁC GIÁ TRỊ SAU:
+
+   top_pct    : tọa độ mép TRÊN của text box, tính bằng % chiều CAO ảnh (0 = trên cùng, 100 = dưới cùng)
+   left_pct   : tọa độ mép TRÁI của text box, tính bằng % chiều RỘNG ảnh (0 = trái, 100 = phải)
+   width_pct  : chiều RỘNG text box, % chiều rộng ảnh
+   height_pct : chiều CAO text box, % chiều cao ảnh
+   bg_color   : mã HEX màu nền THỰC TẾ ngay phía sau văn bản (để che chữ cũ)
+   text_color : mã HEX màu chữ phù hợp để đọc được trên bg_color
+   font_size_pct : cỡ chữ tính bằng % chiều cao ảnh {dim_font_note}
+                   → PHẢI xấp xỉ bằng chiều cao thực tế của 1 dòng chữ trong ảnh
+                   → KHÔNG được nhỏ hơn 60% height_pct (nếu block là 1 dòng)
+                   → Với block nhiều dòng: font_size_pct ≈ height_pct / số_dòng × 0.8
+
+⚠️ YÊU CẦU BẮT BUỘC:
+- Tọa độ phải bao phủ CHÍNH XÁC vùng chứa văn bản, sai số không quá 1%
+- Các box KHÔNG được chồng lên nhau (trừ khi text thực sự chồng trong ảnh)
+- bg_color lấy từ màu nền thực trong ảnh, KHÔNG đặt màu tùy ý
+- Trả về JSON THUẦN TÚY — KHÔNG giải thích, KHÔNG bọc markdown code block ```
+
+FORMAT JSON TRẢ VỀ (giữ đúng cấu trúc này):
+{{
+  "text_blocks": [
+    {{
+      "original": "Văn bản gốc trong ảnh",
+      "translated": "Bản dịch sang {target_lang}",
+      "top_pct": 10.5,
+      "left_pct": 5.2,
+      "width_pct": 30.0,
+      "height_pct": 5.0,
+      "bg_color": "#FFFFFF",
+      "text_color": "#000000",
+      "font_size_pct": {font_example}
+    }}
+  ]
+}}"""
+
+    return jsonify({'prompt': prompt}), 200
+
+
 if __name__ == '__main__':
     # Chạy ứng dụng Flask ở chế độ debug
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000)

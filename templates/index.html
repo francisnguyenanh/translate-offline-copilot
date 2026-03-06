@@ -8,6 +8,8 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome cho icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- html2canvas: capture overlay as image -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
         body {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -61,6 +63,13 @@
             color: #667eea;
             margin-bottom: 10px;
         }
+
+        /* Light mode (mặc định) */
+        .glossary-upload-box {
+            background: #f0f4ff;
+            border: 1px dashed #667eea;
+        }
+
         
         .step-number {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -373,6 +382,57 @@
             background: #1b2d3e;
             border-color: #2d5080 #2d5080 transparent;
         }
+
+        body.dark-mode .glossary-upload-box {
+            background: #232b3b;
+            border-color: #4d6fae;
+        }
+        /* ===== IMAGE OVERLAY ===== */
+        .overlay-block {
+            box-sizing: border-box;
+            transition: outline 0.1s;
+        }
+        .overlay-block.selected {
+            outline: 2px solid #667eea !important;
+            z-index: 15 !important;
+        }
+        .overlay-block:hover { z-index: 14 !important; }
+        .overlay-translated {
+            display: block;
+            width: 100%;
+            text-align: center;
+            line-height: 1.2;
+            word-break: break-word;
+            overflow: hidden;
+        }
+        .overlay-original {
+            font-size: 0.6em;
+            opacity: 0.7;
+            text-align: center;
+        }
+        /* Resize handles */
+        .resize-handle {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: #667eea;
+            border: 1.5px solid #fff;
+            border-radius: 2px;
+            z-index: 40;
+            display: none;
+            box-shadow: 0 0 2px rgba(0,0,0,0.5);
+        }
+        .overlay-block:hover .resize-handle,
+        .overlay-block.selected .resize-handle { display: block; }
+        .rh-nw { top:-5px;  left:-5px;              cursor:nw-resize; }
+        .rh-n  { top:-5px;  left:calc(50% - 5px);   cursor:n-resize;  }
+        .rh-ne { top:-5px;  right:-5px;             cursor:ne-resize; }
+        .rh-e  { top:calc(50% - 5px); right:-5px;  cursor:e-resize;  }
+        .rh-se { bottom:-5px; right:-5px;           cursor:se-resize; }
+        .rh-s  { bottom:-5px; left:calc(50% - 5px); cursor:s-resize;  }
+        .rh-sw { bottom:-5px; left:-5px;            cursor:sw-resize; }
+        .rh-w  { top:calc(50% - 5px); left:-5px;   cursor:w-resize;  }
+        body.dark-mode .resize-handle { background:#5090d8; border-color:#1e3049; }
     </style>
 </head>
 <body class="dark-mode">
@@ -380,7 +440,6 @@
         <!-- Header -->
         <div class="header">
             <h1><i class="fas fa-language"></i> Tomo Translation</h1>
-            <p>Công cụ quản lý trích xuất và nạp bản dịch cho file Excel (.xlsx), PowerPoint (.pptx) và Word (.docx)</p>
             <div class="mt-3 d-flex flex-wrap justify-content-center gap-2">
                 <button class="btn btn-outline-light btn-sm" onclick="clearUploads()" title="Xóa file trong phiên của bạn">
                     <i class="fas fa-trash-alt"></i> Xóa file của tôi
@@ -394,7 +453,27 @@
 
             </div>
         </div>
-        
+
+        <!-- Main Tabs -->
+        <ul class="nav nav-tabs mb-4" id="mainTab" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="main-tab1" data-bs-toggle="tab" data-bs-target="#mainTab1" type="button" role="tab" aria-selected="true">
+                    <i class="fas fa-exchange-alt"></i> Dịch tài liệu
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="main-tab2" data-bs-toggle="tab" data-bs-target="#mainTab2" type="button" role="tab" aria-selected="false">
+                    <i class="fas fa-image"></i> Dịch ảnh
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="main-tab3" data-bs-toggle="tab" data-bs-target="#mainTab3" type="button" role="tab" aria-selected="false">
+                    <i class="fas fa-code-branch"></i> Smart Update
+                </button>
+            </li>
+        </ul>
+        <div class="tab-content" id="mainTabContent">
+        <div class="tab-pane fade show active" id="mainTab1" role="tabpanel" aria-labelledby="main-tab1">
         <!-- 3 Bước theo hàng ngang -->
         <div class="row g-3">
             <!-- Bước 1: Upload file -->
@@ -410,7 +489,7 @@
                         <div class="upload-area compact" id="mainUploadArea">
                             <i class="fas fa-cloud-upload-alt"></i>
                             <p class="mb-2 small"><strong>Kéo thả file vào đây</strong></p>
-                            <input type="file" class="form-control" id="mainExcelFile" name="file" accept=".xlsx,.pptx" style="display: none;">
+                            <input type="file" class="form-control" id="mainExcelFile" name="file" accept=".xlsx,.pptx,.docx" style="display: none;">
                             <label for="mainExcelFile" class="btn btn-custom btn-sm">
                                 <i class="fas fa-folder-open"></i> Chọn file
                             </label>
@@ -426,6 +505,7 @@
                         
                         <div id="mainAlert"></div>
                     </form>
+                    <div id="mainUploadAlert"></div>
 
                     <!-- Chọn ngôn ngữ đích -->
                     <div class="mt-3">
@@ -440,6 +520,15 @@
                         </div>
                     </div>
 
+                    <!-- Giữ nguyên ngôn ngữ -->
+                    <div id="keep-langs-section" class="mt-2">
+                        <label class="form-label small mb-1" style="font-weight: bold;">
+                            <i class="fas fa-lock"></i> Giữ nguyên ngôn ngữ (không dịch):
+                        </label>
+                        <div id="keep-langs-checkboxes" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px;">
+                            <!-- dynamically rendered by JS -->
+                        </div>
+                    </div>
 
                     
                     <!-- Hướng dẫn collapse -->
@@ -473,6 +562,35 @@
                     </div>
                     
                     <form id="extractForm" enctype="multipart/form-data">
+                        <!-- Từ điển chuyên ngành -->
+                        <div class="mb-3" id="glossarySection">
+                            <div class="d-flex align-items-center justify-content-between mb-1">
+                                <label class="form-label small mb-0">
+                                    <i class="fas fa-book" style="color:#667eea;"></i>
+                                    <strong>Từ điển chuyên ngành</strong>
+                                </label>
+                                <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2"
+                                        style="font-size:0.72rem;" onclick="openGlossaryManager()">
+                                    <i class="fas fa-cog"></i> Quản lý
+                                </button>
+                            </div>
+
+                            <!-- Toggle bật/tắt -->
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" id="glossaryToggle">
+                                <label class="form-check-label small" for="glossaryToggle">
+                                    Áp dụng từ điển khi trích xuất
+                                </label>
+                            </div>
+
+                            <!-- Danh sách checkbox chọn glossary (ẩn khi tắt) -->
+                            <div id="glossaryPickerWrap" style="display:none;">
+                                <div id="glossaryPicker" class="p-2 rounded" style="background:#f8f9fa; max-height:140px; overflow-y:auto; font-size:0.8rem;">
+                                    <span class="text-muted small">Đang tải...</span>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="text-center mt-3">
                             <button type="submit" class="btn btn-custom btn-sm" id="extractBtn" disabled>
                                 <i class="fas fa-cog"></i> Trích xuất JSON
@@ -706,6 +824,368 @@ Output yêu cầu:
                 </div>
             </div>
         </div>
+        </div><!-- /tab-pane tab1 -->
+        <div class="tab-pane fade" id="mainTab2" role="tabpanel" aria-labelledby="main-tab2">
+            <div class="row g-3">
+                <!-- Bước 1: Upload ảnh -->
+                <div class="col-lg-4">
+                    <div class="function-card">
+                        <div class="text-center">
+                            <span class="step-number">1</span>
+                            <h3 class="d-inline">Upload Ảnh</h3>
+                            <p class="text-muted small mt-2">Chọn ảnh cần dịch</p>
+                        </div>
+                        <div class="upload-area compact" id="imgUploadArea">
+                            <i class="fas fa-image"></i>
+                            <p class="mb-2 small"><strong>Kéo thả ảnh vào đây</strong></p>
+                            <input type="file" id="imgFileInput" accept=".png,.jpg,.jpeg,.gif,.webp,.bmp" style="display:none;">
+                            <label for="imgFileInput" class="btn btn-custom btn-sm">
+                                <i class="fas fa-folder-open"></i> Chọn ảnh
+                            </label>
+                        </div>
+                        <div id="imgPreviewWrap" style="display:none;" class="mt-2 text-center">
+                            <img id="imgPreview" src="" style="max-width:100%; border-radius:8px; max-height:150px; object-fit:contain;" alt="Preview">
+                            <div class="file-info mt-1 d-flex align-items-center gap-2">
+                                <span id="imgFileName" class="small flex-grow-1"></span>
+                                <button type="button" class="btn btn-sm btn-outline-danger" id="imgRemoveBtn"><i class="fas fa-times"></i></button>
+                            </div>
+                        </div>
+                        <div id="imgUploadAlert" class="mt-2"></div>
+                        <div class="mt-3">
+                            <label class="form-label small mb-1"><i class="fas fa-font"></i> <strong>Ngôn ngữ nguồn (tùy chọn):</strong></label>
+                            <input type="text" class="form-control form-control-sm" id="imgSourceLang" placeholder="Ví dụ: tiếng Anh, tiếng Trung...">
+                        </div>
+                        <div class="mt-2">
+                            <label class="form-label small mb-1"><i class="fas fa-globe"></i> <strong>Ngôn ngữ đích:</strong></label>
+                            <select class="form-select form-select-sm" id="imgTargetLangSelect">
+                                <option value="" disabled>Đang tải...</option>
+                            </select>
+                        </div>
+                        <div class="text-center mt-3">
+                            <button type="button" class="btn btn-custom btn-sm" id="genPromptBtn" disabled>
+                                <i class="fas fa-magic"></i> Tạo Prompt
+                            </button>
+                        </div>
+                        <div class="mt-3">
+                            <div class="collapse-toggle p-2" style="background:#f8f9fa;border-radius:5px;" data-bs-toggle="collapse" data-bs-target="#imgStep1Guide">
+                                <i class="fas fa-info-circle text-info"></i>
+                                <small><strong>Hướng dẫn</strong></small>
+                                <i class="fas fa-chevron-down float-end"></i>
+                            </div>
+                            <div class="collapse mt-2" id="imgStep1Guide">
+                                <div class="p-2" style="border-radius:5px;">
+                                    <ul class="small mb-0" style="padding-left:20px;">
+                                        <li>Hỗ trợ: PNG, JPG, JPEG, GIF, WEBP, BMP</li>
+                                        <li>Ngôn ngữ nguồn có thể bỏ trống</li>
+                                        <li>Chọn ngôn ngữ đích cần dịch sang</li>
+                                        <li>Nhấn <b>Tạo Prompt</b> để chuyển sang bước 2</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bước 2: Prompt AI -->
+                <div class="col-lg-4">
+                    <div class="function-card">
+                        <div class="text-center">
+                            <span class="step-number">2</span>
+                            <h3 class="d-inline">Prompt AI</h3>
+                            <p class="text-muted small mt-2">Copy &amp; gửi cho AI cùng ảnh</p>
+                        </div>
+                        <div id="imgPromptEmpty" class="text-center text-muted mt-4">
+                            <i class="fas fa-arrow-left" style="font-size:2rem;opacity:0.3;"></i>
+                            <p class="mt-2 small">Upload ảnh và nhấn <br><b>Tạo Prompt</b> ở bước 1</p>
+                        </div>
+                        <div id="imgPromptWrap" style="display:none;">
+                            <div class="alert alert-info small py-2 mb-2">
+                                <i class="fas fa-lightbulb"></i> Copy prompt, mở <strong>Gemini / Grok / ChatGPT</strong>, đính kèm ảnh + prompt rồi gửi.
+                            </div>
+                            <textarea class="form-control" id="imgPromptText" rows="12" readonly style="font-size:0.75rem;font-family:monospace;resize:vertical;"></textarea>
+                            <div class="text-center mt-2">
+                                <button type="button" class="btn btn-outline-primary btn-sm" id="copyImgPromptBtn">
+                                    <i class="fas fa-copy"></i> Copy Prompt
+                                </button>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <div class="collapse-toggle p-2" style="background:#f8f9fa;border-radius:5px;" data-bs-toggle="collapse" data-bs-target="#imgStep2Guide">
+                                <i class="fas fa-info-circle text-info"></i>
+                                <small><strong>Hướng dẫn</strong></small>
+                                <i class="fas fa-chevron-down float-end"></i>
+                            </div>
+                            <div class="collapse mt-2" id="imgStep2Guide">
+                                <div class="p-2" style="border-radius:5px;">
+                                    <ul class="small mb-0" style="padding-left:20px;">
+                                        <li>Copy prompt và mở AI (Gemini, Grok...)</li>
+                                        <li>Đính kèm ảnh + paste prompt rồi gửi</li>
+                                        <li>AI trả về JSON chứa tọa độ và bản dịch</li>
+                                        <li>Copy toàn bộ JSON đó → sang Bước 3</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bước 3: Paste JSON & Render -->
+                <div class="col-lg-4">
+                    <div class="function-card">
+                        <div class="text-center">
+                            <span class="step-number">3</span>
+                            <h3 class="d-inline">Dán JSON &amp; Render</h3>
+                            <p class="text-muted small mt-2">Paste JSON từ AI để xem kết quả</p>
+                        </div>
+                        <div>
+                            <label class="form-label small mb-1"><strong>Paste JSON từ AI:</strong></label>
+                            <textarea class="form-control" id="imgJsonTextarea" rows="10"
+                                placeholder='{"text_blocks": [{"original":"...","translated":"...","top_pct":10,"left_pct":5,"width_pct":30,"height_pct":5,"bg_color":"#ffffff","text_color":"#000000","font_size_pct":2.5}]}'
+                                style="font-family:monospace;font-size:0.75rem;resize:vertical;"></textarea>
+                        </div>
+                        <div id="imgJsonAlert" class="mt-2"></div>
+                        <div class="text-center mt-2">
+                            <button type="button" class="btn btn-custom btn-sm" id="renderOverlayBtn" disabled>
+                                <i class="fas fa-layer-group"></i> Render Overlay
+                            </button>
+                        </div>
+                        <div class="mt-3">
+                            <div class="collapse-toggle p-2" style="background:#f8f9fa;border-radius:5px;" data-bs-toggle="collapse" data-bs-target="#imgStep3Guide">
+                                <i class="fas fa-info-circle text-info"></i>
+                                <small><strong>Hướng dẫn</strong></small>
+                                <i class="fas fa-chevron-down float-end"></i>
+                            </div>
+                            <div class="collapse mt-2" id="imgStep3Guide">
+                                <div class="p-2" style="border-radius:5px;">
+                                    <ul class="small mb-0" style="padding-left:20px;">
+                                        <li>Paste JSON trả về từ AI</li>
+                                        <li>Nhấn <b>Render Overlay</b> để hiển thị</li>
+                                        <li><b>Click</b> vào khối → chỉnh sửa nội dung, màu</li>
+                                        <li><b>Kéo thả</b> khối → di chuyển vị trí</li>
+                                        <li><b>Kéo giãn góc/cạnh</b> → thay đổi kích thước</li>
+                                        <li><b>Delete / Backspace</b> → xóa khối đã chọn</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Kết quả Overlay -->
+            <div id="imgOverlayResult" class="mt-4" style="display:none;">
+                <div class="function-card">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h3 class="mb-0"><i class="fas fa-eye"></i> Kết quả Overlay</h3>
+                        <div class="d-flex gap-2 flex-wrap">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" id="toggleOriginalBtn" onclick="toggleImgOriginalText()">
+                                <i class="fas fa-eye-slash"></i> Ẩn/hiện chữ gốc
+                            </button>
+                            <button type="button" id="saveImageBtn" class="btn btn-outline-success btn-sm" onclick="saveOverlayAsImage()">
+                                <i class="fas fa-download"></i> Lưu ảnh
+                            </button>
+                        </div>
+                    </div>
+                    <div class="alert alert-secondary small py-2 mb-2" style="font-size:0.75rem;">
+                        <i class="fas fa-hand-pointer"></i> <b>Click</b> = chỉnh sửa &ensp;
+                        <i class="fas fa-arrows-alt"></i> <b>Kéo khối</b> = di chuyển &ensp;
+                        <i class="fas fa-expand-alt"></i> <b>Kéo góc/cạnh</b> = kích thước &ensp;
+                        <kbd>Delete</kbd> = xóa &ensp;
+                        <kbd>Ctrl</kbd>+<b>Click</b> = chọn nhiều &ensp;
+                        <i class="fas fa-object-group"></i> <b>Kéo khi chọn nhiều</b> = di chuyển đồng loạt
+                    </div>
+                    <!-- Zoom controls -->
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <span class="small text-muted"><i class="fas fa-search"></i> Zoom:</span>
+                        <button type="button" class="btn btn-outline-secondary btn-sm px-2 py-0" onclick="imgZoom(-0.15)" title="Thu nhỏ"><i class="fas fa-search-minus"></i></button>
+                        <span id="imgZoomLabel" class="small" style="min-width:40px;text-align:center;">100%</span>
+                        <button type="button" class="btn btn-outline-secondary btn-sm px-2 py-0" onclick="imgZoom(+0.15)" title="Phóng to"><i class="fas fa-search-plus"></i></button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm px-2 py-0" onclick="imgZoomReset()" title="Khôi phục">↺</button>
+                    </div>
+                    <div style="overflow:auto;max-height:75vh;">
+                        <div id="imgOverlayContainer" style="position:relative;display:inline-block;user-select:none;transform-origin:top left;">
+                            <img id="imgOverlayBase" src="" style="display:block;max-width:none;" alt="Ảnh gốc">
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <h6><i class="fas fa-list"></i> Danh sách vùng dịch <small class="text-muted">(click để chỉnh sửa)</small></h6>
+                        <div id="imgBlockList"></div>
+                    </div>
+                </div>
+            </div>
+        </div><!-- /tab-pane tab2 -->
+
+        <!-- ===================== SMART UPDATE TAB ===================== -->
+        <div class="tab-pane fade" id="mainTab3" role="tabpanel" aria-labelledby="main-tab3">
+            <div class="row g-3">
+
+                <!-- Upload 3 file -->
+                <div class="col-lg-9">
+                    <div class="function-card">
+                        <form id="smartUpdateForm" enctype="multipart/form-data">
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                <!-- File 1: VN 1.0 -->
+                                <div class="mb-3">
+                                    <label class="form-label small mb-1">
+                                        <span class="badge bg-secondary me-1">1</span>
+                                        <strong>File cũ (chưa dịch)</strong> &ndash; ver 1.0
+                                    </label>
+                                    <div class="upload-area compact" id="suArea1">                                    
+                                        <div class="d-flex align-items-center gap-2 justify-content-center">
+                                        <i class="fas fa-file-excel" style="color:#1D6F42;"></i>
+                                        <p class="mb-1 small">Kéo thả hoặc chọn file .xlsx</p>
+                                        <input type="file" id="suFile1" name="file_vn10" accept=".xlsx" style="display:none;">
+                                        <label for="suFile1" class="btn btn-outline-secondary btn-sm">
+                                            <i class="fas fa-folder-open"></i> Chọn
+                                        </label>
+                                        </div>
+                                    </div>
+                                    <div id="suInfo1" class="file-info" style="display:none;"></div>
+                                </div>
+                                </div>
+                                <div class="col-md-4">
+                                <!-- File 2: VN 1.1 -->
+                                <div class="mb-3">
+                                    <label class="form-label small mb-1">
+                                        <span class="badge bg-primary me-1">2</span>
+                                        <strong>File mới (chưa dịch)</strong> &ndash; ver 1.1
+                                    </label>
+                                    <div class="upload-area compact" id="suArea2">
+                                        <div class="d-flex align-items-center gap-2 justify-content-center">
+                                        <i class="fas fa-file-excel" style="color:#1D6F42;"></i>
+                                        <p class="mb-1 small">Kéo thả hoặc chọn file .xlsx</p>
+                                        <input type="file" id="suFile2" name="file_vn11" accept=".xlsx" style="display:none;">
+                                        <label for="suFile2" class="btn btn-outline-primary btn-sm">
+                                            <i class="fas fa-folder-open"></i> Chọn
+                                        </label>
+                                        </div>
+                                    </div>
+                                    <div id="suInfo2" class="file-info" style="display:none;"></div>
+                                    </div>
+                                </div>
+                            
+                            <!-- File 3: JP 1.0 -->
+                             <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label small mb-1">
+                                    <span class="badge bg-danger me-1">3</span>
+                                    <strong>File cũ (đã dịch)</strong> &ndash; ver 1.0
+                                </label>
+                                <div class="upload-area compact" id="suArea3">
+                                    <div class="d-flex align-items-center gap-2 justify-content-center">
+                                    <i class="fas fa-file-excel" style="color:#1D6F42;"></i>
+                                    <p class="mb-1 small">Kéo thả hoặc chọn file .xlsx</p>
+                                    <input type="file" id="suFile3" name="file_jp10" accept=".xlsx" style="display:none;">
+                                    <label for="suFile3" class="btn btn-outline-danger btn-sm">
+                                        <i class="fas fa-folder-open"></i> Chọn
+                                    </label>
+                                    </div>
+                                </div>
+                                <div id="suInfo3" class="file-info" style="display:none;"></div>
+                            </div>
+                            </div>
+                            </div>
+
+                            <!-- Tùy chỉnh màu chữ "nội dung mới" -->
+                            <div class="mb-3">
+                                <label class="form-label small mb-1">
+                                    <i class="fas fa-palette" style="color:#38761D;"></i>
+                                    <strong>Mã màu chữ xác định ô mới (tùy chọn)</strong>
+                                </label>
+                                <input type="text" class="form-control form-control-sm" id="suNewColors" name="new_colors"
+                                    placeholder="Mặc định: 38761D, 00B050, 008000 (xanh lá)"
+                                    style="font-family:monospace;font-size:0.8rem;">
+                                <div class="text-muted" style="font-size:0.72rem;margin-top:3px;">
+                                    <i class="fas fa-info-circle"></i>
+                                    Nhập các mã RGB6 cách nhau dấu phẩy. Ô có màu này → <code>được xem là nội dung thêm mới/chỉnh sửa</code>.
+                                </div>
+                            </div>
+
+                            <div class="text-center mt-3">
+                                <button type="submit" class="btn btn-custom" id="suBtn" disabled>
+                                    <i class="fas fa-cogs"></i> Chạy Smart Update
+                                </button>
+                            </div>
+
+                            <div class="loading text-center" id="suLoading">
+                                <div class="spinner-border text-primary" role="status"></div>
+                                <p class="mt-2 small">Đang xử lý so sánh và kế thừa...</p>
+                            </div>
+                        </form>
+
+                        <div id="suAlert" class="mt-2"></div>
+                    </div>
+                </div>
+
+                <!-- Kết quả -->
+                <div class="col-lg-3">
+                    <div class="function-card">
+                        <div class="text-center mb-2">
+                            <i class="fas fa-download" style="font-size:2rem;color:#28a745;"></i>
+                            <h3 class="mt-1">Kết quả</h3>
+                            <p class="text-muted small mb-0">Tải file đã xử lý và JSON cần dịch</p>
+                        </div>
+
+                        <div id="suResultEmpty" class="text-center text-muted mt-4">
+                            <i class="fas fa-arrow-left" style="font-size:2rem;opacity:0.3;"></i>
+                            <p class="mt-2 small">Chạy Smart Update ở bảng trái để xem kết quả</p>
+                        </div>
+
+                        <div id="suResultWrap" style="display:none;">
+                            <!-- Nút chuyển sang Tab 1 để tiếp tục dịch -->
+                            <div class="mt-3 p-3 rounded" style="background: linear-gradient(135deg,#e8f5e9,#e3f2fd); border: 1px solid #a5d6a7;">
+                                <div class="text-dark" style="font-size:0.72rem;">
+                                    Chuyển file kết quả sang Tab Dịch tài liệu để trích xuất JSON, dịch và nạp bản dịch.
+                                </div>
+                                <div class="text-end mt-2">
+                                    <button class="btn btn-success btn-sm w-100" id="suContinueBtn" onclick="smartUpdateContinue()">
+                                        <i class="fas fa-arrow-right"></i> Dùng file này
+                                    </button>
+                                </div>
+                            </div>
+                            <hr class="my-2">
+                            <!-- Download JP 1.1 -->
+                            <div class="mb-3">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span id="suExcelName" class="small text-muted flex-grow-1" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+                                    <a id="suDownloadExcel" href="/download-smart-excel" class="btn btn-success btn-sm flex-shrink-0" target="_blank">
+                                        <i class="fas fa-download"></i> Tải Excel
+                                    </a>
+                                </div>
+                            </div>
+                            <hr class="my-2">
+                        </div>
+
+                        <!-- Hướng dẫn -->
+                        <div class="mt-4">
+                            <div class="collapse-toggle p-2" style="background:#f8f9fa;border-radius:5px;" data-bs-toggle="collapse" data-bs-target="#suGuide">
+                                <i class="fas fa-info-circle text-info"></i>
+                                <small><strong>Hướng dẫn</strong></small>
+                                <i class="fas fa-chevron-down float-end"></i>
+                            </div>
+                            <div class="collapse mt-2" id="suGuide">
+                                <div class="p-2" style="border-radius:5px;">
+                                    <ul class="small mb-0" style="padding-left:20px;">
+                                        <li><strong>File 1 (VN cũ):</strong> Spec tiếng Việt phiên bản cũ (chưa dịch)</li>
+                                        <li><strong>File 2 (VN mới):</strong> Spec tiếng Việt phiên bản mới (chưa dịch)</li>
+                                        <li><strong>File 3 (JP cũ):</strong> Spec tiếng Nhật phiên bản cũ (đã dịch)</li>
+                                        <li>Ô <span style="color:#38761D;font-weight:bold;">màu xanh lá</span> trong VN mới → giữ nguyên text VN (cần dịch)</li>
+                                        <li>Ô <span style="color:#000;font-weight:bold;">màu đen/auto</span> không đổi → kế thừa bản dịch JP_1.0</li>
+                                        <li>Xuất: <em>JP_1.1.xlsx</em> (kế thừa + placeholder) và <em>to_translate.json</em> (các ô cần dịch)</li>
+                                        <li>Sau khi dịch JSON xong, dùng <strong>Inject</strong> để nạp vào file JP_1.1</li>
+                                        <li>Chỉ hỗ trợ file <strong>.xlsx</strong></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div><!-- /tab-pane tab3 Smart Update -->
+
+        </div><!-- /tab-content -->
     </div>
     
     <!-- Footer -->
@@ -713,13 +1193,54 @@ Output yêu cầu:
         <hr style="border-color: #fff; opacity: 0.2;">
         <div class="pb-2">
             <small>
-                &copy; 2026 Tomo Translation &middot; Built by <a href="mailto:eikitomobe@gmail.com" style="color: #fff; text-decoration: underline;">友部 瑛稀 - eikitomobe@gmail.com</a>
+                &copy; 2026 Tomo Translation &middot; Built by <a href="mailto:eikitomobe@gmail.com" style="color: #fff; text-decoration: underline;">友部 瑛稀</a>
             </small>
         </div>
     </footer>
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Modal: Edit Overlay Block -->
+    <div class="modal fade" id="overlayEditModal" tabindex="-1">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title mb-0"><i class="fas fa-palette"></i> Chỉnh sửa khối</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="editBlockIdx">
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small mb-1"><strong>Màu nền</strong></label>
+                            <div class="d-flex gap-1 align-items-center">
+                                <input type="color" class="form-control form-control-sm" id="editBgColor" style="width:38px;padding:2px;">
+                                <input type="text" class="form-control form-control-sm" id="editBgColorHex" maxlength="7" placeholder="#ffffff">
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small mb-1"><strong>Màu chữ</strong></label>
+                            <div class="d-flex gap-1 align-items-center">
+                                <input type="color" class="form-control form-control-sm" id="editTextColor" style="width:38px;padding:2px;">
+                                <input type="text" class="form-control form-control-sm" id="editTextColorHex" maxlength="7" placeholder="#000000">
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="form-label small mb-1"><strong>Cỡ chữ</strong> <span class="text-muted">(% chiều cao ảnh)</span></label>
+                        <input type="number" class="form-control form-control-sm" id="editFontSize" min="0.3" max="30" step="0.1">
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Hủy</button>
+                    <button type="button" class="btn btn-primary btn-sm" id="saveBlockBtn">
+                        <i class="fas fa-save"></i> Lưu
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Modal: Template Editor -->
     <div class="modal fade" id="templateModal" tabindex="-1">
@@ -775,6 +1296,43 @@ Output yêu cầu:
         let currentTemplateContent = '';
         let editingTemplateIdx     = -1;
 
+        // ==================== GIỮ NGUYÊN NGÔN NGỮ ====================
+        const AVAILABLE_LANGUAGES = [
+            { code: "vi", label: "Tiếng Việt" },
+            { code: "en", label: "Tiếng Anh" },
+            { code: "ja", label: "Tiếng Nhật" },
+            { code: "ko", label: "Tiếng Hàn" },
+            { code: "zh", label: "Tiếng Trung" }
+        ];
+        window.keepLangs = [];
+
+        function renderKeepLangsCheckboxes() {
+            const container = document.getElementById('keep-langs-checkboxes');
+            if (!container) return;
+            const selectedCode = document.getElementById('targetLangSelect').value;
+            // Remove target language from keepLangs if it was previously checked
+            const targetLang = AVAILABLE_LANGUAGES.find(l => l.code === selectedCode);
+            if (targetLang) {
+                window.keepLangs = window.keepLangs.filter(l => l !== targetLang.label);
+            }
+            container.innerHTML = '';
+            AVAILABLE_LANGUAGES.forEach(function(lang) {
+                if (lang.code === selectedCode) return;
+                const checked = window.keepLangs.includes(lang.label);
+                const label = document.createElement('label');
+                label.style.cssText = 'display:flex;align-items:center;gap:4px;font-size:0.8rem;cursor:pointer;';
+                label.innerHTML = '<input type="checkbox"' + (checked ? ' checked' : '') + ' value="' + lang.label + '" style="cursor:pointer;"> ' + lang.label;
+                label.querySelector('input').addEventListener('change', function() {
+                    if (this.checked) {
+                        if (!window.keepLangs.includes(lang.label)) window.keepLangs.push(lang.label);
+                    } else {
+                        window.keepLangs = window.keepLangs.filter(function(l) { return l !== lang.label; });
+                    }
+                });
+                container.appendChild(label);
+            });
+        }
+
         // ==================== NGÔN NGỮ ĐÍCH ====================
         const INITIAL_PROMPT = document.getElementById('aiPrompt').textContent;
         currentTemplateContent = INITIAL_PROMPT;
@@ -805,6 +1363,7 @@ Output yêu cầu:
                     currentLangName = def.dataset.name;
                     updatePrompt(currentLangName);
                     await loadTemplates(currentLangCode);
+                    renderKeepLangsCheckboxes();
                 }
             } catch (e) {
                 select.innerHTML = '<option value="ja" data-name="tiếng Nhật">🇯🇵 Tiếng Nhật (Japanese)</option>';
@@ -818,12 +1377,36 @@ Output yêu cầu:
                     currentLangName = chosen.dataset.name;
                     updatePrompt(currentLangName);
                     await loadTemplates(currentLangCode);
+                    renderKeepLangsCheckboxes();
                 }
             });
         }
 
         // Chạy ngay khi trang load
         loadLanguages();
+
+        // Khôi phục trạng thái từ sessionStorage (nếu có)
+        document.addEventListener('DOMContentLoaded', function() {
+            const storedFileName = sessionStorage.getItem('uploadedFileName');
+            const fromSmartUpdate = sessionStorage.getItem('fromSmartUpdate');
+            
+            if (storedFileName && fromSmartUpdate === 'true') {
+                uploadedExcelFilename = storedFileName;
+                window._fromSmartUpdate = true;
+                
+                // Restore UI state
+                const nameEl = document.getElementById('mainFileName');
+                if (nameEl) nameEl.textContent = storedFileName;
+                
+                const fileInfo = document.getElementById('mainFileInfo');
+                if (fileInfo) fileInfo.style.display = 'block';
+                
+                const extractBtn = document.getElementById('extractBtn');
+                const injectBtn = document.getElementById('injectBtn');
+                if (extractBtn) extractBtn.disabled = false;
+                if (injectBtn) injectBtn.disabled = false;
+            }
+        });
 
         // ==================== UPLOAD EXCEL CHUNG ====================
         const mainExcelFile = document.getElementById('mainExcelFile');
@@ -871,9 +1454,14 @@ Output yêu cầu:
             mainExcelFile.value = '';
             mainFileInfo.style.display = 'none';
             uploadedExcelFilename = null;
+            window._fromSmartUpdate = false;
             extractBtn.disabled = true;
             injectBtn.disabled = true;
             mainAlert.innerHTML = '';
+            
+            // Xóa sessionStorage
+            sessionStorage.removeItem('uploadedFileName');
+            sessionStorage.removeItem('fromSmartUpdate');
         });
         
         // Xử lý drag and drop
@@ -919,8 +1507,9 @@ Output yêu cầu:
         extractForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             
-            // Kiểm tra xem có file được upload chưa
-            if (!uploadedExcelFilename || mainExcelFile.files.length === 0) {
+            // Kiểm tra xem có file được upload chưa (hoặc đến từ Smart Update)
+            // Chặn chỉ khi CẢ HAI đều thiếu: không có filename và không có file thực
+            if (!uploadedExcelFilename && mainExcelFile.files.length === 0) {
                 showAlert(extractAlert, 'warning', 'Vui lòng upload file (Excel hoặc PowerPoint) ở Bước 1 trước!');
                 return;
             }
@@ -938,7 +1527,14 @@ Output yêu cầu:
             
             // Tạo FormData với file Excel từ upload chung
             const formData = new FormData();
-            formData.append('file', mainExcelFile.files[0]);
+            if (mainExcelFile.files.length > 0) {
+                formData.append('file', mainExcelFile.files[0]);
+            }
+            // Thêm glossary_ids nếu bật
+            if (document.getElementById('glossaryToggle').checked) {
+                const ids = getSelectedGlossaryIds();
+                if (ids.length) formData.append('glossary_ids', ids.join(','));
+            }
             
             try {
                 // Gửi request
@@ -1035,7 +1631,13 @@ Output yêu cầu:
                 row.querySelector('.btn-copy-json').addEventListener('click', function() {
                     const btnEl = this;
                     // Đọc prompt tại thời điểm click để luôn dùng ngôn ngữ hiện tại
-                    const promptText = document.getElementById('aiPrompt').textContent;
+                    let promptText = document.getElementById('aiPrompt').textContent;
+                    let keepInstruction = '';
+                    if (window.keepLangs && window.keepLangs.length > 0) {
+                        const langList = window.keepLangs.join(', ');
+                        keepInstruction = '\n⛔ NGÔN NGỮ KHÔNG ĐƯỢC DỊCH — giữ nguyên 100%, không chuyển đổi: ' + langList + '\n- Nếu một value chứa hỗn hợp nhiều ngôn ngữ, chỉ dịch phần KHÔNG thuộc danh sách trên.\n- Ví dụ: nếu giữ Tiếng Nhật và Tiếng Anh → "注文 confirmed đã gửi" chỉ dịch "đã gửi".';
+                    }
+                    promptText = promptText.replace('{KEEP_LANGS_INSTRUCTION}', keepInstruction);
                     const textToCopy = promptText + '\n\n' + file.content;
                     
                     navigator.clipboard.writeText(textToCopy).then(function() {
@@ -1112,7 +1714,13 @@ Output yêu cầu:
                     const btnEl = this;
                     const idx   = parseInt(this.dataset.dedupIdx);
                     const file  = extractedDedupData[idx];
-                    const promptText = document.getElementById('aiPrompt').textContent;
+                    let promptText = document.getElementById('aiPrompt').textContent;
+                    let keepInstruction = '';
+                    if (window.keepLangs && window.keepLangs.length > 0) {
+                        const langList = window.keepLangs.join(', ');
+                        keepInstruction = '\n⛔ NGÔN NGỮ KHÔNG ĐƯỢC DỊCH — giữ nguyên 100%, không chuyển đổi: ' + langList + '\n- Nếu một value chứa hỗn hợp nhiều ngôn ngữ, chỉ dịch phần KHÔNG thuộc danh sách trên.\n- Ví dụ: nếu giữ Tiếng Nhật và Tiếng Anh → "注文 confirmed đã gửi" chỉ dịch "đã gửi".';
+                    }
+                    promptText = promptText.replace('{KEEP_LANGS_INSTRUCTION}', keepInstruction);
                     const textToCopy = promptText + '\n\n' + file.content;
 
                     navigator.clipboard.writeText(textToCopy).then(() => {
@@ -1316,8 +1924,9 @@ Output yêu cầu:
         injectForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             
-            // Kiểm tra xem có file được upload chưa
-            if (!uploadedExcelFilename || mainExcelFile.files.length === 0) {
+            // Kiểm tra xem có file được upload chưa (hoặc đến từ Smart Update)
+            // Chặn chỉ khi CẢ HAI đều thiếu: không có filename và không có file thực
+            if (!uploadedExcelFilename && mainExcelFile.files.length === 0) {
                 showAlert(injectAlert, 'warning', 'Vui lòng upload file (Excel hoặc PowerPoint) ở Bước 1 trước!');
                 return;
             }
@@ -1334,7 +1943,9 @@ Output yêu cầu:
             
             // Tạo FormData với file Excel từ upload chung và tất cả file JSON
             const formData = new FormData();
-            formData.append('excel_file', mainExcelFile.files[0]);
+            if (mainExcelFile.files.length > 0) {
+                formData.append('excel_file', mainExcelFile.files[0]);
+            }
             
             // Thêm tất cả các file JSON/ZIP
             Array.from(injectJsonFile.files).forEach(file => {
@@ -1378,6 +1989,9 @@ Output yêu cầu:
                     
                     showAlert(injectAlert, 'success', 'Nạp bản dịch thành công! File đang được tải về. Tất cả file tạm đã được xóa.');
                     
+                    // Xóa cờ Smart Update chỉ sau khi inject hoàn tất
+                    window._fromSmartUpdate = false;
+
                     // Reset form JSON
                     injectJsonFile.value = '';
                     injectJsonFileInfo.style.display = 'none';
@@ -1725,6 +2339,1035 @@ Output yêu cầu:
                 </div>
             `;
         }
+
+        // ==================== DỊCH ẢNH (IMAGE OVERLAY) ====================
+        let imgCurrentFilename = null;
+        let imgCurrentLangName = 'tiếng Nhật';
+        let imgTextBlocks = [];
+        let imgShowOriginal = false;
+
+        // Populate imgTargetLangSelect từ cùng API languages
+        async function loadImgLanguages() {
+            const select = document.getElementById('imgTargetLangSelect');
+            try {
+                const resp = await fetch('/api/languages');
+                if (!resp.ok) throw new Error();
+                const langs = await resp.json();
+                select.innerHTML = '';
+                langs.forEach(lang => {
+                    const opt = document.createElement('option');
+                    opt.value = lang.code || lang.name;
+                    opt.textContent = lang.name;
+                    opt.dataset.langName = lang.name;
+                    select.appendChild(opt);
+                });
+                if (langs.length > 0) imgCurrentLangName = langs[0].name;
+            } catch(e) {
+                select.innerHTML = '<option value="ja">tiếng Nhật</option>';
+            }
+            select.addEventListener('change', function() {
+                const opt = this.selectedOptions[0];
+                imgCurrentLangName = opt.dataset.langName || opt.textContent;
+            });
+        }
+        loadImgLanguages();
+
+        const imgFileInput    = document.getElementById('imgFileInput');
+        const imgUploadArea   = document.getElementById('imgUploadArea');
+        const imgPreviewWrap  = document.getElementById('imgPreviewWrap');
+        const imgPreview      = document.getElementById('imgPreview');
+        const imgFileNameEl   = document.getElementById('imgFileName');
+        const imgRemoveBtn    = document.getElementById('imgRemoveBtn');
+        const imgUploadAlert  = document.getElementById('imgUploadAlert');
+        const genPromptBtn    = document.getElementById('genPromptBtn');
+        const renderOverlayBtn = document.getElementById('renderOverlayBtn');
+
+        imgFileInput.addEventListener('change', e => { if (e.target.files.length > 0) handleImgFile(e.target.files[0]); });
+
+        imgUploadArea.addEventListener('dragover',  e => { e.preventDefault(); imgUploadArea.style.borderColor = '#764ba2'; });
+        imgUploadArea.addEventListener('dragleave', e => { e.preventDefault(); imgUploadArea.style.borderColor = '#667eea'; });
+        imgUploadArea.addEventListener('drop', e => {
+            e.preventDefault();
+            imgUploadArea.style.borderColor = '#667eea';
+            if (e.dataTransfer.files.length > 0) handleImgFile(e.dataTransfer.files[0]);
+        });
+
+        imgRemoveBtn.addEventListener('click', function() {
+            imgFileInput.value = '';
+            imgCurrentFilename = null;
+            imgPreviewWrap.style.display = 'none';
+            genPromptBtn.disabled = true;
+            renderOverlayBtn.disabled = true;
+            document.getElementById('imgPromptWrap').style.display = 'none';
+            document.getElementById('imgPromptEmpty').style.display = 'block';
+            document.getElementById('imgOverlayResult').style.display = 'none';
+            imgUploadAlert.innerHTML = '';
+        });
+
+        async function handleImgFile(file) {
+            const allowed = ['image/png','image/jpeg','image/jpg','image/gif','image/webp','image/bmp'];
+            if (!allowed.includes(file.type)) {
+                imgUploadAlert.innerHTML = '<div class="alert alert-danger small py-2">Định dạng không hỗ trợ. Chỉ nhận PNG, JPG, GIF, WEBP, BMP.</div>';
+                return;
+            }
+            imgUploadAlert.innerHTML = '<div class="alert alert-info small py-2"><i class="fas fa-spinner fa-spin"></i> Đang upload...</div>';
+            const fd = new FormData();
+            fd.append('image', file);
+            try {
+                const resp = await fetch('/img-translate/upload', { method: 'POST', body: fd });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.error || 'Upload thất bại');
+                imgCurrentFilename = data.filename;
+                imgPreview.src = `/img-translate/image/${data.filename}`;
+                imgFileNameEl.textContent = file.name;
+                imgPreviewWrap.style.display = 'block';
+                genPromptBtn.disabled = false;
+                renderOverlayBtn.disabled = false;
+                imgUploadAlert.innerHTML = '<div class="alert alert-success small py-2"><i class="fas fa-check"></i> Upload thành công!</div>';
+                setTimeout(() => { imgUploadAlert.innerHTML = ''; }, 2500);
+            } catch(err) {
+                imgUploadAlert.innerHTML = `<div class="alert alert-danger small py-2">${err.message}</div>`;
+            }
+        }
+
+        // Tạo Prompt
+        genPromptBtn.addEventListener('click', async function() {
+            const sourceLang = document.getElementById('imgSourceLang').value.trim();
+            // Pass actual image pixel dimensions so AI can anchor coordinates
+            const imgW = imgPreview.naturalWidth  || 0;
+            const imgH = imgPreview.naturalHeight || 0;
+            try {
+                const resp = await fetch('/img-translate/prompt', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        target_lang: imgCurrentLangName,
+                        source_lang: sourceLang,
+                        image_width:  imgW,
+                        image_height: imgH
+                    })
+                });
+                const data = await resp.json();
+                document.getElementById('imgPromptText').value = data.prompt;
+                document.getElementById('imgPromptWrap').style.display = 'block';
+                document.getElementById('imgPromptEmpty').style.display = 'none';
+            } catch(err) {
+                alert('Lỗi tạo prompt: ' + err.message);
+            }
+        });
+
+        // Copy Prompt
+        document.getElementById('copyImgPromptBtn').addEventListener('click', function() {
+            const text = document.getElementById('imgPromptText').value;
+            navigator.clipboard.writeText(text).then(() => {
+                this.innerHTML = '<i class="fas fa-check"></i> Đã copy!';
+                this.classList.replace('btn-outline-primary', 'btn-success');
+                setTimeout(() => {
+                    this.innerHTML = '<i class="fas fa-copy"></i> Copy Prompt';
+                    this.classList.replace('btn-success', 'btn-outline-primary');
+                }, 2000);
+            });
+        });
+
+        // Render Overlay
+        renderOverlayBtn.addEventListener('click', function() {
+            const jsonText = document.getElementById('imgJsonTextarea').value.trim();
+            const imgJsonAlert = document.getElementById('imgJsonAlert');
+            if (!jsonText) { imgJsonAlert.innerHTML = '<div class="alert alert-warning small py-2">Vui lòng paste JSON từ AI.</div>'; return; }
+            if (!imgCurrentFilename) { imgJsonAlert.innerHTML = '<div class="alert alert-warning small py-2">Vui lòng upload ảnh trước.</div>'; return; }
+            try {
+                const parsed = JSON.parse(jsonText);
+                if (!parsed.text_blocks || !Array.isArray(parsed.text_blocks)) throw new Error('thiếu trường "text_blocks"');
+                imgTextBlocks = parsed.text_blocks;
+                imgJsonAlert.innerHTML = '';
+                renderAllOverlays();
+            } catch(e) {
+                imgJsonAlert.innerHTML = `<div class="alert alert-danger small py-2">JSON không hợp lệ: ${e.message}</div>`;
+            }
+        });
+
+        function renderAllOverlays() {
+            const container = document.getElementById('imgOverlayContainer');
+            const imgEl     = document.getElementById('imgOverlayBase');
+            const result    = document.getElementById('imgOverlayResult');
+            const blockList = document.getElementById('imgBlockList');
+
+            imgEl.src = `/img-translate/image/${imgCurrentFilename}`;
+            result.style.display = 'block';
+            setTimeout(() => result.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+
+            container.querySelectorAll('.overlay-block').forEach(el => el.remove());
+            blockList.innerHTML = '';
+            selectedBlockIdx = -1;
+            selectedBlockIdxSet.clear();
+
+            function doRender() {
+                imgTextBlocks.forEach((block, idx) => {
+                    createOverlayBlock(block, idx, container, imgEl);
+                    appendBlockListRow(block, idx, blockList);
+                });
+            }
+            if (imgEl.complete && imgEl.naturalWidth > 0) doRender();
+            else imgEl.onload = doRender;
+        }
+
+        let selectedBlockIdx  = -1;
+        let selectedBlockIdxSet = new Set();   // multi-select set
+
+        /**
+         * selectBlock(idx, ctrlKey)
+         * - ctrlKey=false (default): single-select – clears all, selects only idx
+         * - ctrlKey=true:           toggle idx in/out of the selection set
+         */
+        function selectBlock(idx, ctrlKey) {
+            const container = document.getElementById('imgOverlayContainer');
+            if (ctrlKey && idx >= 0) {
+                // Toggle
+                if (selectedBlockIdxSet.has(idx)) {
+                    selectedBlockIdxSet.delete(idx);
+                    const el = container.querySelector(`.overlay-block[data-idx="${idx}"]`);
+                    if (el) el.classList.remove('selected');
+                } else {
+                    selectedBlockIdxSet.add(idx);
+                    const el = container.querySelector(`.overlay-block[data-idx="${idx}"]`);
+                    if (el) el.classList.add('selected');
+                }
+                // Keep selectedBlockIdx pointing at the most-recently toggled block
+                selectedBlockIdx = selectedBlockIdxSet.size > 0 ? idx : -1;
+            } else {
+                // Single select
+                container.querySelectorAll('.overlay-block').forEach(el => el.classList.remove('selected'));
+                selectedBlockIdxSet.clear();
+                selectedBlockIdx = idx;
+                if (idx >= 0) {
+                    selectedBlockIdxSet.add(idx);
+                    const el = container.querySelector(`.overlay-block[data-idx="${idx}"]`);
+                    if (el) el.classList.add('selected');
+                }
+            }
+        }
+
+        // Delete / Backspace to remove selected block(s)
+        document.addEventListener('keydown', function(e) {
+            if (selectedBlockIdxSet.size === 0) return;
+            const tag = document.activeElement ? document.activeElement.tagName : '';
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                e.preventDefault();
+                // Remove in descending order so splicing does not shift remaining indices
+                const toDelete = Array.from(selectedBlockIdxSet).sort((a, b) => b - a);
+                toDelete.forEach(i => imgTextBlocks.splice(i, 1));
+                selectedBlockIdxSet.clear();
+                selectedBlockIdx = -1;
+                renderAllOverlays();
+            }
+        });
+
+        // Click outside → deselect all
+        document.getElementById('imgOverlayContainer').addEventListener('mousedown', function(e) {
+            if (!e.target.closest('.overlay-block')) selectBlock(-1, false);
+        });
+
+        function createOverlayBlock(block, idx, container, imgEl) {
+            const div = document.createElement('div');
+            div.className = 'overlay-block';
+            div.dataset.idx = idx;
+            const bg = block.bg_color || '#ffffff';
+            const fg = block.text_color || '#000000';
+            // Derive font-size in px from font_size_pct (% of image height).
+            // If AI gave a value too small relative to block height, auto-scale up.
+            const blockHeightPx = imgEl.naturalHeight * (block.height_pct || 5) / 100;
+            let fsPx = imgEl.naturalHeight * (block.font_size_pct || 0) / 100;
+            // Fallback: font must be at least 45% of block height (single-line readable)
+            if (fsPx < blockHeightPx * 0.45) fsPx = blockHeightPx * 0.72;
+            const fs = fsPx + 'px';
+            Object.assign(div.style, {
+                position: 'absolute',
+                top:    block.top_pct    + '%',
+                left:   block.left_pct   + '%',
+                width:  block.width_pct  + '%',
+                height: block.height_pct + '%',
+                backgroundColor: bg,
+                color: fg,
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                alignItems: 'center',
+                overflow: 'visible',
+                cursor: 'move',
+                fontSize: fs,
+                lineHeight: '1.2',
+                padding: '2px',
+                zIndex: '10',
+                boxSizing: 'border-box',
+                userSelect: 'none'
+            });
+
+            // Text content wrapper (clips text inside block)
+            const inner = document.createElement('div');
+            inner.style.cssText = 'display:flex;flex-direction:column;justify-content:center;align-items:center;width:100%;height:100%;overflow:hidden;pointer-events:none;';
+            const textSpan = document.createElement('span');
+            textSpan.className = 'overlay-translated';
+            textSpan.textContent = block.translated || '';
+            inner.appendChild(textSpan);
+            if (imgShowOriginal && block.original) {
+                const origDiv = document.createElement('div');
+                origDiv.className = 'overlay-original';
+                origDiv.textContent = '[' + block.original + ']';
+                inner.appendChild(origDiv);
+            }
+            div.appendChild(inner);
+
+            // Resize handles
+            ['nw','n','ne','e','se','s','sw','w'].forEach(dir => {
+                const h = document.createElement('div');
+                h.className = `resize-handle rh-${dir}`;
+                h.dataset.dir = dir;
+                div.appendChild(h);
+            });
+
+            // Interaction: drag (move) + resize
+            attachBlockInteraction(div, idx, container);
+            container.appendChild(div);
+        }
+
+        function attachBlockInteraction(div, idx, container) {
+            div.addEventListener('mousedown', function(e) {
+                // Check if we're clicking a resize handle
+                const handle = e.target.closest('.resize-handle');
+                const dir = handle ? handle.dataset.dir : null;
+
+                e.preventDefault();
+                e.stopPropagation();
+
+                const isCtrl = e.ctrlKey || e.metaKey;
+                // Track whether this block was already in selection BEFORE mousedown
+                const wasAlreadySelected = selectedBlockIdxSet.has(idx);
+
+                if (isCtrl) {
+                    // Always ADD to selection on mousedown (never remove yet).
+                    // Removal of an already-selected block is deferred to mouseup,
+                    // but only if the user didn't drag (plain Ctrl+click = deselect).
+                    if (!wasAlreadySelected) {
+                        selectedBlockIdxSet.add(idx);
+                        selectedBlockIdx = idx;
+                        div.classList.add('selected');
+                    }
+                    // if already selected → keep it selected during potential drag
+                } else if (!wasAlreadySelected) {
+                    // Plain click on a block NOT in current selection → single-select
+                    selectBlock(idx, false);
+                }
+                // Plain click on an already-selected block (no Ctrl) → keep selection for drag
+
+                const rect  = container.getBoundingClientRect();
+                const W     = rect.width;
+                const H     = rect.height;
+                const startX = e.clientX;
+                const startY = e.clientY;
+                const startTop    = imgTextBlocks[idx].top_pct;
+                const startLeft   = imgTextBlocks[idx].left_pct;
+                const startWidth  = imgTextBlocks[idx].width_pct;
+                const startHeight = imgTextBlocks[idx].height_pct;
+
+                // Snapshot starting positions for ALL currently-selected blocks
+                const startPositions = {};
+                selectedBlockIdxSet.forEach(i => {
+                    if (imgTextBlocks[i]) {
+                        startPositions[i] = {
+                            top_pct:  imgTextBlocks[i].top_pct,
+                            left_pct: imgTextBlocks[i].left_pct
+                        };
+                    }
+                });
+
+                let dragged = false;
+
+                function onMove(ev) {
+                    const dx = (ev.clientX - startX) / W * 100;
+                    const dy = (ev.clientY - startY) / H * 100;
+                    if (Math.abs(dx) > 0.2 || Math.abs(dy) > 0.2) dragged = true;
+
+                    if (!dir) {
+                        if (selectedBlockIdxSet.size > 1) {
+                            // MULTI-MOVE: move every selected block by the same delta
+                            selectedBlockIdxSet.forEach(i => {
+                                const sp = startPositions[i];
+                                const block = imgTextBlocks[i];
+                                if (!sp || !block) return;
+                                const newTop  = Math.max(0, Math.min(100 - block.height_pct, sp.top_pct  + dy));
+                                const newLeft = Math.max(0, Math.min(100 - block.width_pct,  sp.left_pct + dx));
+                                block.top_pct  = newTop;
+                                block.left_pct = newLeft;
+                                const blockEl = container.querySelector(`.overlay-block[data-idx="${i}"]`);
+                                if (blockEl) {
+                                    blockEl.style.top  = newTop  + '%';
+                                    blockEl.style.left = newLeft + '%';
+                                }
+                            });
+                        } else {
+                            // Single-block MOVE
+                            const newTop  = Math.max(0, Math.min(100 - startHeight, startTop  + dy));
+                            const newLeft = Math.max(0, Math.min(100 - startWidth,  startLeft + dx));
+                            div.style.top  = newTop  + '%';
+                            div.style.left = newLeft + '%';
+                            imgTextBlocks[idx].top_pct  = newTop;
+                            imgTextBlocks[idx].left_pct = newLeft;
+                        }
+                    } else {
+                        // RESIZE (always single-block)
+                        let t = startTop, l = startLeft, w = startWidth, h = startHeight;
+                        if (dir.includes('s')) h = Math.max(1, startHeight + dy);
+                        if (dir.includes('n')) { h = Math.max(1, startHeight - dy); t = startTop + (startHeight - h); }
+                        if (dir.includes('e')) w = Math.max(2, startWidth  + dx);
+                        if (dir.includes('w')) { w = Math.max(2, startWidth  - dx); l = startLeft + (startWidth - w); }
+                        div.style.top    = t + '%';
+                        div.style.left   = l + '%';
+                        div.style.width  = w + '%';
+                        div.style.height = h + '%';
+                        imgTextBlocks[idx].top_pct    = t;
+                        imgTextBlocks[idx].left_pct   = l;
+                        imgTextBlocks[idx].width_pct  = w;
+                        imgTextBlocks[idx].height_pct = h;
+                    }
+                }
+
+                function onUp() {
+                    document.removeEventListener('mousemove', onMove);
+                    document.removeEventListener('mouseup', onUp);
+                    if (isCtrl && wasAlreadySelected && !dragged) {
+                        // Deferred deselect: Ctrl+click (no drag) on already-selected block → remove it
+                        selectedBlockIdxSet.delete(idx);
+                        selectedBlockIdx = selectedBlockIdxSet.size > 0 ? [...selectedBlockIdxSet].at(-1) : -1;
+                        div.classList.remove('selected');
+                    } else if (!dragged && !dir && !isCtrl) {
+                        // Plain click with no drag → open edit modal
+                        openImgEditModal(idx);
+                    }
+                }
+
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+            });
+        }
+
+        function appendBlockListRow(block, idx, listEl) {
+            const row = document.createElement('div');
+            row.className = 'json-file-row';
+            row.dataset.blockRow = idx;
+            row.innerHTML = `
+                <div class="file-name" style="flex:1;">
+                    <span style="background:${block.bg_color||'#fff'};color:${block.text_color||'#000'};
+                                 padding:1px 6px;border-radius:3px;font-size:0.8rem;margin-right:6px;">
+                        ${block.translated || '(trống)'}
+                    </span>
+                    <span class="text-muted" style="font-size:0.72rem;">${block.original || ''}</span>
+                </div>
+                <button class="btn btn-outline-secondary btn-sm me-1" style="font-size:0.72rem;padding:3px 8px;" onclick="openImgEditModal(${idx})">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn btn-outline-danger btn-sm" style="font-size:0.72rem;padding:3px 8px;" onclick="deleteImgBlock(${idx})">
+                    <i class="fas fa-trash"></i>
+                </button>`;
+            listEl.appendChild(row);
+        }
+
+        window.deleteImgBlock = function(idx) {
+            if (!confirm('Xóa block này?')) return;
+            imgTextBlocks.splice(idx, 1);
+            renderAllOverlays();
+        };
+
+        window.toggleImgOriginalText = function() {
+            imgShowOriginal = !imgShowOriginal;
+            renderAllOverlays();
+        };
+
+        // ========== EDIT MODAL ==========
+        window.openImgEditModal = function(idx) {
+            const block = imgTextBlocks[idx];
+            document.getElementById('editBlockIdx').value = idx;
+            const bg = block.bg_color || '#ffffff';
+            const fg = block.text_color || '#000000';
+            document.getElementById('editBgColor').value    = bg;
+            document.getElementById('editBgColorHex').value = bg;
+            document.getElementById('editTextColor').value    = fg;
+            document.getElementById('editTextColorHex').value = fg;
+            document.getElementById('editFontSize').value  = block.font_size_pct || 2;
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('overlayEditModal')).show();
+        };
+
+        // Color picker ↔ hex text sync
+        ['Bg','Text'].forEach(which => {
+            const picker   = document.getElementById(`edit${which}Color`);
+            const hexInput = document.getElementById(`edit${which}ColorHex`);
+            picker.addEventListener('input', () => { hexInput.value = picker.value; });
+            hexInput.addEventListener('input', () => {
+                if (/^#[0-9a-fA-F]{6}$/.test(hexInput.value)) picker.value = hexInput.value;
+            });
+        });
+
+        document.getElementById('saveBlockBtn').addEventListener('click', function() {
+            const idx = parseInt(document.getElementById('editBlockIdx').value);
+            imgTextBlocks[idx].bg_color      = document.getElementById('editBgColorHex').value || document.getElementById('editBgColor').value;
+            imgTextBlocks[idx].text_color    = document.getElementById('editTextColorHex').value || document.getElementById('editTextColor').value;
+            imgTextBlocks[idx].font_size_pct = parseFloat(document.getElementById('editFontSize').value) || 2;
+            renderAllOverlays();
+            bootstrap.Modal.getInstance(document.getElementById('overlayEditModal')).hide();
+        });
+
+        // ========== ZOOM ==========
+        let imgZoomLevel = 1.0;
+        window.imgZoom = function(delta) {
+            imgZoomLevel = Math.max(0.2, Math.min(5, imgZoomLevel + delta));
+            applyZoom();
+        };
+        window.imgZoomReset = function() {
+            imgZoomLevel = 1.0;
+            applyZoom();
+        };
+        function applyZoom() {
+            const container = document.getElementById('imgOverlayContainer');
+            container.style.transform = `scale(${imgZoomLevel})`;
+            container.style.transformOrigin = 'top left';
+            // Update scroll container height so scrollbar reflects scaled size
+            const imgEl = document.getElementById('imgOverlayBase');
+            const wrapper = container.parentElement;
+            wrapper.style.height = (imgEl.naturalHeight * imgZoomLevel) + 'px';
+            const lbl = document.getElementById('imgZoomLabel');
+            if (lbl) lbl.textContent = Math.round(imgZoomLevel * 100) + '%';
+        }
+
+        // Font-size recalc on window resize
+        window.addEventListener('resize', () => {
+            if (imgTextBlocks.length > 0 && document.getElementById('imgOverlayResult').style.display !== 'none') {
+                const container = document.getElementById('imgOverlayContainer');
+                const imgEl = document.getElementById('imgOverlayBase');
+                container.querySelectorAll('.overlay-block').forEach(div => {
+                    const idx = parseInt(div.dataset.idx);
+                    const block = imgTextBlocks[idx];
+                    if (!block) return;
+                    const blockHeightPx = imgEl.naturalHeight * (block.height_pct || 5) / 100;
+                    let fsPx = imgEl.naturalHeight * (block.font_size_pct || 0) / 100;
+                    if (fsPx < blockHeightPx * 0.45) fsPx = blockHeightPx * 0.72;
+                    div.style.fontSize = fsPx + 'px';
+                });
+            }
+        });
+
+        // ========== SAVE AS IMAGE ==========
+        window.saveOverlayAsImage = async function() {
+            const container = document.getElementById('imgOverlayContainer');
+            const btn = document.getElementById('saveImageBtn');
+
+            // Temporarily reset zoom for full-resolution capture
+            const savedZoom = imgZoomLevel;
+            imgZoomLevel = 1.0;
+            container.style.transform = 'scale(1)';
+
+            // Hide resize handles & selection outline during capture
+            const captureStyle = document.createElement('style');
+            captureStyle.id = '__captureStyle';
+            captureStyle.textContent = '.resize-handle{display:none!important}.overlay-block{outline:none!important}';
+            document.head.appendChild(captureStyle);
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang lưu...';
+
+            try {
+                const canvas = await html2canvas(container, {
+                    useCORS: true,
+                    allowTaint: true,
+                    scale: window.devicePixelRatio || 1,
+                    backgroundColor: null,
+                });
+                const link = document.createElement('a');
+                const baseName = (imgCurrentFilename || 'overlay').replace(/\.[^.]+$/, '');
+                link.download = baseName + '_translated.png';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            } catch(e) {
+                console.error(e);
+                alert('Lỗi khi lưu ảnh: ' + e.message);
+            } finally {
+                // Restore
+                imgZoomLevel = savedZoom;
+                container.style.transform = `scale(${imgZoomLevel})`;
+                document.getElementById('__captureStyle')?.remove();
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-download"></i> Lưu ảnh';
+            }
+        };
     </script>
+
+    <!-- ==================== GLOSSARY JS ==================== -->
+    <script>
+    // ==================== GLOSSARY ====================
+
+    let _glossaries = [];           // cache danh sách glossary
+    let _editingGlossaryId = null;  // glossary đang được edit
+
+    // Toggle hiển thị picker khi bật/tắt switch
+    document.getElementById('glossaryToggle').addEventListener('change', function() {
+        document.getElementById('glossaryPickerWrap').style.display = this.checked ? 'block' : 'none';
+        if (this.checked && _glossaries.length === 0) loadGlossaryPicker();
+    });
+
+    // Load danh sách glossary vào picker (checkbox list)
+    async function loadGlossaryPicker() {
+        const picker = document.getElementById('glossaryPicker');
+        try {
+            const res = await fetch('/api/glossaries');
+            _glossaries = await res.json();
+            if (!_glossaries.length) {
+                picker.innerHTML = '<span class="text-muted small">Chưa có từ điển nào. Nhấn <strong>Quản lý</strong> để upload.</span>';
+                return;
+            }
+            picker.innerHTML = _glossaries.map(g => `
+                <div class="form-check">
+                    <input class="form-check-input glossary-check" type="checkbox"
+                           value="${g.id}" id="gc_${g.id}" checked>
+                    <label class="form-check-label" for="gc_${g.id}">
+                        ${g.name} <span class="text-muted">(${g.rows} dòng)</span>
+                    </label>
+                </div>`).join('');
+        } catch(e) {
+            picker.innerHTML = '<span class="text-danger small">Lỗi tải danh sách</span>';
+        }
+    }
+
+    // Lấy danh sách glossary_ids đang được chọn
+    function getSelectedGlossaryIds() {
+        return [...document.querySelectorAll('.glossary-check:checked')].map(el => el.value);
+    }
+
+    // Mở modal quản lý glossary
+    async function openGlossaryManager() {
+        await loadGlossaryList();
+        new bootstrap.Modal(document.getElementById('glossaryModal')).show();
+    }
+
+    // Load danh sách vào modal quản lý
+    async function loadGlossaryList() {
+        const listEl = document.getElementById('glossaryList');
+        listEl.innerHTML = '<span class="text-muted small">Đang tải...</span>';
+        try {
+            const res = await fetch('/api/glossaries');
+            const items = await res.json();
+            _glossaries = items;
+            if (!items.length) {
+                listEl.innerHTML = '<p class="text-muted small text-center mt-3">Chưa có từ điển nào.</p>';
+                return;
+            }
+            listEl.innerHTML = items.map(g => `
+                <div class="d-flex align-items-center gap-2 mb-2 p-2 rounded glossary-upload-box"">
+                    <div class="flex-grow-1">
+                        <div class="small fw-bold">${g.name}</div>
+                        <div class="text-muted" style="font-size:0.72rem;">${g.rows} cặp từ &bull; ID: ${g.id}</div>
+                    </div>
+                    <button class="btn btn-outline-primary btn-sm py-0 px-2" onclick="editGlossary('${g.id}','${g.name.replace(/'/g,"\\'")}')">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-outline-danger btn-sm py-0 px-2" onclick="deleteGlossary('${g.id}','${g.name.replace(/'/g,"\\'")}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>`).join('');
+        } catch(e) {
+            listEl.innerHTML = '<span class="text-danger small">Lỗi tải danh sách</span>';
+        }
+    }
+
+    // Upload glossary mới
+    async function uploadGlossary() {
+        const fileInput = document.getElementById('glossaryUploadFile');
+        const nameInput = document.getElementById('glossaryUploadName');
+        const alertEl  = document.getElementById('glossaryUploadAlert');
+        if (!fileInput.files.length) {
+            alertEl.innerHTML = '<div class="alert alert-warning py-1 small">Chọn file CSV trước.</div>';
+            return;
+        }
+        const fd = new FormData();
+        fd.append('file', fileInput.files[0]);
+        fd.append('name', nameInput.value.trim());
+        try {
+            const res = await fetch('/api/glossaries', { method: 'POST', body: fd });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            alertEl.innerHTML = `<div class="alert alert-success py-1 small">Upload thành công: <strong>${data.name}</strong> (${data.rows} dòng)</div>`;
+            fileInput.value = '';
+            nameInput.value = '';
+            await loadGlossaryList();
+            // Refresh picker nếu đang bật
+            if (document.getElementById('glossaryToggle').checked) await loadGlossaryPicker();
+        } catch(e) {
+            alertEl.innerHTML = `<div class="alert alert-danger py-1 small">Lỗi: ${e.message}</div>`;
+        }
+    }
+
+    // Mở modal chỉnh sửa glossary
+    async function editGlossary(gid, name) {
+        _editingGlossaryId = gid;
+        document.getElementById('glossaryEditTitle').textContent = `Chỉnh sửa: ${name}`;
+        document.getElementById('glossaryEditName').value = name;
+        const rowsEl = document.getElementById('glossaryEditRows');
+        rowsEl.innerHTML = '<span class="text-muted small">Đang tải...</span>';
+        // Đóng modal quản lý, mở modal edit
+        bootstrap.Modal.getInstance(document.getElementById('glossaryModal'))?.hide();
+        new bootstrap.Modal(document.getElementById('glossaryEditModal')).show();
+        try {
+            const res = await fetch(`/api/glossaries/${gid}`);
+            const rows = await res.json();
+            renderGlossaryRows(rows);
+        } catch(e) {
+            rowsEl.innerHTML = '<span class="text-danger small">Lỗi tải nội dung</span>';
+        }
+    }
+
+    function renderGlossaryRows(rows) {
+        const rowsEl = document.getElementById('glossaryEditRows');
+        if (!rows.length) { rowsEl.innerHTML = ''; addGlossaryRow(); return; }
+        rowsEl.innerHTML = rows.map((r, i) => glossaryRowHtml(i, r.dst, r.src)).join('');
+    }
+
+    function glossaryRowHtml(i, dst='', src='') {
+        return `<div class="row g-1 mb-1 glossary-row">
+            <div class="col-5">
+                <input type="text" class="form-control form-control-sm g-dst" value="${dst.replace(/"/g,'&quot;')}" placeholder="Ngôn ngữ đích">
+            </div>
+            <div class="col-5">
+                <input type="text" class="form-control form-control-sm g-src" value="${src.replace(/"/g,'&quot;')}" placeholder="Ngôn ngữ gốc">
+            </div>
+            <div class="col-2">
+                <button class="btn btn-outline-danger btn-sm w-100 py-0" onclick="this.closest('.glossary-row').remove()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>`;
+    }
+
+    function addGlossaryRow() {
+        document.getElementById('glossaryEditRows').insertAdjacentHTML('beforeend', glossaryRowHtml(Date.now()));
+    }
+
+    // Lưu sau khi chỉnh sửa
+    async function saveGlossaryEdit() {
+        const name = document.getElementById('glossaryEditName').value.trim();
+        const rows = [...document.querySelectorAll('#glossaryEditRows .glossary-row')].map(row => ({
+            dst: row.querySelector('.g-dst').value.trim(),
+            src: row.querySelector('.g-src').value.trim()
+        })).filter(r => r.src || r.dst);
+
+        try {
+            const res = await fetch(`/api/glossaries/${_editingGlossaryId}`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ name, rows })
+            });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            bootstrap.Modal.getInstance(document.getElementById('glossaryEditModal'))?.hide();
+            if (document.getElementById('glossaryToggle').checked) await loadGlossaryPicker();
+        } catch(e) {
+            alert('Lỗi lưu: ' + e.message);
+        }
+    }
+
+    // Xóa glossary
+    async function deleteGlossary(gid, name) {
+        if (!confirm(`Xóa từ điển "${name}"?`)) return;
+        try {
+            await fetch(`/api/glossaries/${gid}`, { method: 'DELETE' });
+            await loadGlossaryList();
+            if (document.getElementById('glossaryToggle').checked) await loadGlossaryPicker();
+        } catch(e) {
+            alert('Lỗi xóa: ' + e.message);
+        }
+    }
+    </script>
+
+    <!-- ==================== SMART UPDATE JS ==================== -->
+    <script>
+    (function () {
+        // ---- Drag & drop + file info helpers ----
+        function bindSuFile(inputId, areaId, infoId) {
+            const input = document.getElementById(inputId);
+            const area  = document.getElementById(areaId);
+            const info  = document.getElementById(infoId);
+            if (!input) return;
+
+            function showInfo(file) {
+                if (!file) { info.style.display = 'none'; return; }
+                info.innerHTML = `<i class="fas fa-file-excel text-success"></i> <span class="small">${file.name}</span>
+                    <button type="button" class="btn btn-sm btn-outline-danger float-end" onclick="clearSuFile('${inputId}','${areaId}','${infoId}')"><i class="fas fa-times"></i></button>`;
+                info.style.display = 'block';
+                checkSuBtn();
+            }
+
+            input.addEventListener('change', () => showInfo(input.files[0]));
+
+            area.addEventListener('dragover', e => { e.preventDefault(); area.style.borderColor = '#764ba2'; });
+            area.addEventListener('dragleave', () => { area.style.borderColor = ''; });
+            area.addEventListener('drop', e => {
+                e.preventDefault();
+                area.style.borderColor = '';
+                const file = e.dataTransfer.files[0];
+                if (file && file.name.toLowerCase().endsWith('.xlsx')) {
+                    const dt = new DataTransfer();
+                    dt.items.add(file);
+                    input.files = dt.files;
+                    showInfo(file);
+                } else {
+                    alert('Chỉ chấp nhận file .xlsx');
+                }
+            });
+        }
+
+        window.clearSuFile = function(inputId, areaId, infoId) {
+            const input = document.getElementById(inputId);
+            if (input) input.value = '';
+            document.getElementById(infoId).style.display = 'none';
+            checkSuBtn();
+        };
+
+        function checkSuBtn() {
+            const f1 = document.getElementById('suFile1');
+            const f2 = document.getElementById('suFile2');
+            const f3 = document.getElementById('suFile3');
+            const btn = document.getElementById('suBtn');
+            if (!btn) return;
+            btn.disabled = !(f1 && f1.files.length && f2 && f2.files.length && f3 && f3.files.length);
+        }
+
+        bindSuFile('suFile1', 'suArea1', 'suInfo1');
+        bindSuFile('suFile2', 'suArea2', 'suInfo2');
+        bindSuFile('suFile3', 'suArea3', 'suInfo3');
+
+        // ---- Form submit ----
+        const form = document.getElementById('smartUpdateForm');
+        if (form) {
+            form.addEventListener('submit', async function (e) {
+                e.preventDefault();
+
+                const btn      = document.getElementById('suBtn');
+                const loading  = document.getElementById('suLoading');
+                const alertEl  = document.getElementById('suAlert');
+                const resultWrap = document.getElementById('suResultWrap');
+                const resultEmpty = document.getElementById('suResultEmpty');
+
+                alertEl.innerHTML = '';
+                loading.style.display = 'block';
+                btn.disabled = true;
+
+                const formData = new FormData(form);
+
+                try {
+                    const resp = await fetch('/smart-update', { method: 'POST', body: formData });
+                    const data = await resp.json();
+
+                    if (!resp.ok || data.error) {
+                        alertEl.innerHTML = `<div class="alert alert-danger small mt-2">${data.error || 'Lỗi không xác định'}</div>`;
+                        return;
+                    }
+
+                    // Stats — tổng + chi tiết từng sheet
+                    const s = data.stats;
+                    let sheetRows = '';
+                    if (s.sheets && Object.keys(s.sheets).length > 1) {
+                        sheetRows = '<div class="mt-1" style="font-size:0.72rem;opacity:.85;">';
+                        for (const [shName, sh] of Object.entries(s.sheets)) {
+                            const badge = sh.status === 'new_sheet'
+                                ? '<span class="badge bg-primary ms-1">sheet mới</span>'
+                                : sh.status === 'no_jp10'
+                                    ? '<span class="badge bg-warning text-dark ms-1">JP cũ thiếu sheet</span>'
+                                    : '';
+                            sheetRows += `<span class="me-3">📄 ${shName}${badge}: ✅${sh.inherited} 🆕${sh.to_translate}</span>`;
+                        }
+                        sheetRows += '</div>';
+                    }
+
+                    // Download links
+                    document.getElementById('suExcelName').textContent = data.result_display_name;
+                    document.getElementById('suDownloadExcel').href = '/download-smart-excel';
+
+                    resultEmpty.style.display = 'none';
+                    resultWrap.style.display = 'block';
+
+                } catch (err) {
+                    alertEl.innerHTML = `<div class="alert alert-danger small mt-2">Lỗi kết nối: ${err.message}</div>`;
+                } finally {
+                    loading.style.display = 'none';
+                    btn.disabled = false;
+                    checkSuBtn();
+                }
+            });
+        }
+
+        window.smartUpdateContinue = async function() {
+            const btn = document.getElementById('suContinueBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Đang chuyển...';
+
+            try {
+                const resp = await fetch('/smart-update/use-as-input', { method: 'POST' });
+                const data = await resp.json();
+
+                if (!resp.ok || data.error) {
+                    alert('Lỗi: ' + (data.error || 'Không xác định'));
+                    return;
+                }
+
+                // Điền tên file vào Tab 1 UI
+                const nameEl = document.getElementById('mainFileName');
+                if (nameEl) nameEl.textContent = data.display_name;
+
+                // Hiển thị file info, enable các nút
+                const fileInfo = document.getElementById('mainFileInfo');
+                if (fileInfo) fileInfo.style.display = 'block';
+
+                // Bật nút Extract và Inject
+                const extractBtn = document.getElementById('extractBtn');
+                const injectBtn  = document.getElementById('injectBtn');
+                if (extractBtn) extractBtn.disabled = false;
+                if (injectBtn)  injectBtn.disabled  = false;
+
+                // Lưu tên file để JS Tab 1 biết (đúng scope)
+                uploadedExcelFilename = data.display_name;
+                window._fromSmartUpdate = true;
+                
+                // Lưu vào sessionStorage để tránh mất khi reload
+                sessionStorage.setItem('uploadedFileName', data.display_name);
+                sessionStorage.setItem('fromSmartUpdate', 'true');
+
+                // Chuyển sang Tab 1
+                const tab1Trigger = document.getElementById('main-tab1');
+                if (tab1Trigger) {
+                    bootstrap.Tab.getOrCreateInstance(tab1Trigger).show();
+                }
+
+                // Scroll lên đầu
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+
+                // Hiển thị banner thông báo ở Tab 1
+                const alertArea = document.getElementById('mainUploadAlert');
+                if (alertArea) {
+                    alertArea.innerHTML = `
+                        <div class="alert alert-success alert-dismissible small py-2 mt-2" role="alert">
+                            <i class="fas fa-check-circle"></i>
+                            <strong>${data.display_name}</strong> đã được nạp từ Smart Update.
+                            Nhấn <strong>Trích xuất JSON</strong> để tiếp tục.
+                            <button type="button" class="btn-close btn-sm" data-bs-dismiss="alert"></button>
+                        </div>`;
+                }
+
+            } catch (err) {
+                alert('Lỗi kết nối: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-arrow-right"></i> Dùng file này';
+            }
+        };
+
+        window.copySuJson = function(btn) {
+            const raw = decodeURIComponent(btn.dataset.content);
+            navigator.clipboard.writeText(raw).then(() => {
+                btn.classList.add('copied');
+                btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                setTimeout(() => {
+                    btn.classList.remove('copied');
+                    btn.innerHTML = '<i class="fas fa-copy"></i> Copy';
+                }, 2000);
+            });
+        };
+    })();
+    </script>
+
+<!-- Modal: Quản lý Từ điển Chuyên ngành -->
+<div class="modal fade" id="glossaryModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title"><i class="fas fa-book"></i> Quản lý Từ điển Chuyên ngành</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+
+                <!-- Upload file mới -->
+                <div class="mb-3 p-2 rounded glossary-upload-box" style="border:1px dashed #667eea;">
+                    <div class="small fw-bold mb-2"><i class="fas fa-upload"></i> Upload file CSV mới</div>
+                    <div class="row g-2 align-items-end">
+                        <div class="col">
+                            <input type="text" class="form-control form-control-sm" id="glossaryUploadName"
+                                   placeholder="Tên hiển thị (để trống = lấy tên file)">
+                        </div>
+                        <div class="col-auto">
+                            <input type="file" id="glossaryUploadFile" accept=".csv" style="display:none;">
+                            <label for="glossaryUploadFile" class="btn btn-outline-primary btn-sm">
+                                <i class="fas fa-folder-open"></i> Chọn CSV
+                            </label>
+                        </div>
+                        <div class="col-auto">
+                            <button class="btn btn-primary btn-sm" onclick="uploadGlossary()">
+                                <i class="fas fa-upload"></i> Upload
+                            </button>
+                        </div>
+                    </div>
+                    <div class="text-muted mt-1" style="font-size:0.72rem;">
+                        <i class="fas fa-info-circle"></i>
+                        CSV format: <strong>Cột A</strong> = ngôn ngữ đích &bull; <strong>Cột B</strong> = ngôn ngữ gốc &bull; Không cần header
+                    </div>
+                    <div id="glossaryUploadAlert" class="mt-1"></div>
+                </div>
+
+                <!-- Danh sách glossary -->
+                <div id="glossaryList">
+                    <span class="text-muted small">Đang tải...</span>
+                </div>
+
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Đóng</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Chỉnh sửa nội dung Glossary -->
+<div class="modal fade" id="glossaryEditModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title" id="glossaryEditTitle">Chỉnh sửa từ điển</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-2 mb-2">
+                    <div class="col">
+                        <input type="text" class="form-control form-control-sm" id="glossaryEditName"
+                               placeholder="Tên hiển thị">
+                    </div>
+                    <div class="col-auto">
+                        <button class="btn btn-outline-primary btn-sm" onclick="addGlossaryRow()">
+                            <i class="fas fa-plus"></i> Thêm dòng
+                        </button>
+                    </div>
+                </div>
+                <!-- Header -->
+                <div class="row g-1 mb-1 px-1">
+                    <div class="col-5"><small class="text-muted fw-bold">Ngôn ngữ đích (cột A)</small></div>
+                    <div class="col-5"><small class="text-muted fw-bold">Ngôn ngữ gốc (cột B)</small></div>
+                    <div class="col-2"></div>
+                </div>
+                <div id="glossaryEditRows" style="max-height:400px; overflow-y:auto;"></div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Huỷ</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="saveGlossaryEdit()">
+                    <i class="fas fa-save"></i> Lưu
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 </body>
 </html>
