@@ -10,6 +10,7 @@ import uuid
 import shutil
 import io
 import re
+import csv
 from datetime import datetime, timedelta
 from urllib.parse import quote
 from flask import Flask, render_template, request, send_file, jsonify, session, redirect, url_for
@@ -36,6 +37,9 @@ PASSWORD_FILE = 'password.txt'
 
 # File lưu Prompt Templates
 TEMPLATES_FILE = 'prompt_templates.json'
+
+GLOSSARY_DIR = 'glossaries'   # thư mục lưu các file CSV chuyên ngành
+os.makedirs(GLOSSARY_DIR, exist_ok=True)
 
 # ==================== HELPER: PROMPT TEMPLATES ====================
 def get_default_templates():
@@ -69,6 +73,67 @@ def load_templates(lang='default'):
         return data.get(lang) or data.get('default') or get_default_templates()
     except Exception:
         return get_default_templates()
+
+
+def apply_glossary(extracted_data: dict, glossary_ids: list) -> dict:
+    """
+    Thay thế các cụm từ trong extracted_data theo các file glossary được chọn.
+
+    Logic:
+    - Với mỗi cặp (src, dst) trong glossary: tìm src (case-insensitive, exact match)
+      trong từng value của extracted_data, thay bằng dst.
+    - "Exact match" = cụm từ đứng độc lập, không phải substring nằm giữa ký tự chữ.
+      Dùng regex word-boundary \\b kết hợp re.IGNORECASE.
+    - Ưu tiên thay thế cụm dài trước (tránh thay một phần của cụm dài hơn).
+    - Nếu glossary_ids rỗng hoặc không có file nào, trả về nguyên extracted_data.
+
+    CSV format: cột A = ngôn ngữ đích (dst), cột B = ngôn ngữ gốc (src)
+    """
+    if not glossary_ids:
+        return extracted_data
+
+    # Thu thập tất cả cặp (src, dst) từ các file glossary được chọn
+    pairs = []
+    for gid in glossary_ids:
+        filepath = os.path.join(GLOSSARY_DIR, f'{gid}.csv')
+        if not os.path.exists(filepath):
+            continue
+        with open(filepath, 'r', encoding='utf-8-sig') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                if len(row) >= 2:
+                    dst = row[0].strip()   # cột A: ngôn ngữ đích
+                    src = row[1].strip()   # cột B: ngôn ngữ gốc
+                    if src and dst:
+                        pairs.append((src, dst))
+
+    if not pairs:
+        return extracted_data
+
+    # Sắp xếp: cụm dài trước để tránh thay nhầm phần của cụm dài
+    pairs.sort(key=lambda x: len(x[0]), reverse=True)
+
+    # Build regex patterns (một lần, tái sử dụng)
+    # Dùng \b nếu src bắt đầu/kết thúc bằng ký tự word; fallback lookaround nếu không
+    def make_pattern(src: str):
+        escaped = re.escape(src)
+        prefix = r'\b' if re.match(r'\w', src[0])  else r'(?<![^\s])'
+        suffix = r'\b' if re.match(r'\w', src[-1]) else r'(?![^\s])'
+        return re.compile(prefix + escaped + suffix, re.IGNORECASE)
+
+    compiled = [(make_pattern(src), dst) for src, dst in pairs]
+
+    # Áp dụng thay thế lên từng value
+    result = {}
+    for key, value in extracted_data.items():
+        if not isinstance(value, str):
+            result[key] = value
+            continue
+        for pattern, dst in compiled:
+            value = pattern.sub(dst, value)
+        result[key] = value
+
+    return result
 
 
 def build_dedup_data(extracted_data, chunk_size=400):
@@ -1510,6 +1575,116 @@ def api_save_templates():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
+# ==================== API: GLOSSARY ====================
+
+@app.route('/api/glossaries', methods=['GET'])
+@login_required
+def api_list_glossaries():
+    """Trả về danh sách tất cả file glossary đã lưu."""
+    result = []
+    for fname in sorted(os.listdir(GLOSSARY_DIR)):
+        if not fname.endswith('.csv'):
+            continue
+        gid = fname[:-4]
+        meta_path = os.path.join(GLOSSARY_DIR, f'{gid}.meta.json')
+        display_name = gid
+        if os.path.exists(meta_path):
+            with open(meta_path, 'r', encoding='utf-8') as f:
+                meta = json.load(f)
+                display_name = meta.get('name', gid)
+        # Đếm số dòng
+        try:
+            with open(os.path.join(GLOSSARY_DIR, fname), 'r', encoding='utf-8-sig') as f:
+                row_count = sum(1 for r in csv.reader(f) if any(r))
+        except Exception:
+            row_count = 0
+        result.append({'id': gid, 'name': display_name, 'rows': row_count})
+    return jsonify(result)
+
+
+@app.route('/api/glossaries', methods=['POST'])
+@login_required
+def api_upload_glossary():
+    """Upload file CSV mới. Form fields: file (CSV), name (tên hiển thị)."""
+    import time
+    if 'file' not in request.files:
+        return jsonify({'error': 'Không có file'}), 400
+    f = request.files['file']
+    if not f.filename.endswith('.csv'):
+        return jsonify({'error': 'Chỉ chấp nhận file .csv'}), 400
+    display_name = request.form.get('name', '').strip() or os.path.splitext(f.filename)[0]
+    gid = f'glossary_{int(time.time())}'
+    csv_path  = os.path.join(GLOSSARY_DIR, f'{gid}.csv')
+    meta_path = os.path.join(GLOSSARY_DIR, f'{gid}.meta.json')
+    f.save(csv_path)
+    with open(meta_path, 'w', encoding='utf-8') as mf:
+        json.dump({'name': display_name}, mf, ensure_ascii=False)
+    # Đếm dòng
+    with open(csv_path, 'r', encoding='utf-8-sig') as cf:
+        row_count = sum(1 for r in csv.reader(cf) if any(r))
+    return jsonify({'success': True, 'id': gid, 'name': display_name, 'rows': row_count})
+
+
+@app.route('/api/glossaries/<gid>', methods=['GET'])
+@login_required
+def api_get_glossary(gid):
+    """Trả về toàn bộ nội dung glossary dưới dạng list of {src, dst}."""
+    csv_path = os.path.join(GLOSSARY_DIR, f'{gid}.csv')
+    if not os.path.exists(csv_path):
+        return jsonify({'error': 'Không tìm thấy'}), 404
+    rows = []
+    with open(csv_path, 'r', encoding='utf-8-sig') as f:
+        for r in csv.reader(f):
+            if len(r) >= 2:
+                rows.append({'dst': r[0].strip(), 'src': r[1].strip()})
+            elif len(r) == 1 and r[0].strip():
+                rows.append({'dst': r[0].strip(), 'src': ''})
+    return jsonify(rows)
+
+
+@app.route('/api/glossaries/<gid>', methods=['PUT'])
+@login_required
+def api_update_glossary(gid):
+    """
+    Cập nhật nội dung glossary.
+    Body JSON: { "name": "...", "rows": [{"src": "...", "dst": "..."}, ...] }
+    """
+    csv_path  = os.path.join(GLOSSARY_DIR, f'{gid}.csv')
+    meta_path = os.path.join(GLOSSARY_DIR, f'{gid}.meta.json')
+    if not os.path.exists(csv_path):
+        return jsonify({'error': 'Không tìm thấy'}), 404
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Body rỗng'}), 400
+    # Cập nhật tên
+    if 'name' in data:
+        with open(meta_path, 'w', encoding='utf-8') as mf:
+            json.dump({'name': data['name']}, mf, ensure_ascii=False)
+    # Cập nhật rows
+    if 'rows' in data:
+        with open(csv_path, 'w', encoding='utf-8-sig', newline='') as f:
+            w = csv.writer(f)
+            for row in data['rows']:
+                if row.get('src') or row.get('dst'):
+                    w.writerow([row.get('dst', ''), row.get('src', '')])
+    return jsonify({'success': True})
+
+
+@app.route('/api/glossaries/<gid>', methods=['DELETE'])
+@login_required
+def api_delete_glossary(gid):
+    """Xóa glossary và meta file."""
+    csv_path  = os.path.join(GLOSSARY_DIR, f'{gid}.csv')
+    meta_path = os.path.join(GLOSSARY_DIR, f'{gid}.meta.json')
+    for p in [csv_path, meta_path]:
+        try:
+            os.remove(p)
+        except FileNotFoundError:
+            pass
+    return jsonify({'success': True})
+
+
 @app.route('/extract', methods=['POST'])
 @login_required
 def extract():
@@ -1601,6 +1776,12 @@ def extract():
             # Trích xuất text từ DOCX
             extracted_data = extract_text_from_docx(filepath)
         
+        # Áp dụng glossary nếu có
+        glossary_ids_raw = request.form.get('glossary_ids', '')
+        glossary_ids = [g.strip() for g in glossary_ids_raw.split(',') if g.strip()]
+        if glossary_ids:
+            extracted_data = apply_glossary(extracted_data, glossary_ids)
+
         # Tách dữ liệu thành nhiều file, mỗi file 400 cặp key-value
         CHUNK_SIZE = 400
         data_items = list(extracted_data.items())

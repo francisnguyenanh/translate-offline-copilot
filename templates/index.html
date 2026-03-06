@@ -542,6 +542,35 @@
                     </div>
                     
                     <form id="extractForm" enctype="multipart/form-data">
+                        <!-- Từ điển chuyên ngành -->
+                        <div class="mb-3" id="glossarySection">
+                            <div class="d-flex align-items-center justify-content-between mb-1">
+                                <label class="form-label small mb-0">
+                                    <i class="fas fa-book" style="color:#667eea;"></i>
+                                    <strong>Từ điển chuyên ngành</strong>
+                                </label>
+                                <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2"
+                                        style="font-size:0.72rem;" onclick="openGlossaryManager()">
+                                    <i class="fas fa-cog"></i> Quản lý
+                                </button>
+                            </div>
+
+                            <!-- Toggle bật/tắt -->
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" id="glossaryToggle">
+                                <label class="form-check-label small" for="glossaryToggle">
+                                    Áp dụng từ điển khi trích xuất
+                                </label>
+                            </div>
+
+                            <!-- Danh sách checkbox chọn glossary (ẩn khi tắt) -->
+                            <div id="glossaryPickerWrap" style="display:none;">
+                                <div id="glossaryPicker" class="p-2 rounded" style="background:#f8f9fa; max-height:140px; overflow-y:auto; font-size:0.8rem;">
+                                    <span class="text-muted small">Đang tải...</span>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="text-center mt-3">
                             <button type="submit" class="btn btn-custom btn-sm" id="extractBtn" disabled>
                                 <i class="fas fa-cog"></i> Trích xuất JSON
@@ -1441,6 +1470,11 @@ Output yêu cầu:
             const formData = new FormData();
             if (mainExcelFile.files.length > 0) {
                 formData.append('file', mainExcelFile.files[0]);
+            }
+            // Thêm glossary_ids nếu bật
+            if (document.getElementById('glossaryToggle').checked) {
+                const ids = getSelectedGlossaryIds();
+                if (ids.length) formData.append('glossary_ids', ids.join(','));
             }
             
             try {
@@ -2795,6 +2829,191 @@ Output yêu cầu:
         };
     </script>
 
+    <!-- ==================== GLOSSARY JS ==================== -->
+    <script>
+    // ==================== GLOSSARY ====================
+
+    let _glossaries = [];           // cache danh sách glossary
+    let _editingGlossaryId = null;  // glossary đang được edit
+
+    // Toggle hiển thị picker khi bật/tắt switch
+    document.getElementById('glossaryToggle').addEventListener('change', function() {
+        document.getElementById('glossaryPickerWrap').style.display = this.checked ? 'block' : 'none';
+        if (this.checked && _glossaries.length === 0) loadGlossaryPicker();
+    });
+
+    // Load danh sách glossary vào picker (checkbox list)
+    async function loadGlossaryPicker() {
+        const picker = document.getElementById('glossaryPicker');
+        try {
+            const res = await fetch('/api/glossaries');
+            _glossaries = await res.json();
+            if (!_glossaries.length) {
+                picker.innerHTML = '<span class="text-muted small">Chưa có từ điển nào. Nhấn <strong>Quản lý</strong> để upload.</span>';
+                return;
+            }
+            picker.innerHTML = _glossaries.map(g => `
+                <div class="form-check">
+                    <input class="form-check-input glossary-check" type="checkbox"
+                           value="${g.id}" id="gc_${g.id}" checked>
+                    <label class="form-check-label" for="gc_${g.id}">
+                        ${g.name} <span class="text-muted">(${g.rows} dòng)</span>
+                    </label>
+                </div>`).join('');
+        } catch(e) {
+            picker.innerHTML = '<span class="text-danger small">Lỗi tải danh sách</span>';
+        }
+    }
+
+    // Lấy danh sách glossary_ids đang được chọn
+    function getSelectedGlossaryIds() {
+        return [...document.querySelectorAll('.glossary-check:checked')].map(el => el.value);
+    }
+
+    // Mở modal quản lý glossary
+    async function openGlossaryManager() {
+        await loadGlossaryList();
+        new bootstrap.Modal(document.getElementById('glossaryModal')).show();
+    }
+
+    // Load danh sách vào modal quản lý
+    async function loadGlossaryList() {
+        const listEl = document.getElementById('glossaryList');
+        listEl.innerHTML = '<span class="text-muted small">Đang tải...</span>';
+        try {
+            const res = await fetch('/api/glossaries');
+            const items = await res.json();
+            _glossaries = items;
+            if (!items.length) {
+                listEl.innerHTML = '<p class="text-muted small text-center mt-3">Chưa có từ điển nào.</p>';
+                return;
+            }
+            listEl.innerHTML = items.map(g => `
+                <div class="d-flex align-items-center gap-2 mb-2 p-2 rounded" style="background:#f8f9fa;">
+                    <div class="flex-grow-1">
+                        <div class="small fw-bold">${g.name}</div>
+                        <div class="text-muted" style="font-size:0.72rem;">${g.rows} cặp từ &bull; ID: ${g.id}</div>
+                    </div>
+                    <button class="btn btn-outline-primary btn-sm py-0 px-2" onclick="editGlossary('${g.id}','${g.name.replace(/'/g,"\\'")}')">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-outline-danger btn-sm py-0 px-2" onclick="deleteGlossary('${g.id}','${g.name.replace(/'/g,"\\'")}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>`).join('');
+        } catch(e) {
+            listEl.innerHTML = '<span class="text-danger small">Lỗi tải danh sách</span>';
+        }
+    }
+
+    // Upload glossary mới
+    async function uploadGlossary() {
+        const fileInput = document.getElementById('glossaryUploadFile');
+        const nameInput = document.getElementById('glossaryUploadName');
+        const alertEl  = document.getElementById('glossaryUploadAlert');
+        if (!fileInput.files.length) {
+            alertEl.innerHTML = '<div class="alert alert-warning py-1 small">Chọn file CSV trước.</div>';
+            return;
+        }
+        const fd = new FormData();
+        fd.append('file', fileInput.files[0]);
+        fd.append('name', nameInput.value.trim());
+        try {
+            const res = await fetch('/api/glossaries', { method: 'POST', body: fd });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            alertEl.innerHTML = `<div class="alert alert-success py-1 small">Upload thành công: <strong>${data.name}</strong> (${data.rows} dòng)</div>`;
+            fileInput.value = '';
+            nameInput.value = '';
+            await loadGlossaryList();
+            // Refresh picker nếu đang bật
+            if (document.getElementById('glossaryToggle').checked) await loadGlossaryPicker();
+        } catch(e) {
+            alertEl.innerHTML = `<div class="alert alert-danger py-1 small">Lỗi: ${e.message}</div>`;
+        }
+    }
+
+    // Mở modal chỉnh sửa glossary
+    async function editGlossary(gid, name) {
+        _editingGlossaryId = gid;
+        document.getElementById('glossaryEditTitle').textContent = `Chỉnh sửa: ${name}`;
+        document.getElementById('glossaryEditName').value = name;
+        const rowsEl = document.getElementById('glossaryEditRows');
+        rowsEl.innerHTML = '<span class="text-muted small">Đang tải...</span>';
+        // Đóng modal quản lý, mở modal edit
+        bootstrap.Modal.getInstance(document.getElementById('glossaryModal'))?.hide();
+        new bootstrap.Modal(document.getElementById('glossaryEditModal')).show();
+        try {
+            const res = await fetch(`/api/glossaries/${gid}`);
+            const rows = await res.json();
+            renderGlossaryRows(rows);
+        } catch(e) {
+            rowsEl.innerHTML = '<span class="text-danger small">Lỗi tải nội dung</span>';
+        }
+    }
+
+    function renderGlossaryRows(rows) {
+        const rowsEl = document.getElementById('glossaryEditRows');
+        if (!rows.length) { rowsEl.innerHTML = ''; addGlossaryRow(); return; }
+        rowsEl.innerHTML = rows.map((r, i) => glossaryRowHtml(i, r.dst, r.src)).join('');
+    }
+
+    function glossaryRowHtml(i, dst='', src='') {
+        return `<div class="row g-1 mb-1 glossary-row">
+            <div class="col-5">
+                <input type="text" class="form-control form-control-sm g-dst" value="${dst.replace(/"/g,'&quot;')}" placeholder="Ngôn ngữ đích">
+            </div>
+            <div class="col-5">
+                <input type="text" class="form-control form-control-sm g-src" value="${src.replace(/"/g,'&quot;')}" placeholder="Ngôn ngữ gốc">
+            </div>
+            <div class="col-2">
+                <button class="btn btn-outline-danger btn-sm w-100 py-0" onclick="this.closest('.glossary-row').remove()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>`;
+    }
+
+    function addGlossaryRow() {
+        document.getElementById('glossaryEditRows').insertAdjacentHTML('beforeend', glossaryRowHtml(Date.now()));
+    }
+
+    // Lưu sau khi chỉnh sửa
+    async function saveGlossaryEdit() {
+        const name = document.getElementById('glossaryEditName').value.trim();
+        const rows = [...document.querySelectorAll('#glossaryEditRows .glossary-row')].map(row => ({
+            dst: row.querySelector('.g-dst').value.trim(),
+            src: row.querySelector('.g-src').value.trim()
+        })).filter(r => r.src || r.dst);
+
+        try {
+            const res = await fetch(`/api/glossaries/${_editingGlossaryId}`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ name, rows })
+            });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            bootstrap.Modal.getInstance(document.getElementById('glossaryEditModal'))?.hide();
+            if (document.getElementById('glossaryToggle').checked) await loadGlossaryPicker();
+        } catch(e) {
+            alert('Lỗi lưu: ' + e.message);
+        }
+    }
+
+    // Xóa glossary
+    async function deleteGlossary(gid, name) {
+        if (!confirm(`Xóa từ điển "${name}"?`)) return;
+        try {
+            await fetch(`/api/glossaries/${gid}`, { method: 'DELETE' });
+            await loadGlossaryList();
+            if (document.getElementById('glossaryToggle').checked) await loadGlossaryPicker();
+        } catch(e) {
+            alert('Lỗi xóa: ' + e.message);
+        }
+    }
+    </script>
+
     <!-- ==================== SMART UPDATE JS ==================== -->
     <script>
     (function () {
@@ -2990,5 +3209,94 @@ Output yêu cầu:
         };
     })();
     </script>
+
+<!-- Modal: Quản lý Từ điển Chuyên ngành -->
+<div class="modal fade" id="glossaryModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title"><i class="fas fa-book"></i> Quản lý Từ điển Chuyên ngành</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+
+                <!-- Upload file mới -->
+                <div class="mb-3 p-2 rounded" style="background:#f0f4ff; border:1px dashed #667eea;">
+                    <div class="small fw-bold mb-2"><i class="fas fa-upload"></i> Upload file CSV mới</div>
+                    <div class="row g-2 align-items-end">
+                        <div class="col">
+                            <input type="text" class="form-control form-control-sm" id="glossaryUploadName"
+                                   placeholder="Tên hiển thị (để trống = lấy tên file)">
+                        </div>
+                        <div class="col-auto">
+                            <input type="file" id="glossaryUploadFile" accept=".csv" style="display:none;">
+                            <label for="glossaryUploadFile" class="btn btn-outline-primary btn-sm">
+                                <i class="fas fa-folder-open"></i> Chọn CSV
+                            </label>
+                        </div>
+                        <div class="col-auto">
+                            <button class="btn btn-primary btn-sm" onclick="uploadGlossary()">
+                                <i class="fas fa-upload"></i> Upload
+                            </button>
+                        </div>
+                    </div>
+                    <div class="text-muted mt-1" style="font-size:0.72rem;">
+                        <i class="fas fa-info-circle"></i>
+                        CSV format: <strong>Cột A</strong> = ngôn ngữ đích &bull; <strong>Cột B</strong> = ngôn ngữ gốc &bull; Không cần header
+                    </div>
+                    <div id="glossaryUploadAlert" class="mt-1"></div>
+                </div>
+
+                <!-- Danh sách glossary -->
+                <div id="glossaryList">
+                    <span class="text-muted small">Đang tải...</span>
+                </div>
+
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Đóng</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Chỉnh sửa nội dung Glossary -->
+<div class="modal fade" id="glossaryEditModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title" id="glossaryEditTitle">Chỉnh sửa từ điển</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-2 mb-2">
+                    <div class="col">
+                        <input type="text" class="form-control form-control-sm" id="glossaryEditName"
+                               placeholder="Tên hiển thị">
+                    </div>
+                    <div class="col-auto">
+                        <button class="btn btn-outline-primary btn-sm" onclick="addGlossaryRow()">
+                            <i class="fas fa-plus"></i> Thêm dòng
+                        </button>
+                    </div>
+                </div>
+                <!-- Header -->
+                <div class="row g-1 mb-1 px-1">
+                    <div class="col-5"><small class="text-muted fw-bold">Ngôn ngữ đích (cột A)</small></div>
+                    <div class="col-5"><small class="text-muted fw-bold">Ngôn ngữ gốc (cột B)</small></div>
+                    <div class="col-2"></div>
+                </div>
+                <div id="glossaryEditRows" style="max-height:400px; overflow-y:auto;"></div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Huỷ</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="saveGlossaryEdit()">
+                    <i class="fas fa-save"></i> Lưu
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 </body>
 </html>
