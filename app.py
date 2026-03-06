@@ -1146,6 +1146,66 @@ def _xlsx_set_cell_inline_text(sheet_root, cell_ref, text_value):
         cell_elem = _etree.Element(f'{{{_NS_WB}}}c', r=cell_ref.upper())
         row_elem.append(cell_elem)
 
+    text_str = '' if text_value is None else str(text_value)
+
+    # Check if cell already has an <is> with rich-text runs
+    existing_is = cell_elem.find(f'{{{_NS_WB}}}is')
+    r_tag = f'{{{_NS_WB}}}r'
+    t_tag = f'{{{_NS_WB}}}t'
+    xml_space_attr = '{http://www.w3.org/XML/1998/namespace}space'
+
+    if existing_is is not None:
+        runs = existing_is.findall(r_tag)
+        if len(runs) > 1:
+            # Rich text: distribute new_text across runs by original char-count ratio
+            orig_lengths = [len((r.findtext(t_tag) or '')) for r in runs]
+            total_orig = sum(orig_lengths)
+            new_total = len(text_str)
+            pos = 0
+            for i, (run_elem, orig_len) in enumerate(zip(runs, orig_lengths)):
+                t_elem = run_elem.find(t_tag)
+                if t_elem is None:
+                    t_elem = _etree.SubElement(run_elem, t_tag)
+                if i == len(runs) - 1:
+                    part = text_str[pos:]
+                else:
+                    if total_orig > 0:
+                        count = round(new_total * orig_len / total_orig)
+                        count = min(count, new_total - pos - (len(runs) - i - 1))
+                        count = max(count, 0)
+                    else:
+                        count = 0
+                    part = text_str[pos:pos + count]
+                    pos += count
+                t_elem.text = part
+                if part != part.strip() or '\n' in part:
+                    t_elem.set(xml_space_attr, 'preserve')
+                elif xml_space_attr in t_elem.attrib:
+                    del t_elem.attrib[xml_space_attr]
+            # Ensure cell type is inlineStr
+            cell_elem.set('t', 'inlineStr')
+            for child in list(cell_elem):
+                if child.tag in {f'{{{_NS_WB}}}v', f'{{{_NS_WB}}}f'}:
+                    cell_elem.remove(child)
+            return
+        elif len(runs) == 1:
+            # Single run: just replace the text element, keep rPr
+            t_elem = runs[0].find(t_tag)
+            if t_elem is None:
+                t_elem = _etree.SubElement(runs[0], t_tag)
+            t_elem.text = text_str
+            if text_str != text_str.strip() or '\n' in text_str:
+                t_elem.set(xml_space_attr, 'preserve')
+            elif xml_space_attr in t_elem.attrib:
+                del t_elem.attrib[xml_space_attr]
+            cell_elem.set('t', 'inlineStr')
+            for child in list(cell_elem):
+                if child.tag in {f'{{{_NS_WB}}}v', f'{{{_NS_WB}}}f'}:
+                    cell_elem.remove(child)
+            return
+        # else: plain <is><t>...</t></is> — fall through to rewrite below
+
+    # No existing <is>, or plain <is><t> only: rewrite from scratch
     cell_elem.set('t', 'inlineStr')
     for child in list(cell_elem):
         if child.tag in {
@@ -1156,11 +1216,10 @@ def _xlsx_set_cell_inline_text(sheet_root, cell_ref, text_value):
             cell_elem.remove(child)
 
     is_elem = _etree.SubElement(cell_elem, f'{{{_NS_WB}}}is')
-    t_elem = _etree.SubElement(is_elem, f'{{{_NS_WB}}}t')
-    text_str = '' if text_value is None else str(text_value)
+    t_elem = _etree.SubElement(is_elem, t_tag)
     t_elem.text = text_str
     if text_str != text_str.strip() or '\n' in text_str:
-        t_elem.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
+        t_elem.set(xml_space_attr, 'preserve')
 
 
 def inject_xlsx_shapes(source_filepath, output_filepath, json_data):
@@ -1320,26 +1379,35 @@ def extract_text_from_docx(filepath):
 
 def replace_text_keep_format_docx(paragraph, new_text):
     """
-    Thay thế text trong paragraph của Word nhưng giữ nguyên định dạng (font, màu, bold, italic...)
-    Chiến lược:
-    1. Lưu định dạng của run đầu tiên
-    2. Xóa text của tất cả runs
-    3. Gán text mới vào run đầu tiên (giữ nguyên định dạng)
+    Thay thế text trong paragraph nhưng GIỮ NGUYÊN format của từng run riêng lẻ.
+    Chiến lược: phân phối new_text vào các runs theo tỉ lệ ký tự gốc.
     """
     if not paragraph.runs:
-        # Không có run nào, tạo mới
         paragraph.text = new_text
         return
-    
-    # Lưu định dạng của run đầu tiên
-    first_run = paragraph.runs[0]
-    
-    # Xóa text của tất cả runs
-    for run in paragraph.runs:
-        run.text = ""
-    
-    # Gán text mới vào run đầu tiên (giữ nguyên định dạng)
-    first_run.text = new_text
+
+    runs = paragraph.runs
+    orig_lengths = [len(run.text) for run in runs]
+    total_orig = sum(orig_lengths)
+
+    if total_orig == 0:
+        # All runs empty — assign everything to first run
+        runs[0].text = new_text
+        for run in runs[1:]:
+            run.text = ""
+        return
+
+    new_total = len(new_text)
+    pos = 0
+    for i, (run, orig_len) in enumerate(zip(runs, orig_lengths)):
+        if i == len(runs) - 1:
+            run.text = new_text[pos:]
+        else:
+            count = round(new_total * orig_len / total_orig)
+            count = min(count, new_total - pos - (len(runs) - i - 1))
+            count = max(count, 0)
+            run.text = new_text[pos:pos + count]
+            pos += count
 
 def inject_text_to_docx(filepath, json_data):
     """
