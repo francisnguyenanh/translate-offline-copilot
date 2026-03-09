@@ -1262,6 +1262,13 @@ def inject_xlsx_shapes(source_filepath, output_filepath, json_data):
         sheet_root = _etree.fromstring(files[sheet_path])
         for cell_ref, value in updates.items():
             _xlsx_set_cell_inline_text(sheet_root, cell_ref, value)
+        # Sync hyperlink display attributes to match updated cell values
+        hyperlinks_elem = sheet_root.find(f'{{{_NS_WB}}}hyperlinks')
+        if hyperlinks_elem is not None:
+            for hl in hyperlinks_elem.findall(f'{{{_NS_WB}}}hyperlink'):
+                ref = hl.get('ref', '')
+                if ref in updates and hl.get('display') is not None:
+                    hl.set('display', str(updates[ref]))
         files[sheet_path] = _etree.tostring(sheet_root, xml_declaration=True, encoding='UTF-8', standalone=True)
 
     if shape_updates:
@@ -1873,7 +1880,7 @@ def extract():
             extracted_data = apply_glossary(extracted_data, glossary_ids)
 
         # Tách dữ liệu thành nhiều file, mỗi file 400 cặp key-value
-        CHUNK_SIZE = 400
+        CHUNK_SIZE = 300
         data_items = list(extracted_data.items())
         total_items = len(data_items)
         num_files = (total_items + CHUNK_SIZE - 1) // CHUNK_SIZE  # Làm tròn lên
@@ -2800,4 +2807,5 @@ FORMAT JSON TRẢ VỀ (giữ đúng cấu trúc này):
 
 if __name__ == '__main__':
     # Chạy ứng dụng Flask ở chế độ debug
-    app.run(host='0.0.0.0', port=5000)
+    #app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5001)
