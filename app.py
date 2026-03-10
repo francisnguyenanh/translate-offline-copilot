@@ -245,6 +245,118 @@ def _get_rgb6(cell) -> str:
     return ''
 
 
+# ==================== COLOR FILTER HELPERS ====================
+
+def _get_font_rgb_xlsx(cell) -> str:
+    """Đọc màu chữ HEX 6 ký tự từ openpyxl cell. Trả '' nếu không xác định."""
+    try:
+        color = cell.font.color if (cell.font and cell.font.color) else None
+        if color and color.type == 'rgb' and color.rgb:
+            return str(color.rgb).upper()[-6:]  # lấy 6 ký tự cuối của ARGB
+    except Exception:
+        pass
+    return ''
+
+
+def _get_font_rgb_pptx(run) -> str:
+    """Đọc màu chữ HEX 6 ký tự từ python-pptx run. Trả '' nếu không xác định."""
+    try:
+        rgb = run.font.color.rgb
+        if rgb is not None:
+            return str(rgb).upper()
+    except Exception:
+        pass
+    return ''
+
+
+def _get_font_rgb_docx(run) -> str:
+    """Đọc màu chữ HEX 6 ký tự từ python-docx run. Trả '' nếu không xác định."""
+    try:
+        rgb = run.font.color.rgb
+        if rgb is not None:
+            return str(rgb).upper()
+    except Exception:
+        pass
+    return ''
+
+
+def _normalize_color_filter(color_list: list) -> set:
+    """Chuẩn hóa list màu HEX → set HEX 6 UPPERCASE không '#'."""
+    result = set()
+    for c in color_list:
+        c = c.strip().lstrip('#').upper()
+        if len(c) == 6:
+            result.add(c)
+    return result
+
+
+def _pptx_shape_matches_color_filter(shape, color_filter: set) -> bool:
+    """
+    Trả về True nếu bất kỳ run nào trong text_frame của shape khớp color_filter.
+    Nếu không có run nào → match khi '000000' trong filter (màu mặc định).
+    """
+    if not hasattr(shape, 'text_frame'):
+        return True  # không kiểm tra được → include mặc định
+    all_runs = [run for para in shape.text_frame.paragraphs for run in para.runs]
+    if not all_runs:
+        return '000000' in color_filter
+    return any((_get_font_rgb_pptx(run) or '000000') in color_filter for run in all_runs)
+
+
+def _pptx_cell_matches_color_filter(cell, color_filter: set) -> bool:
+    """Trả về True nếu bất kỳ run nào trong table cell của pptx khớp color_filter."""
+    tf = getattr(cell, 'text_frame', None)
+    if tf is None:
+        return True
+    all_runs = [run for para in tf.paragraphs for run in para.runs]
+    if not all_runs:
+        return '000000' in color_filter
+    return any((_get_font_rgb_pptx(run) or '000000') in color_filter for run in all_runs)
+
+
+def _docx_para_matches_color_filter(para, color_filter: set) -> bool:
+    """Trả về True nếu bất kỳ run nào trong paragraph docx khớp color_filter."""
+    if not para.runs:
+        return '000000' in color_filter
+    return any((_get_font_rgb_docx(run) or '000000') in color_filter for run in para.runs)
+
+
+def _docx_cell_matches_color_filter(cell, color_filter: set) -> bool:
+    """Trả về True nếu bất kỳ run nào trong table cell docx khớp color_filter."""
+    has_any_run = False
+    for para in cell.paragraphs:
+        for run in para.runs:
+            has_any_run = True
+            if (_get_font_rgb_docx(run) or '000000') in color_filter:
+                return True
+    if not has_any_run:
+        return '000000' in color_filter
+    return False
+
+
+def _collect_pptx_shape_colors(shape, colors: set):
+    """Thu thập màu chữ từ tất cả runs trong shape pptx (đệ quy cho grouped shapes)."""
+    if hasattr(shape, 'text_frame'):
+        for para in shape.text_frame.paragraphs:
+            for run in para.runs:
+                c = _get_font_rgb_pptx(run)
+                if c:
+                    colors.add(c)
+    if hasattr(shape, 'has_table') and shape.has_table:
+        for row in shape.table.rows:
+            for cell in row.cells:
+                tf = getattr(cell, 'text_frame', None)
+                if tf:
+                    for para in tf.paragraphs:
+                        for run in para.runs:
+                            c = _get_font_rgb_pptx(run)
+                            if c:
+                                colors.add(c)
+    if hasattr(shape, 'shapes'):
+        for child_shape in shape.shapes:
+            _collect_pptx_shape_colors(child_shape, colors)
+
+
 def is_new_or_modified_cell(cell_vn11, new_colors=None, red_colors=None) -> bool:
     """
     Trả về True nếu ô được đánh dấu màu xanh lá (nội dung mới/sửa).
@@ -707,16 +819,18 @@ def internal_server_error(error):
         return jsonify({'error': f'Lỗi máy chủ: {str(error)}'}), 500
     return str(error), 500
 
-def extract_text_from_shape(shape, shape_path, extracted_data):
+def extract_text_from_shape(shape, shape_path, extracted_data, color_filter=None):
     """
     Hàm đệ quy để trích xuất text từ shape, bao gồm cả grouped shapes
     shape_path: đường dẫn đến shape, ví dụ "Shape1" hoặc "Shape1_2_3"
+    color_filter: set HEX strings hoặc None (không lọc)
     """
     # Trích xuất text từ text frame của shape hiện tại
     if hasattr(shape, "text") and shape.text:
         text_content = shape.text.strip()
         if text_content:  # Chỉ lấy nội dung không rỗng
-            extracted_data[shape_path] = text_content
+            if color_filter is None or _pptx_shape_matches_color_filter(shape, color_filter):
+                extracted_data[shape_path] = text_content
     
     # Trích xuất text từ table nếu có
     if hasattr(shape, "has_table") and shape.has_table:
@@ -724,21 +838,23 @@ def extract_text_from_shape(shape, shape_path, extracted_data):
         for row_idx, row in enumerate(table.rows, start=1):
             for col_idx, cell in enumerate(row.cells, start=1):
                 if cell.text.strip():
-                    key = f"{shape_path}!Table_R{row_idx}C{col_idx}"
-                    extracted_data[key] = cell.text.strip()
+                    if color_filter is None or _pptx_cell_matches_color_filter(cell, color_filter):
+                        key = f"{shape_path}!Table_R{row_idx}C{col_idx}"
+                        extracted_data[key] = cell.text.strip()
     
     # Kiểm tra xem shape có phải là GroupShape không (chứa các shape con)
     if hasattr(shape, "shapes"):
         # Đây là grouped shape, duyệt qua các shape con
         for child_idx, child_shape in enumerate(shape.shapes, start=1):
             child_path = f"{shape_path}_{child_idx}"
-            extract_text_from_shape(child_shape, child_path, extracted_data)
+            extract_text_from_shape(child_shape, child_path, extracted_data, color_filter)
 
-def extract_text_from_pptx(filepath):
+def extract_text_from_pptx(filepath, color_filter=None):
     """
     Trích xuất text từ file PPTX, bao gồm cả text trong grouped shapes
     Trả về dictionary với format: {"SlideX!ShapeY": "Content"}
     Với nested shapes: {"SlideX!ShapeY_Z": "Content"} (Z là shape con)
+    color_filter: set HEX strings hoặc None (không lọc)
     """
     extracted_data = {}
     prs = Presentation(filepath)
@@ -746,7 +862,7 @@ def extract_text_from_pptx(filepath):
     for slide_idx, slide in enumerate(prs.slides, start=1):
         for shape_idx, shape in enumerate(slide.shapes, start=1):
             shape_path = f"Slide{slide_idx}!Shape{shape_idx}"
-            extract_text_from_shape(shape, shape_path, extracted_data)
+            extract_text_from_shape(shape, shape_path, extracted_data, color_filter)
     
     return extracted_data
 
@@ -1316,26 +1432,29 @@ def inject_xlsx_shapes(source_filepath, output_filepath, json_data):
             z_out.writestr(name, content)
 
 
-def extract_text_from_docx(filepath):
+def extract_text_from_docx(filepath, color_filter=None):
     """
     Trích xuất text từ file DOCX, bao gồm paragraphs, tables, headers, footers
     Trả về dictionary với format:
     - Paragraphs: {"ParagraphX": "Content"}
-    - Tables: {"TableX!RyC z": "Content"}
+    - Tables: {"TableX!RyCz": "Content"}
     - Headers: {"Header_SectionX!ParagraphY": "Content"}
     - Footers: {"Footer_SectionX!ParagraphY": "Content"}
+    color_filter: set HEX strings hoặc None (không lọc)
     """
     extracted_data = {}
     doc = Document(filepath)
     
     # 1. Trích xuất text từ các paragraph thông thường (không trong table)
+    # Luôn đếm TẤT CẢ paragraph không rỗng để giữ index nhất quán với inject
     paragraph_idx = 0
     for para in doc.paragraphs:
         text_content = para.text.strip()
-        if text_content:  # Chỉ lấy paragraph không rỗng
+        if text_content:  # Đếm tất cả paragraph không rỗng
             paragraph_idx += 1
-            key = f"Paragraph{paragraph_idx}"
-            extracted_data[key] = text_content
+            if color_filter is None or _docx_para_matches_color_filter(para, color_filter):
+                key = f"Paragraph{paragraph_idx}"
+                extracted_data[key] = text_content
     
     # 2. Trích xuất text từ các bảng
     for table_idx, table in enumerate(doc.tables, start=1):
@@ -1343,8 +1462,9 @@ def extract_text_from_docx(filepath):
             for col_idx, cell in enumerate(row.cells, start=1):
                 text_content = cell.text.strip()
                 if text_content:
-                    key = f"Table{table_idx}!R{row_idx}C{col_idx}"
-                    extracted_data[key] = text_content
+                    if color_filter is None or _docx_cell_matches_color_filter(cell, color_filter):
+                        key = f"Table{table_idx}!R{row_idx}C{col_idx}"
+                        extracted_data[key] = text_content
     
     # 3. Trích xuất text từ headers
     for section_idx, section in enumerate(doc.sections, start=1):
@@ -1352,8 +1472,9 @@ def extract_text_from_docx(filepath):
         for para_idx, para in enumerate(header.paragraphs, start=1):
             text_content = para.text.strip()
             if text_content:
-                key = f"Header_Section{section_idx}!Paragraph{para_idx}"
-                extracted_data[key] = text_content
+                if color_filter is None or _docx_para_matches_color_filter(para, color_filter):
+                    key = f"Header_Section{section_idx}!Paragraph{para_idx}"
+                    extracted_data[key] = text_content
         
         # Trích xuất từ table trong header (nếu có)
         for table_idx, table in enumerate(header.tables, start=1):
@@ -1361,8 +1482,9 @@ def extract_text_from_docx(filepath):
                 for col_idx, cell in enumerate(row.cells, start=1):
                     text_content = cell.text.strip()
                     if text_content:
-                        key = f"Header_Section{section_idx}!Table{table_idx}!R{row_idx}C{col_idx}"
-                        extracted_data[key] = text_content
+                        if color_filter is None or _docx_cell_matches_color_filter(cell, color_filter):
+                            key = f"Header_Section{section_idx}!Table{table_idx}!R{row_idx}C{col_idx}"
+                            extracted_data[key] = text_content
     
     # 4. Trích xuất text từ footers
     for section_idx, section in enumerate(doc.sections, start=1):
@@ -1370,8 +1492,9 @@ def extract_text_from_docx(filepath):
         for para_idx, para in enumerate(footer.paragraphs, start=1):
             text_content = para.text.strip()
             if text_content:
-                key = f"Footer_Section{section_idx}!Paragraph{para_idx}"
-                extracted_data[key] = text_content
+                if color_filter is None or _docx_para_matches_color_filter(para, color_filter):
+                    key = f"Footer_Section{section_idx}!Paragraph{para_idx}"
+                    extracted_data[key] = text_content
         
         # Trích xuất từ table trong footer (nếu có)
         for table_idx, table in enumerate(footer.tables, start=1):
@@ -1379,8 +1502,9 @@ def extract_text_from_docx(filepath):
                 for col_idx, cell in enumerate(row.cells, start=1):
                     text_content = cell.text.strip()
                     if text_content:
-                        key = f"Footer_Section{section_idx}!Table{table_idx}!R{row_idx}C{col_idx}"
-                        extracted_data[key] = text_content
+                        if color_filter is None or _docx_cell_matches_color_filter(cell, color_filter):
+                            key = f"Footer_Section{section_idx}!Table{table_idx}!R{row_idx}C{col_idx}"
+                            extracted_data[key] = text_content
     
     return extracted_data
 
@@ -1782,6 +1906,69 @@ def api_delete_glossary(gid):
     return jsonify({'success': True})
 
 
+# ==================== API: EXTRACT COLORS ====================
+
+@app.route('/api/extract-colors', methods=['POST'])
+@login_required
+def api_extract_colors():
+    """
+    Trả về danh sách màu chữ duy nhất có trong file xlsx/pptx/docx.
+    Luôn bao gồm '000000' để đại diện cho màu đen/auto (mặc định).
+    """
+    if 'file' not in request.files or not request.files['file'].filename:
+        return jsonify({'error': 'Không có file'}), 400
+
+    f = request.files['file']
+    if not allowed_file(f.filename):
+        return jsonify({'error': 'Chỉ chấp nhận file .xlsx, .pptx hoặc .docx'}), 400
+
+    ext = f.filename.rsplit('.', 1)[1].lower()
+    file_bytes = f.read()
+    colors = set()
+
+    try:
+        if ext == 'xlsx':
+            wb = load_workbook(io.BytesIO(file_bytes))
+            for ws in wb.worksheets:
+                for row in ws.iter_rows():
+                    for cell in row:
+                        if cell.value is not None:
+                            c = _get_font_rgb_xlsx(cell)
+                            if c:
+                                colors.add(c)
+            wb.close()
+
+        elif ext == 'pptx':
+            prs = Presentation(io.BytesIO(file_bytes))
+            for slide in prs.slides:
+                for shape in slide.shapes:
+                    _collect_pptx_shape_colors(shape, colors)
+
+        elif ext == 'docx':
+            doc = Document(io.BytesIO(file_bytes))
+            for para in doc.paragraphs:
+                for run in para.runs:
+                    c = _get_font_rgb_docx(run)
+                    if c:
+                        colors.add(c)
+            for table in doc.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        for para in cell.paragraphs:
+                            for run in para.runs:
+                                c = _get_font_rgb_docx(run)
+                                if c:
+                                    colors.add(c)
+
+    except Exception as e:
+        return jsonify({'error': f'Lỗi đọc màu: {str(e)}'}), 500
+
+    # Luôn bao gồm 000000 cho màu đen/auto
+    colors.add('000000')
+
+    return jsonify({'colors': sorted(colors)})
+
+
 @app.route('/extract', methods=['POST'])
 @login_required
 def extract():
@@ -1831,6 +2018,11 @@ def extract():
 
         # Xác định loại file và trích xuất
         file_ext = original_ext
+
+        # Đọc color filter nếu có (chuỗi HEX cách nhau bằng dấu phẩy)
+        color_filter_raw = request.form.get('color_filter', '')
+        color_list = [c.strip() for c in color_filter_raw.split(',') if c.strip()]
+        color_filter = _normalize_color_filter(color_list) if color_list else None
         
         if file_ext == 'xlsx':
             # Mở file Excel bằng openpyxl
@@ -1854,11 +2046,13 @@ def extract():
                         if isinstance(cell.value, str):
                             # Bỏ qua công thức (bắt đầu bằng '=')
                             if not cell.value.startswith('='):
-                                # Tạo key theo format "SheetName!CellCoordinate"
-                                key = f"{sheet_name}!{cell.coordinate}"
-                                extracted_data[key] = cell.value
+                                if color_filter is None or (_get_font_rgb_xlsx(cell) or '000000') in color_filter:
+                                    # Tạo key theo format "SheetName!CellCoordinate"
+                                    key = f"{sheet_name}!{cell.coordinate}"
+                                    extracted_data[key] = cell.value
             
             # Trích xuất text từ shapes/objects (text-box) trong xlsx
+            # TODO: color filter for xlsx shapes not yet implemented
             shapes_from_xlsx = extract_xlsx_shapes(filepath)
             extracted_data.update(shapes_from_xlsx)
 
@@ -1867,11 +2061,11 @@ def extract():
         
         elif file_ext == 'pptx':
             # Trích xuất text từ PPTX
-            extracted_data = extract_text_from_pptx(filepath)
+            extracted_data = extract_text_from_pptx(filepath, color_filter)
         
         elif file_ext == 'docx':
             # Trích xuất text từ DOCX
-            extracted_data = extract_text_from_docx(filepath)
+            extracted_data = extract_text_from_docx(filepath, color_filter)
         
         # Áp dụng glossary nếu có
         glossary_ids_raw = request.form.get('glossary_ids', '')
@@ -1981,11 +2175,12 @@ def extract():
 
 # ==================== HELPER: core extract logic ====================
 
-def _run_extract(filepath, original_filename, glossary_ids, session_folder):
+def _run_extract(filepath, original_filename, glossary_ids, session_folder, color_filter=None):
     """
     Chạy toàn bộ logic extract từ cột filepath.
     Trả về dict cho jsonify (cùng format như route /extract).
     Ném Exception nếu có lỗi.
+    color_filter: set HEX strings hoặc None (không lọc)
     """
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     original_ext = original_filename.rsplit('.', 1)[-1].lower() if '.' in original_filename else 'xlsx'
@@ -2000,13 +2195,15 @@ def _run_extract(filepath, original_filename, glossary_ids, session_folder):
                     if cell.value is None:
                         continue
                     if isinstance(cell.value, str) and not cell.value.startswith('='):
-                        extracted_data[f"{sheet_name}!{cell.coordinate}"] = cell.value
+                        if color_filter is None or (_get_font_rgb_xlsx(cell) or '000000') in color_filter:
+                            extracted_data[f"{sheet_name}!{cell.coordinate}"] = cell.value
+        # TODO: color filter for xlsx shapes not yet implemented
         extracted_data.update(extract_xlsx_shapes(filepath))
         workbook.close()
     elif original_ext == 'pptx':
-        extracted_data = extract_text_from_pptx(filepath)
+        extracted_data = extract_text_from_pptx(filepath, color_filter)
     elif original_ext == 'docx':
-        extracted_data = extract_text_from_docx(filepath)
+        extracted_data = extract_text_from_docx(filepath, color_filter)
     else:
         raise ValueError(f'Không hỗ trợ định dạng .{original_ext}')
 
@@ -2807,5 +3004,5 @@ FORMAT JSON TRẢ VỀ (giữ đúng cấu trúc này):
 
 if __name__ == '__main__':
     # Chạy ứng dụng Flask ở chế độ debug
-    #app.run(host='0.0.0.0', port=5000)
-    app.run(host='0.0.0.0', port=5001)
+    app.run(host='0.0.0.0', port=5000)
+    #app.run(host='0.0.0.0', port=5001)

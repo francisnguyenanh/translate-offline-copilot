@@ -404,6 +404,30 @@
             background: #232b3b;
             border-color: #4d6fae;
         }
+
+        /* ===== COLOR FILTER PANEL ===== */
+        #colorFilterSection {
+            border: 1px solid #c8d8f0;
+            border-radius: 8px;
+            background: #f4f8ff;
+            padding: 10px 12px;
+            margin-bottom: 10px;
+        }
+        body.dark-mode #colorFilterSection {
+            background: #1b2d3e;
+            border-color: #2d5080;
+        }
+        .color-filter-item { cursor: pointer; user-select: none; }
+        .color-swatch {
+            display: inline-block;
+            width: 16px; height: 16px;
+            border: 1px solid #999;
+            border-radius: 3px;
+            flex-shrink: 0;
+        }
+        .color-swatch.white-swatch { border-color: #888; }
+        #colorFilterLoading { display: none; }
+
         /* ===== IMAGE OVERLAY ===== */
         .overlay-block {
             box-sizing: border-box;
@@ -663,6 +687,26 @@
                                     <span class="text-muted small">Đang tải...</span>
                                 </div>
                             </div>
+                        </div>
+
+                        <!-- Lọc theo màu chữ -->
+                        <div id="colorFilterSection" style="display:none;" class="mb-3">
+                            <div class="d-flex align-items-center justify-content-between mb-1">
+                                <label class="form-label small mb-0">
+                                    <i class="fas fa-palette" style="color:#667eea;"></i>
+                                    <strong>Lọc theo màu chữ</strong>
+                                </label>
+                                <div class="d-flex gap-1">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size:0.72rem;" onclick="selectAllColors(true)">Chọn tất</button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size:0.72rem;" onclick="selectAllColors(false)">Bỏ chọn</button>
+                                </div>
+                            </div>
+                            <p class="text-muted mb-1" style="font-size:0.72rem;"><i class="fas fa-info-circle"></i> Bỏ trống = lấy tất cả màu</p>
+                            <div id="colorFilterLoading" class="text-center py-1">
+                                <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+                                <span class="small ms-1">Đang đọc màu...</span>
+                            </div>
+                            <div id="colorFilterList" style="max-height:160px; overflow-y:auto;"></div>
                         </div>
 
                         <div class="text-center mt-3">
@@ -1575,6 +1619,9 @@ Output yêu cầu:
                 
                 // Hiển thị thông báo
                 showAlert(mainAlert, 'success', `File "${file.name}" đã được chọn. Bạn có thể tiến hành Extract hoặc Inject.`);
+
+                // Fetch màu chữ từ file để hiển thị bộ lọc màu
+                fetchExtractColors(file);
             }
         });
         
@@ -1591,6 +1638,9 @@ Output yêu cầu:
             // Xóa sessionStorage
             sessionStorage.removeItem('uploadedFileName');
             sessionStorage.removeItem('fromSmartUpdate');
+
+            // Reset bộ lọc màu
+            resetColorFilter();
         });
         
         // Xử lý drag and drop
@@ -1620,6 +1670,7 @@ Output yêu cầu:
                 extractBtn.disabled = false;
                 injectBtn.disabled = false;
                 showAlert(mainAlert, 'success', `File "${files[0].name}" đã được chọn.`);
+                fetchExtractColors(files[0]);
             }
         });
         
@@ -1722,6 +1773,11 @@ Output yêu cầu:
                 const ids = getSelectedGlossaryIds();
                 if (ids.length) formData.append('glossary_ids', ids.join(','));
             }
+            // Thêm color_filter nếu có chọn màu
+            const selectedColors = [...document.querySelectorAll('.color-filter-cb:checked')]
+                .map(cb => cb.value)
+                .join(',');
+            if (selectedColors) formData.append('color_filter', selectedColors);
             
             try {
                 // Gửi request
@@ -1793,6 +1849,72 @@ Output yêu cầu:
                 showAlert(extractAlert, 'danger', 'Lỗi kết nối: ' + error.message);
             }
         });
+
+        // ==================== COLOR FILTER ====================
+
+        async function fetchExtractColors(file) {
+            const colorFilterSection = document.getElementById('colorFilterSection');
+            const colorFilterLoading = document.getElementById('colorFilterLoading');
+            const colorFilterList = document.getElementById('colorFilterList');
+
+            // Reset trước
+            colorFilterList.innerHTML = '';
+            colorFilterSection.style.display = 'none';
+            colorFilterLoading.style.display = 'block';
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const resp = await fetch('/api/extract-colors', { method: 'POST', body: formData });
+                colorFilterLoading.style.display = 'none';
+                if (!resp.ok) return;
+                const data = await resp.json();
+                if (!data.colors || data.colors.length === 0) return;
+                renderColorFilter(data.colors);
+                colorFilterSection.style.display = 'block';
+            } catch (e) {
+                colorFilterLoading.style.display = 'none';
+                // silently fail — không block Extract
+            }
+        }
+
+        function renderColorFilter(colors) {
+            const colorFilterList = document.getElementById('colorFilterList');
+            colorFilterList.innerHTML = '';
+            colors.forEach(hex => {
+                const label = document.createElement('label');
+                label.className = 'color-filter-item d-flex align-items-center gap-2 mb-1';
+
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.value = hex;
+                cb.className = 'color-filter-cb form-check-input mt-0';
+
+                const swatch = document.createElement('span');
+                swatch.className = 'color-swatch' + (hex === 'FFFFFF' ? ' white-swatch' : '');
+                swatch.style.background = '#' + hex;
+
+                const text = document.createElement('span');
+                text.className = 'small';
+                text.textContent = hex === '000000' ? 'Đen / Mặc định (#000000)' : '#' + hex;
+
+                label.appendChild(cb);
+                label.appendChild(swatch);
+                label.appendChild(text);
+                colorFilterList.appendChild(label);
+            });
+        }
+
+        function resetColorFilter() {
+            document.getElementById('colorFilterSection').style.display = 'none';
+            document.getElementById('colorFilterList').innerHTML = '';
+            document.getElementById('colorFilterLoading').style.display = 'none';
+        }
+
+        function selectAllColors(checked) {
+            document.querySelectorAll('.color-filter-cb').forEach(cb => { cb.checked = checked; });
+        }
         
         // Render danh sách file JSON thành từng hàng
         function renderJsonFileRows(files) {
