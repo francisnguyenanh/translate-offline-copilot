@@ -3002,6 +3002,443 @@ FORMAT JSON TRẢ VỀ (giữ đúng cấu trúc này):
     return jsonify({'prompt': prompt}), 200
 
 
+# ==================== TERMINOLOGY EXTRACTOR ====================
+
+TERMINOLOGY_PROMPTS_FILE = 'terminology_prompts.json'
+
+
+def get_default_terminology_prompts() -> list:
+    """Trả về danh sách prompt mặc định cho việc trích xuất thuật ngữ."""
+    return [
+        {
+            "id": "terminology_default",
+            "name": "Trích xuất thuật ngữ chuyên ngành",
+            "content": (
+                "Bạn là chuyên gia ngôn ngữ chuyên ngành. Tôi sẽ cung cấp một danh sách "
+                "các cặp văn bản song ngữ dạng JSON (mỗi cặp gồm \"src\": văn bản gốc, \"dst\": văn bản đã dịch).\n\n"
+                "Nhiệm vụ:\n"
+                "1. Phân tích toàn bộ các cặp văn bản\n"
+                "2. Xác định các từ/cụm từ CHUYÊN NGÀNH xuất hiện nhất quán trong bản dịch\n"
+                "3. Chỉ lấy thuật ngữ thực sự chuyên ngành — loại bỏ từ thông thường, giới từ, động từ phổ thông\n"
+                "4. Loại bỏ trùng lặp (giữ lại 1 cặp duy nhất cho mỗi thuật ngữ)\n\n"
+                "Trả về KẾT QUẢ là JSON object thuần túy theo format sau:\n"
+                "{\n"
+                "  \"src_text_1\": \"dst_text_1\",\n"
+                "  \"src_text_2\": \"dst_text_2\"\n"
+                "}\n\n"
+                "Trong đó:\n"
+                "- KEY = thuật ngữ ngôn ngữ GỐC (src)\n"
+                "- VALUE = thuật ngữ ngôn ngữ ĐÍCH (dst)\n\n"
+                "⚠️ QUAN TRỌNG:\n"
+                "- Chỉ trả về JSON object thuần túy, không markdown, không giải thích\n"
+                "- Không bọc trong ```json``` hay bất kỳ code block nào\n"
+                "- Đảm bảo JSON hợp lệ, không có trailing comma\n"
+                "- Nếu không tìm thấy thuật ngữ chuyên ngành, trả về {}"
+            )
+        }
+    ]
+
+
+def load_terminology_prompts() -> list:
+    try:
+        with open(TERMINOLOGY_PROMPTS_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        return data if isinstance(data, list) and data else get_default_terminology_prompts()
+    except Exception:
+        return get_default_terminology_prompts()
+
+
+def save_terminology_prompts(prompts: list) -> None:
+    with open(TERMINOLOGY_PROMPTS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(prompts, f, ensure_ascii=False, indent=2)
+
+
+def align_bilingual_texts(src_dict: dict, dst_dict: dict) -> list:
+    """
+    Ghép hai dict extract theo key chung.
+    Chỉ lấy các key có mặt trong CẢ HAI và cả hai value đều không rỗng.
+    Loại bỏ các cặp có src == dst (không thực sự được dịch).
+    Trả về list of {"src": str, "dst": str}.
+    """
+    import unicodedata
+    pairs = []
+    common_keys = set(src_dict.keys()) & set(dst_dict.keys())
+    for key in sorted(common_keys):
+        src_text = unicodedata.normalize('NFC', str(src_dict[key]).strip())
+        dst_text = unicodedata.normalize('NFC', str(dst_dict[key]).strip())
+        if src_text and dst_text and src_text != dst_text:
+            pairs.append({"src": src_text, "dst": dst_text})
+    return pairs
+
+
+def extract_text_from_file(filepath: str, ext: str) -> dict:
+    """
+    Wrapper tái sử dụng logic extract hiện có.
+    ext: 'xlsx' | 'pptx' | 'docx'
+    Trả về dict {key: text}.
+    """
+    if ext == 'xlsx':
+        wb = load_workbook(filepath, data_only=True)
+        result = {}
+        for sheet_name in wb.sheetnames:
+            ws = wb[sheet_name]
+            for row in ws.iter_rows():
+                for cell in row:
+                    if cell.value is None:
+                        continue
+                    if isinstance(cell.value, str) and not cell.value.startswith('='):
+                        result[f"{sheet_name}!{cell.coordinate}"] = cell.value
+        result.update(extract_xlsx_shapes(filepath))
+        wb.close()
+        return result
+    elif ext == 'pptx':
+        return extract_text_from_pptx(filepath)
+    elif ext == 'docx':
+        return extract_text_from_docx(filepath)
+    return {}
+
+
+@app.route('/api/terminology/align', methods=['POST'])
+@login_required
+def api_terminology_align():
+    """
+    Nhận file_src + file_dst, extract cả hai, ghép cặp song ngữ theo key.
+    """
+    if 'file_src' not in request.files or 'file_dst' not in request.files:
+        return jsonify({'error': 'Cần upload cả file gốc (file_src) và file đã dịch (file_dst)'}), 400
+
+    f_src = request.files['file_src']
+    f_dst = request.files['file_dst']
+
+    if not f_src.filename or not f_dst.filename:
+        return jsonify({'error': 'Tên file không hợp lệ'}), 400
+
+    if not allowed_file(f_src.filename) or not allowed_file(f_dst.filename):
+        return jsonify({'error': 'Chỉ chấp nhận file .xlsx, .pptx hoặc .docx'}), 400
+
+    ext_src = f_src.filename.rsplit('.', 1)[1].lower()
+    ext_dst = f_dst.filename.rsplit('.', 1)[1].lower()
+    if ext_src != ext_dst:
+        return jsonify({'error': f'Hai file phải cùng định dạng (file gốc: .{ext_src}, file dịch: .{ext_dst})'}), 400
+
+    session_folder = get_session_folder()
+    ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+    path_src = os.path.join(session_folder, f'term_src_{ts}.{ext_src}')
+    path_dst = os.path.join(session_folder, f'term_dst_{ts}.{ext_dst}')
+
+    try:
+        f_src.save(path_src)
+        f_dst.save(path_dst)
+
+        src_dict = extract_text_from_file(path_src, ext_src)
+        dst_dict = extract_text_from_file(path_dst, ext_dst)
+
+        pairs = align_bilingual_texts(src_dict, dst_dict)
+
+        # Lưu pairs vào file tạm (tránh giới hạn ~4KB của Flask session cookie)
+        session_folder = get_session_folder()
+        pairs_cache_path = os.path.join(session_folder, 'terminology_pairs_cache.json')
+        try:
+            with open(pairs_cache_path, 'w', encoding='utf-8') as _f:
+                json.dump(pairs, _f, ensure_ascii=False)
+            session['terminology_pairs_cache'] = pairs_cache_path
+        except Exception:
+            pass  # non-critical
+
+        pairs_json_str = json.dumps(pairs, ensure_ascii=False, indent=2)
+
+        return jsonify({
+            'success': True,
+            'pairs': pairs[:50],         # trả về tối đa 50 cho preview
+            'total': len(src_dict),
+            'matched': len(pairs),
+            'pairs_json': pairs_json_str,
+        })
+    except Exception as e:
+        return jsonify({'error': f'Lỗi khi xử lý file: {str(e)}'}), 500
+    finally:
+        for p in [path_src, path_dst]:
+            try:
+                if os.path.exists(p):
+                    os.remove(p)
+            except Exception:
+                pass
+
+
+@app.route('/api/terminology/prompts', methods=['GET'])
+@login_required
+def api_get_terminology_prompts():
+    return jsonify(load_terminology_prompts())
+
+
+@app.route('/api/terminology/prompts', methods=['POST'])
+@login_required
+def api_save_terminology_prompts_route():
+    data = request.get_json()
+    if not isinstance(data, list):
+        return jsonify({'error': 'Phải là array'}), 400
+    try:
+        save_terminology_prompts(data)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/terminology/import-csv', methods=['POST'])
+@login_required
+def api_terminology_import_csv():
+    """
+    Parse CSV text từ AI output và lưu vào glossary (mới hoặc merge).
+    Body JSON: { csv_text, target_glossary_id?, new_glossary_name? }
+    """
+    import time as _time
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Body rỗng'}), 400
+
+    csv_text = (data.get('csv_text') or '').strip()
+    if not csv_text:
+        return jsonify({'error': 'CSV rỗng'}), 400
+
+    target_gid = (data.get('target_glossary_id') or '').strip()
+    new_name = (data.get('new_glossary_name') or '').strip()
+
+    # Parse CSV — thử dấu phẩy trước, fallback tab
+    rows_raw = []
+    for line in csv_text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            parsed = list(csv.reader([line]))[0]
+        except Exception:
+            parsed = [line]
+
+        if len(parsed) >= 2:
+            rows_raw.append((parsed[0].strip(), parsed[1].strip()))
+        elif len(parsed) == 1 and '\t' in parsed[0]:
+            parts = parsed[0].split('\t', 1)
+            rows_raw.append((parts[0].strip(), parts[1].strip()))
+        # else: bỏ qua dòng không đủ cột
+
+    valid_rows = [(dst, src) for dst, src in rows_raw if dst and src]
+    if not valid_rows:
+        return jsonify({'error': 'Không tìm thấy dữ liệu hợp lệ trong CSV'}), 400
+
+    added = 0
+    skipped = 0
+
+    if target_gid:
+        # Merge vào glossary có sẵn
+        csv_path = os.path.join(GLOSSARY_DIR, f'{target_gid}.csv')
+        if not os.path.exists(csv_path):
+            return jsonify({'error': f'Không tìm thấy glossary: {target_gid}'}), 404
+
+        # Đọc existing rows để dedup
+        existing_set = set()
+        existing_rows = []
+        try:
+            with open(csv_path, 'r', encoding='utf-8-sig') as f:
+                for row in csv.reader(f):
+                    if len(row) >= 2:
+                        existing_rows.append(row)
+                        existing_set.add((row[1].strip().lower(), row[0].strip().lower()))
+        except Exception:
+            pass
+
+        new_rows = []
+        for dst, src in valid_rows:
+            key = (src.lower(), dst.lower())
+            if key in existing_set:
+                skipped += 1
+            else:
+                new_rows.append([dst, src])
+                existing_set.add(key)
+                added += 1
+
+        with open(csv_path, 'w', encoding='utf-8-sig', newline='') as f:
+            w = csv.writer(f)
+            for r in existing_rows:
+                w.writerow(r)
+            for r in new_rows:
+                w.writerow(r)
+
+        # Lấy tên từ meta
+        meta_path = os.path.join(GLOSSARY_DIR, f'{target_gid}.meta.json')
+        gid_name = target_gid
+        try:
+            with open(meta_path, 'r', encoding='utf-8') as f:
+                gid_name = json.load(f).get('name', target_gid)
+        except Exception:
+            pass
+
+        return jsonify({
+            'success': True,
+            'gid': target_gid,
+            'name': gid_name,
+            'added': added,
+            'skipped_duplicate': skipped,
+            'total_rows': len(existing_rows) + added,
+        })
+
+    else:
+        # Tạo glossary mới
+        if not new_name:
+            new_name = f'Thuật ngữ {datetime.now().strftime("%Y-%m-%d %H:%M")}'
+
+        gid = f'glossary_{int(_time.time())}'
+        csv_path = os.path.join(GLOSSARY_DIR, f'{gid}.csv')
+        meta_path = os.path.join(GLOSSARY_DIR, f'{gid}.meta.json')
+
+        seen = set()
+        with open(csv_path, 'w', encoding='utf-8-sig', newline='') as f:
+            w = csv.writer(f)
+            for dst, src in valid_rows:
+                key = (src.lower(), dst.lower())
+                if key in seen:
+                    skipped += 1
+                else:
+                    w.writerow([dst, src])
+                    seen.add(key)
+                    added += 1
+
+        with open(meta_path, 'w', encoding='utf-8') as f:
+            json.dump({'name': new_name}, f, ensure_ascii=False)
+
+        return jsonify({
+            'success': True,
+            'gid': gid,
+            'name': new_name,
+            'added': added,
+            'skipped_duplicate': skipped,
+            'total_rows': added,
+        })
+
+
+@app.route('/api/terminology/import-json', methods=['POST'])
+@login_required
+def api_terminology_import_json():
+    """
+    Parse JSON object {src: dst} từ AI output và lưu vào glossary (mới hoặc merge).
+    Body JSON: { json_text: str, target_glossary_id?: str, new_glossary_name?: str }
+    """
+    import time as _time
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Body rỗng'}), 400
+
+    json_text = (data.get('json_text') or '').strip()
+    if not json_text:
+        return jsonify({'error': 'JSON rỗng'}), 400
+
+    target_gid = (data.get('target_glossary_id') or '').strip()
+    new_name = (data.get('new_glossary_name') or '').strip()
+
+    # Strip markdown code fence nếu AI bọc kết quả
+    clean_text = json_text.strip()
+    if clean_text.startswith('```'):
+        lines = clean_text.splitlines()
+        lines = [l for l in lines if not l.strip().startswith('```')]
+        clean_text = '\n'.join(lines).strip()
+
+    try:
+        parsed = json.loads(clean_text)
+    except json.JSONDecodeError as e:
+        return jsonify({'error': f'JSON không hợp lệ: {str(e)}'}), 400
+
+    if not isinstance(parsed, dict):
+        return jsonify({'error': 'Dữ liệu phải là JSON object {src: dst}'}), 400
+
+    # Chuyển thành list (cột A=dst, cột B=src — chuẩn glossary CSV)
+    valid_rows = []
+    for src_text, dst_text in parsed.items():
+        src = str(src_text).strip()
+        dst = str(dst_text).strip()
+        if src and dst:
+            valid_rows.append((dst, src))
+
+    if not valid_rows:
+        return jsonify({'error': 'Không tìm thấy cặp thuật ngữ hợp lệ trong JSON'}), 400
+
+    added = 0
+    skipped = 0
+
+    if target_gid:
+        csv_path = os.path.join(GLOSSARY_DIR, f'{target_gid}.csv')
+        if not os.path.exists(csv_path):
+            return jsonify({'error': f'Không tìm thấy glossary: {target_gid}'}), 404
+
+        existing_set = set()
+        existing_rows = []
+        try:
+            with open(csv_path, 'r', encoding='utf-8-sig') as f:
+                for row in csv.reader(f):
+                    if len(row) >= 2:
+                        existing_rows.append(row)
+                        existing_set.add((row[1].strip().lower(), row[0].strip().lower()))
+        except Exception:
+            pass
+
+        new_rows = []
+        for dst, src in valid_rows:
+            key = (src.lower(), dst.lower())
+            if key in existing_set:
+                skipped += 1
+            else:
+                new_rows.append([dst, src])
+                existing_set.add(key)
+                added += 1
+
+        with open(csv_path, 'w', encoding='utf-8-sig', newline='') as f:
+            w = csv.writer(f)
+            for r in existing_rows:
+                w.writerow(r)
+            for r in new_rows:
+                w.writerow(r)
+
+        meta_path = os.path.join(GLOSSARY_DIR, f'{target_gid}.meta.json')
+        gid_name = target_gid
+        try:
+            with open(meta_path, 'r', encoding='utf-8') as f:
+                gid_name = json.load(f).get('name', target_gid)
+        except Exception:
+            pass
+
+        return jsonify({
+            'success': True, 'gid': target_gid, 'name': gid_name,
+            'added': added, 'skipped_duplicate': skipped,
+            'total_rows': len(existing_rows) + added,
+        })
+
+    else:
+        if not new_name:
+            new_name = f'Thuật ngữ {datetime.now().strftime("%Y-%m-%d %H:%M")}'
+        gid = f'glossary_{int(_time.time())}'
+        csv_path = os.path.join(GLOSSARY_DIR, f'{gid}.csv')
+        meta_path = os.path.join(GLOSSARY_DIR, f'{gid}.meta.json')
+
+        seen = set()
+        with open(csv_path, 'w', encoding='utf-8-sig', newline='') as f:
+            w = csv.writer(f)
+            for dst, src in valid_rows:
+                key = (src.lower(), dst.lower())
+                if key not in seen:
+                    w.writerow([dst, src])
+                    seen.add(key)
+                    added += 1
+                else:
+                    skipped += 1
+
+        with open(meta_path, 'w', encoding='utf-8') as f:
+            json.dump({'name': new_name}, f, ensure_ascii=False)
+
+        return jsonify({
+            'success': True, 'gid': gid, 'name': new_name,
+            'added': added, 'skipped_duplicate': skipped,
+            'total_rows': added,
+        })
+
+
 if __name__ == '__main__':
     # Chạy ứng dụng Flask ở chế độ debug
     app.run(host='0.0.0.0', port=5000)

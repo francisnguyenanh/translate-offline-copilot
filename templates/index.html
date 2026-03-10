@@ -103,6 +103,13 @@
             background: #e9ecef;
             border-color: #764ba2;
         }
+
+        .upload-area.drag-over {
+            border-color: #667eea !important;
+            background: rgba(102, 126, 234, 0.08) !important;
+            transform: scale(1.01);
+            transition: all 0.15s ease;
+        }
         
         .upload-area i {
             font-size: 1.5rem;
@@ -510,6 +517,11 @@
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="main-tab3" data-bs-toggle="tab" data-bs-target="#mainTab3" type="button" role="tab" aria-selected="false">
                     <i class="fas fa-code-branch"></i> Smart Update
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="main-tab4" data-bs-toggle="tab" data-bs-target="#mainTab4" type="button" role="tab" aria-selected="false">
+                    <i class="fas fa-spell-check"></i> Thuật ngữ
                 </button>
             </li>
         </ul>
@@ -1302,6 +1314,213 @@ Output yêu cầu:
 
             </div>
         </div><!-- /tab-pane tab3 Smart Update -->
+
+        <!-- ==================== TAB 4: TERMINOLOGY EXTRACTOR ==================== -->
+        <div class="tab-pane fade" id="mainTab4" role="tabpanel" aria-labelledby="main-tab4">
+        <div class="row g-3">
+
+            <!-- Bước 1: Upload & Align -->
+            <div class="col-lg-4">
+                <div class="function-card">
+                    <div class="text-center">
+                        <span class="step-number">1</span>
+                        <h3 class="d-inline">Upload & Align</h3>
+                        <p class="text-muted small mt-2">Upload file gốc và file đã dịch</p>
+                    </div>
+
+                    <!-- File gốc -->
+                    <div class="mb-3">
+                        <label class="form-label small mb-1"><i class="fas fa-file-alt" style="color:#667eea;"></i> <strong>File gốc (chưa dịch):</strong></label>
+                        <div class="upload-area compact" id="termSrcUploadArea" onclick="document.getElementById('termSrcFile').click()" style="cursor:pointer;">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                            <p class="mb-1 small"><strong>Kéo thả file vào đây</strong></p>
+                            <p class="mb-0" style="font-size:0.72rem;color:#888;">hoặc click để chọn</p>
+                            <input type="file" id="termSrcFile" accept=".xlsx,.pptx,.docx" style="display:none;">
+                        </div>
+                        <div id="termSrcInfo" class="file-info" style="display:none;">
+                            <i id="termSrcIcon" class="fas fa-file text-secondary"></i>
+                            <span id="termSrcName" class="small"></span>
+                            <button type="button" class="btn btn-sm btn-outline-danger float-end" onclick="clearTermFile('src')">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- File dịch -->
+                    <div class="mb-3">
+                        <label class="form-label small mb-1"><i class="fas fa-file-code" style="color:#764ba2;"></i> <strong>File đã dịch:</strong></label>
+                        <div class="upload-area compact" id="termDstUploadArea" onclick="document.getElementById('termDstFile').click()" style="cursor:pointer;">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                            <p class="mb-1 small"><strong>Kéo thả file vào đây</strong></p>
+                            <p class="mb-0" style="font-size:0.72rem;color:#888;">hoặc click để chọn</p>
+                            <input type="file" id="termDstFile" accept=".xlsx,.pptx,.docx" style="display:none;">
+                        </div>
+                        <div id="termDstInfo" class="file-info" style="display:none;">
+                            <i id="termDstIcon" class="fas fa-file text-secondary"></i>
+                            <span id="termDstName" class="small"></span>
+                            <button type="button" class="btn btn-sm btn-outline-danger float-end" onclick="clearTermFile('dst')">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="text-center">
+                        <button type="button" class="btn btn-custom btn-sm" id="termAlignBtn" onclick="runTermAlign()">
+                            <i class="fas fa-project-diagram"></i> Trích xuất cặp song ngữ
+                        </button>
+                    </div>
+
+                    <div class="loading text-center mt-2" id="termAlignLoading" style="display:none;">
+                        <div class="spinner-border text-primary" role="status"><span class="visually-hidden">...</span></div>
+                        <p class="mt-1 small">Đang xử lý...</p>
+                    </div>
+
+                    <div id="termAlignAlert" class="mt-2"></div>
+
+                    <!-- Kết quả align -->
+                    <div id="termAlignResult" style="display:none;" class="mt-3">
+                        <div id="termAlignStats" class="alert alert-success py-2 small mb-2"></div>
+                        <div class="small fw-bold mb-1">Preview (10 cặp đầu):</div>
+                        <div style="max-height:200px; overflow-y:auto; border:1px solid #dee2e6; border-radius:6px;">
+                            <table class="table table-sm table-bordered mb-0" id="termPreviewTable">
+                                <thead><tr><th style="width:50%">Nguồn (src)</th><th style="width:50%">Đích (dst)</th></tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Bước 2: Tạo Prompt AI -->
+            <div class="col-lg-4">
+                <div class="function-card">
+                    <div class="text-center">
+                        <span class="step-number">2</span>
+                        <h3 class="d-inline">Prompt AI</h3>
+                        <p class="text-muted small mt-2">Copy prompt để gửi cho AI</p>
+                    </div>
+
+                    <!-- Template selector -->
+                    <div class="mb-2">
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                            <small><strong>Template:</strong></small>
+                            <select class="form-select form-select-sm" id="termTemplateSelect" onchange="onTermTemplateChange()"></select>
+                            <button class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size:0.72rem;flex-shrink:0" onclick="openAddTermTemplateModal()" title="Thêm template mới">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                        <div class="d-flex gap-1">
+                            <button class="btn btn-outline-primary btn-sm py-0 flex-fill" style="font-size:0.75rem;" onclick="saveTermTemplate()"><i class="fas fa-save"></i> Lưu chỉnh sửa</button>
+                        </div>
+                    </div>
+                    <div id="termTemplateSaveAlert" class="mb-1" style="font-size:0.78rem;"></div>
+
+                    <!-- Prompt textarea -->
+                    <div class="mb-2">
+                        <label class="form-label small mb-1"><strong>Prompt:</strong></label>
+                        <textarea class="form-control" id="termPromptTextarea" rows="8" style="font-size:0.78rem; resize:vertical;"></textarea>
+                    </div>
+
+                    <!-- JSON cặp song ngữ -->
+                    <div class="mb-2">
+                        <div class="d-flex align-items-center justify-content-between mb-1">
+                            <label class="form-label small mb-0"><strong>JSON cặp song ngữ:</strong></label>
+                            <button class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size:0.72rem;" onclick="toggleTermJsonExpand()" id="termJsonExpandBtn">Mở rộng</button>
+                        </div>
+                        <textarea class="form-control" id="termPairsJsonTextarea" rows="4" readonly
+                            placeholder="Số cặp sẽ hiện ở đây sau khi Align..."
+                            style="font-size:0.73rem; font-family:monospace; resize:none;"></textarea>
+                        <!-- Container các chunks (hiển thị thay thế khi > 0 chunks) -->
+                        <div id="termJsonChunksContainer" style="display:none;"></div>
+                    </div>
+
+                    <!-- Nút copy -->
+                    <div class="d-flex flex-wrap gap-2">
+                        <button class="btn btn-custom btn-sm flex-fill" onclick="copyTermAll()">
+                            <i class="fas fa-copy"></i> Copy tất cả
+                        </button>
+                        <button class="btn btn-outline-primary btn-sm" onclick="copyTermPart('prompt')" style="font-size:0.78rem;">
+                            <i class="fas fa-align-left"></i> Prompt
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="copyTermPart('json')" style="font-size:0.78rem;">
+                            <i class="fas fa-code"></i> JSON
+                        </button>
+                    </div>
+
+                    <div id="termCopyAlert" class="mt-2" style="font-size:0.78rem;"></div>
+
+                </div>
+            </div>
+
+            <!-- Bước 3: Nhập CSV & Lưu Glossary -->
+            <div class="col-lg-4">
+                <div class="function-card">
+                    <div class="text-center">
+                        <span class="step-number">3</span>
+                        <h3 class="d-inline">Nhập kết quả</h3>
+                        <p class="text-muted small mt-2">Paste JSON từ AI → lưu Glossary</p>
+                    </div>
+
+                    <!-- CSV textarea -->
+                    <div class="mb-2">
+                        <label class="form-label small mb-1"><strong>Paste JSON từ AI:</strong></label>
+                        <textarea class="form-control" id="termCsvTextarea" rows="6"
+                            placeholder='Ví dụ:&#10;{"Purchase Order": "注文書", "Delivery Note": "納品書"}'
+                            oninput="previewTermInput()"
+                            style="font-family:monospace; font-size:0.8rem; resize:vertical;"></textarea>
+                    </div>
+
+                    <!-- Preview bảng -->
+                    <div id="termCsvPreviewWrap" style="display:none;" class="mb-2">
+                        <div class="small fw-bold mb-1">Preview:</div>
+                        <div style="max-height:150px; overflow-y:auto; border:1px solid #dee2e6; border-radius:6px;">
+                            <table class="table table-sm table-bordered mb-0" id="termCsvPreviewTable">
+                                <thead><tr><th>Đích (cột A)</th><th>Gốc (cột B)</th></tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Lưu vào Glossary -->
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Lưu vào Glossary:</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="termGlossaryMode" id="termModeNew" value="new" checked onchange="onTermGlossaryModeChange()">
+                            <label class="form-check-label small" for="termModeNew">Tạo glossary mới</label>
+                        </div>
+                        <div id="termNewNameWrap" class="mt-1 mb-2">
+                            <input type="text" class="form-control form-control-sm" id="termNewGlossaryName"
+                                placeholder="Tên glossary mới...">
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="termGlossaryMode" id="termModeMerge" value="merge" onchange="onTermGlossaryModeChange()">
+                            <label class="form-check-label small" for="termModeMerge">Merge vào glossary có sẵn</label>
+                        </div>
+                        <div id="termMergeSelectWrap" style="display:none;" class="mt-1">
+                            <select class="form-select form-select-sm" id="termMergeGlossarySelect">
+                                <option value="">Đang tải...</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="text-center">
+                        <button type="button" class="btn btn-custom btn-sm" id="termImportBtn" onclick="runTermImport()">
+                            <i class="fas fa-save"></i> Lưu vào Glossary
+                        </button>
+                    </div>
+
+                    <div class="loading text-center mt-2" id="termImportLoading" style="display:none;">
+                        <div class="spinner-border text-primary" role="status"><span class="visually-hidden">...</span></div>
+                    </div>
+
+                    <div id="termImportAlert" class="mt-2"></div>
+
+                </div>
+            </div>
+
+        </div><!-- /row -->
+        </div><!-- /tab-pane tab4 Terminology -->
 
         </div><!-- /tab-content -->
     </div>
@@ -3590,6 +3809,482 @@ Output yêu cầu:
     })();
     </script>
 
+<script>
+// ==================== TERMINOLOGY EXTRACTOR ====================
+(function () {
+    'use strict';
+
+    // --- State ---
+    let termTemplates = [];       // loaded from API
+    let termPairsJson = '';       // JSON string of aligned pairs
+    let termPairsChunks = [];     // paginated chunks (300 pairs each)
+
+    // --- File input helpers ---
+    function bindTermFileInput(inputId, infoId, iconId, nameId, areaId) {
+        const input = document.getElementById(inputId);
+        const areaEl = areaId ? document.getElementById(areaId) : null;
+        input.addEventListener('change', function () {
+            if (this.files.length > 0) {
+                const f = this.files[0];
+                document.getElementById(nameId).textContent = f.name;
+                document.getElementById(infoId).style.display = 'block';
+                const fn = f.name.toLowerCase();
+                const icon = document.getElementById(iconId);
+                if (fn.endsWith('.xlsx')) icon.className = 'fas fa-file-excel text-success';
+                else if (fn.endsWith('.pptx')) icon.className = 'fas fa-file-powerpoint text-danger';
+                else if (fn.endsWith('.docx')) icon.className = 'fas fa-file-word text-primary';
+                else icon.className = 'fas fa-file text-secondary';
+            }
+        });
+        // Drag & drop support
+        if (areaEl) {
+            areaEl.addEventListener('dragover', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                areaEl.classList.add('drag-over');
+            });
+            areaEl.addEventListener('dragleave', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                areaEl.classList.remove('drag-over');
+            });
+            areaEl.addEventListener('drop', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                areaEl.classList.remove('drag-over');
+                const files = e.dataTransfer.files;
+                if (!files || !files.length) return;
+                const file = files[0];
+                const ext = file.name.split('.').pop().toLowerCase();
+                if (!['xlsx', 'pptx', 'docx'].includes(ext)) {
+                    areaEl.style.borderColor = '#dc3545';
+                    setTimeout(() => { areaEl.style.borderColor = ''; }, 2000);
+                    return;
+                }
+                const dt = new DataTransfer();
+                dt.items.add(file);
+                input.files = dt.files;
+                input.dispatchEvent(new Event('change'));
+            });
+        }
+    }
+    bindTermFileInput('termSrcFile', 'termSrcInfo', 'termSrcIcon', 'termSrcName', 'termSrcUploadArea');
+    bindTermFileInput('termDstFile', 'termDstInfo', 'termDstIcon', 'termDstName', 'termDstUploadArea');
+
+    window.clearTermFile = function (which) {
+        const prefix = which === 'src' ? 'termSrc' : 'termDst';
+        document.getElementById(prefix + 'File').value = '';
+        document.getElementById(prefix + 'Info').style.display = 'none';
+    };
+
+    // --- Step 1: Align ---
+    window.runTermAlign = async function () {
+        const srcInput = document.getElementById('termSrcFile');
+        const dstInput = document.getElementById('termDstFile');
+        const alertEl = document.getElementById('termAlignAlert');
+        const loading = document.getElementById('termAlignLoading');
+        const resultEl = document.getElementById('termAlignResult');
+        const btn = document.getElementById('termAlignBtn');
+
+        if (!srcInput.files.length || !dstInput.files.length) {
+            showTermAlert(alertEl, 'warning', 'Vui lòng chọn cả hai file.');
+            return;
+        }
+
+        const extSrc = srcInput.files[0].name.split('.').pop().toLowerCase();
+        const extDst = dstInput.files[0].name.split('.').pop().toLowerCase();
+        if (extSrc !== extDst) {
+            showTermAlert(alertEl, 'danger', `Hai file phải cùng định dạng (.${extSrc} vs .${extDst}).`);
+            return;
+        }
+
+        alertEl.innerHTML = '';
+        resultEl.style.display = 'none';
+        loading.style.display = 'block';
+        btn.disabled = true;
+
+        const fd = new FormData();
+        fd.append('file_src', srcInput.files[0]);
+        fd.append('file_dst', dstInput.files[0]);
+
+        try {
+            const resp = await fetch('/api/terminology/align', { method: 'POST', body: fd });
+            const data = await resp.json();
+            loading.style.display = 'none';
+            btn.disabled = false;
+
+            if (!resp.ok || data.error) {
+                showTermAlert(alertEl, 'danger', data.error || 'Lỗi không xác định');
+                return;
+            }
+
+            // Stats
+            document.getElementById('termAlignStats').innerHTML =
+                `<i class="fas fa-check-circle"></i> Tìm thấy <strong>${data.matched}</strong> cặp song ngữ từ <strong>${data.total}</strong> keys khớp nhau.`;
+
+            // Preview table
+            const tbody = document.querySelector('#termPreviewTable tbody');
+            tbody.innerHTML = '';
+            (data.pairs || []).slice(0, 10).forEach(p => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td style="font-size:0.78rem;word-break:break-word;">${escHtml(p.src)}</td><td style="font-size:0.78rem;word-break:break-word;">${escHtml(p.dst)}</td>`;
+                tbody.appendChild(tr);
+            });
+
+            // Store full JSON for step 2 — with chunking
+            const CHUNK_SIZE = 300;
+            const allPairs = JSON.parse(data.pairs_json || '[]');
+            termPairsChunks = [];
+            for (let i = 0; i < allPairs.length; i += CHUNK_SIZE) {
+                termPairsChunks.push(allPairs.slice(i, i + CHUNK_SIZE));
+            }
+            termPairsJson = data.pairs_json || '';
+            renderTermJsonChunks();
+
+            resultEl.style.display = 'block';
+        } catch (e) {
+            loading.style.display = 'none';
+            btn.disabled = false;
+            showTermAlert(alertEl, 'danger', 'Lỗi kết nối: ' + e.message);
+        }
+    };
+
+    // --- Step 2: Templates ---
+    function renderTermJsonChunks() {
+        const container = document.getElementById('termJsonChunksContainer');
+        const ta = document.getElementById('termPairsJsonTextarea');
+        const expandBtn = document.getElementById('termJsonExpandBtn');
+        container.innerHTML = '';
+        if (!termPairsChunks || !termPairsChunks.length) {
+            // Fall back to single textarea
+            ta.value = termPairsJson;
+            ta.style.display = '';
+            expandBtn.style.display = '';
+            container.style.display = 'none';
+            return;
+        }
+        const total = termPairsChunks.length;
+        termPairsChunks.forEach((chunk, idx) => {
+            const chunkJson = JSON.stringify(chunk, null, 2);
+            const div = document.createElement('div');
+            div.className = 'mb-2';
+            div.innerHTML = `
+                <div class="d-flex align-items-center justify-content-between mb-1">
+                    <span class="small fw-bold">Phần ${idx + 1}/${total} — ${chunk.length} cặp</span>
+                    <button class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size:0.72rem;"
+                        onclick="copyTermChunk(${idx})">
+                        <i class="fas fa-copy"></i> Copy phần ${idx + 1}
+                    </button>
+                </div>
+                <textarea class="form-control" rows="3" readonly
+                    style="font-size:0.72rem;font-family:monospace;resize:none;"
+                    id="termChunkTextarea_${idx}"></textarea>
+            `;
+            container.appendChild(div);
+            document.getElementById(`termChunkTextarea_${idx}`).value = chunkJson;
+        });
+        container.style.display = 'block';
+        ta.style.display = 'none';
+        expandBtn.style.display = 'none';
+    }
+
+    window.copyTermChunk = function (idx) {
+        const alertEl = document.getElementById('termCopyAlert');
+        const chunkJson = JSON.stringify(termPairsChunks[idx], null, 2);
+        copyToClipboard(chunkJson, alertEl, `Đã copy phần ${idx + 1} (${termPairsChunks[idx].length} cặp)!`);
+    };
+
+    async function loadTermTemplates() {
+        try {
+            const resp = await fetch('/api/terminology/prompts');
+            termTemplates = await resp.json();
+            renderTermTemplateSelect();
+        } catch (e) {
+            termTemplates = [];
+        }
+    }
+
+    function renderTermTemplateSelect() {
+        const sel = document.getElementById('termTemplateSelect');
+        sel.innerHTML = '';
+        termTemplates.forEach((t, i) => {
+            const opt = document.createElement('option');
+            opt.value = i;
+            opt.textContent = t.name;
+            sel.appendChild(opt);
+        });
+        if (termTemplates.length > 0) {
+            document.getElementById('termPromptTextarea').value = termTemplates[0].content;
+        }
+    }
+
+    window.onTermTemplateChange = function () {
+        const idx = parseInt(document.getElementById('termTemplateSelect').value);
+        if (termTemplates[idx]) {
+            document.getElementById('termPromptTextarea').value = termTemplates[idx].content;
+        }
+    };
+
+    window.saveTermTemplate = async function () {
+        const idx = parseInt(document.getElementById('termTemplateSelect').value);
+        const alertEl = document.getElementById('termTemplateSaveAlert');
+        if (isNaN(idx) || !termTemplates[idx]) {
+            showTermAlert(alertEl, 'warning', 'Không có template nào đang chọn.');
+            return;
+        }
+        termTemplates[idx].content = document.getElementById('termPromptTextarea').value;
+        try {
+            const resp = await fetch('/api/terminology/prompts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(termTemplates)
+            });
+            const data = await resp.json();
+            if (data.success) {
+                showTermAlert(alertEl, 'success', 'Đã lưu template.');
+                setTimeout(() => { alertEl.innerHTML = ''; }, 2500);
+            } else {
+                showTermAlert(alertEl, 'danger', data.error || 'Lỗi lưu.');
+            }
+        } catch (e) {
+            showTermAlert(alertEl, 'danger', 'Lỗi kết nối: ' + e.message);
+        }
+    };
+
+    window.openAddTermTemplateModal = function () {
+        document.getElementById('termNewTemplateName').value = '';
+        new bootstrap.Modal(document.getElementById('termAddTemplateModal')).show();
+    };
+
+    window.confirmAddTermTemplate = async function () {
+        const name = document.getElementById('termNewTemplateName').value.trim();
+        if (!name) return;
+        const newTpl = { id: 'term_' + Date.now(), name, content: '' };
+        termTemplates.push(newTpl);
+        try {
+            await fetch('/api/terminology/prompts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(termTemplates)
+            });
+        } catch (e) { /* non-critical */ }
+        renderTermTemplateSelect();
+        document.getElementById('termTemplateSelect').value = termTemplates.length - 1;
+        document.getElementById('termPromptTextarea').value = '';
+        bootstrap.Modal.getInstance(document.getElementById('termAddTemplateModal'))?.hide();
+    };
+
+    // JSON expand/collapse
+    window.toggleTermJsonExpand = function () {
+        const ta = document.getElementById('termPairsJsonTextarea');
+        const btn = document.getElementById('termJsonExpandBtn');
+        if (ta.rows <= 4) {
+            ta.rows = 18;
+            ta.style.resize = 'vertical';
+            btn.textContent = 'Thu gọn';
+        } else {
+            ta.rows = 4;
+            ta.style.resize = 'none';
+            btn.textContent = 'Mở rộng';
+        }
+    };
+
+    // Copy helpers
+    async function copyToClipboard(text, alertEl, msg) {
+        try {
+            await navigator.clipboard.writeText(text);
+            showTermAlert(alertEl, 'success', msg || 'Đã copy!');
+            setTimeout(() => { alertEl.innerHTML = ''; }, 2000);
+        } catch (e) {
+            showTermAlert(alertEl, 'danger', 'Copy thất bại: ' + e.message);
+        }
+    }
+
+    window.copyTermAll = function () {
+        const prompt = document.getElementById('termPromptTextarea').value;
+        const alertEl = document.getElementById('termCopyAlert');
+        if (termPairsChunks && termPairsChunks.length > 0) {
+            const jsonPart = JSON.stringify(termPairsChunks[0], null, 2);
+            copyToClipboard(prompt + '\n\n' + jsonPart, alertEl,
+                `Đã copy Prompt + Phần 1/${termPairsChunks.length} (${termPairsChunks[0].length} cặp). Dùng nút "Copy phần N" để copy từng phần.`);
+        } else {
+            copyToClipboard(prompt + '\n\n' + (termPairsJson || ''), alertEl, 'Đã copy toàn bộ (Prompt + JSON)!');
+        }
+    };
+
+    window.copyTermPart = function (part) {
+        const alertEl = document.getElementById('termCopyAlert');
+        if (part === 'prompt') {
+            copyToClipboard(document.getElementById('termPromptTextarea').value, alertEl, 'Đã copy Prompt!');
+        } else {
+            copyToClipboard(document.getElementById('termPairsJsonTextarea').value, alertEl, 'Đã copy JSON!');
+        }
+    };
+
+    // --- Step 3: JSON/CSV preview ---
+    window.previewTermInput = function () {
+        const raw = document.getElementById('termCsvTextarea').value.trim();
+        const previewWrap = document.getElementById('termCsvPreviewWrap');
+        const tbody = document.querySelector('#termCsvPreviewTable tbody');
+        tbody.innerHTML = '';
+        if (!raw) { previewWrap.style.display = 'none'; return; }
+
+        let pairs = [];
+
+        // Try JSON first
+        try {
+            let cleanRaw = raw;
+            if (cleanRaw.startsWith('```')) {
+                cleanRaw = cleanRaw.replace(/```[\w]*\n?/g, '').trim();
+            }
+            const parsed = JSON.parse(cleanRaw);
+            if (typeof parsed === 'object' && !Array.isArray(parsed)) {
+                pairs = Object.entries(parsed).map(([src, dst]) => [String(dst), String(src)]);
+            }
+        } catch (e) {
+            // Fallback: parse as CSV
+            const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+            lines.forEach(line => {
+                let parts;
+                if (line.includes(',')) {
+                    parts = line.split(',');
+                } else if (line.includes('\t')) {
+                    parts = line.split('\t');
+                } else {
+                    parts = [line, ''];
+                }
+                pairs.push([(parts[0] || '').trim(), (parts[1] || '').trim()]);
+            });
+        }
+
+        if (!pairs.length) { previewWrap.style.display = 'none'; return; }
+
+        pairs.slice(0, 20).forEach(([dst, src]) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td style="font-size:0.78rem;">${escHtml(dst)}</td><td style="font-size:0.78rem;">${escHtml(src)}</td>`;
+            tbody.appendChild(tr);
+        });
+        previewWrap.style.display = 'block';
+    };
+    // Alias for backward compatibility
+    window.previewTermCsv = window.previewTermInput;
+
+    // Glossary mode toggle
+    window.onTermGlossaryModeChange = function () {
+        const mode = document.querySelector('input[name="termGlossaryMode"]:checked')?.value;
+        document.getElementById('termNewNameWrap').style.display = mode === 'new' ? 'block' : 'none';
+        const mergeWrap = document.getElementById('termMergeSelectWrap');
+        if (mode === 'merge') {
+            mergeWrap.style.display = 'block';
+            loadTermGlossaryList();
+        } else {
+            mergeWrap.style.display = 'none';
+        }
+    };
+
+    async function loadTermGlossaryList() {
+        const sel = document.getElementById('termMergeGlossarySelect');
+        try {
+            const resp = await fetch('/api/glossaries');
+            const list = await resp.json();
+            sel.innerHTML = '';
+            if (!list.length) {
+                sel.innerHTML = '<option value="">Chưa có glossary nào</option>';
+                return;
+            }
+            list.forEach(g => {
+                const opt = document.createElement('option');
+                opt.value = g.id;
+                opt.textContent = `${g.name} (${g.rows} dòng)`;
+                sel.appendChild(opt);
+            });
+        } catch (e) {
+            sel.innerHTML = '<option value="">Lỗi tải danh sách</option>';
+        }
+    }
+
+    // --- Step 3: Import JSON ---
+    window.runTermImport = async function () {
+        const inputText = document.getElementById('termCsvTextarea').value.trim();
+        const alertEl = document.getElementById('termImportAlert');
+        const loading = document.getElementById('termImportLoading');
+        const btn = document.getElementById('termImportBtn');
+
+        if (!inputText) {
+            showTermAlert(alertEl, 'warning', 'Vui lòng paste nội dung JSON trước.');
+            return;
+        }
+
+        const mode = document.querySelector('input[name="termGlossaryMode"]:checked')?.value;
+        let body = { json_text: inputText };
+
+        if (mode === 'new') {
+            const name = document.getElementById('termNewGlossaryName').value.trim();
+            if (!name) {
+                showTermAlert(alertEl, 'warning', 'Vui lòng nhập tên glossary mới.');
+                return;
+            }
+            body.new_glossary_name = name;
+        } else {
+            const gid = document.getElementById('termMergeGlossarySelect').value;
+            if (!gid) {
+                showTermAlert(alertEl, 'warning', 'Vui lòng chọn glossary để merge.');
+                return;
+            }
+            body.target_glossary_id = gid;
+        }
+
+        alertEl.innerHTML = '';
+        loading.style.display = 'block';
+        btn.disabled = true;
+
+        try {
+            const resp = await fetch('/api/terminology/import-json', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            const data = await resp.json();
+            loading.style.display = 'none';
+            btn.disabled = false;
+
+            if (!resp.ok || data.error) {
+                showTermAlert(alertEl, 'danger', data.error || 'Lỗi không xác định');
+                return;
+            }
+
+            const skipNote = data.skipped_duplicate > 0 ? `, bỏ qua ${data.skipped_duplicate} trùng lặp` : '';
+            showTermAlert(alertEl, 'success',
+                `✅ Đã thêm <strong>${data.added}</strong> thuật ngữ mới vào "<em>${escHtml(data.name)}</em>"${skipNote}. ` +
+                `<a href="#" onclick="document.getElementById('main-tab1').click();return false;">→ Xem trong tab Dịch tài liệu</a>`
+            );
+        } catch (e) {
+            loading.style.display = 'none';
+            btn.disabled = false;
+            showTermAlert(alertEl, 'danger', 'Lỗi kết nối: ' + e.message);
+        }
+    };
+
+    // --- Util helpers ---
+    function showTermAlert(el, type, html) {
+        el.innerHTML = `<div class="alert alert-${type} py-1 px-2 mt-1 small">${html}</div>`;
+    }
+
+    function escHtml(str) {
+        return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // Load templates on startup
+    loadTermTemplates();
+
+    // Activate when tab is shown
+    document.getElementById('main-tab4').addEventListener('shown.bs.tab', function () {
+        loadTermTemplates();
+    });
+
+})();
+</script>
+
 <!-- Modal: Quản lý Từ điển Chuyên ngành -->
 <div class="modal fade" id="glossaryModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
@@ -3672,6 +4367,28 @@ Output yêu cầu:
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Huỷ</button>
                 <button type="button" class="btn btn-primary btn-sm" onclick="saveGlossaryEdit()">
                     <i class="fas fa-save"></i> Lưu
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Thêm Terminology Template mới -->
+<div class="modal fade" id="termAddTemplateModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title">Thêm Template Mới</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <label class="form-label small mb-1"><strong>Tên template:</strong></label>
+                <input type="text" class="form-control form-control-sm" id="termNewTemplateName" placeholder="VD: Trích xuất thuật ngữ kỹ thuật">
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Huỷ</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="confirmAddTermTemplate()">
+                    <i class="fas fa-plus"></i> Thêm
                 </button>
             </div>
         </div>

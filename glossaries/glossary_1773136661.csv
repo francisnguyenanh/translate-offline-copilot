@@ -1,0 +1,65 @@
+﻿Kịch bản kiểm thử,テストパターン
+Đăng ký chữ ký,ご署名登録
+Giao hàng (Chỉ giao đồ),配達（納品のみ）
+Giao hàng lắp đặt,配達工事
+Thu hồi,引取
+Cho mượn,貸出
+Thu hồi đồ cho mượn,貸出引取
+Đổi trả hàng lỗi,不良交換
+Chỉ thị công việc,作業指示
+Đăng ký công việc bổ sung,追加作業登録
+Thu hồi đồ tái chế,リサイクル引取
+Hủy,取消
+Nhiều chi tiết,複数明細
+Vệ sinh máy lạnh,エアコンクリーニング
+Vệ sinh khu vực nước,水回りクリーニング
+Hỗn hợp,混在
+Đăng ký tạm hoãn,保留登録
+Đăng ký chưa hoàn thành,未完了登録
+Hóa đơn giao hàng lắp đặt,配達工事伝票
+Thu tiền mặt,現金集金
+Hoàn thành,完了
+Hóa đơn thu hồi,引取伝票
+Chưa thu tiền,未収
+Hủy hóa đơn gốc,元伝票取消
+Thêm hóa đơn gốc,元伝票追加
+Sửa hóa đơn gốc,元伝票修正
+Ghé trạm,立ち寄り
+Nơi nhận,届け先
+Hàng ghé trạm,立ち寄り品
+Chi tiết hóa đơn gốc,元伝明細
+Hoàn tiền,返金
+Hóa đơn thu hồi cho mượn,貸出引取伝票
+Hóa đơn thu hồi đổi trả hàng lỗi,不良交換引取伝票
+Hóa đơn cho mượn,貸出伝票
+Tên kịch bản,パターン名
+Xác thực,認証
+Bao phủ toàn bộ các mẫu màn hình,画面パターン全網羅
+Đặt lại mật khẩu,パスワード再設定
+Cấp mới,発行
+Xử lý nhập kho,入庫処理
+Xử lý nhập tiền,入金処理
+Ngoài giờ làm việc,業務時間外
+Kịch bản kiểm thử tích hợp nội bộ,内部結合テストパターン
+Phân loại kiểm thử lớn,テスト大分類
+Phân loại kiểm thử,ﾃｽﾄ分類
+Xác nhận hoàn thành hóa đơn,伝票完了の確認
+Xác nhận nhập kho và nhập tiền,入庫・入金の確認
+Kết thúc công việc,業務終了
+Hamburger menu,ハンバーガーメニュー
+Nội dung hiển thị trên màn hình,画面表示内容
+Nội dung in trên biểu mẫu,帳票印字内容
+Cập nhật DB,更新DB
+Màn hình chuyển đổi,遷移画面
+Bằng chứng (Evidence),エビデンス
+Luồng giao hàng thông thường,通常配達フロー
+Luồng đăng nhập,ログインフロー
+Luồng ghé trạm,立ち寄りフロー
+Luồng kết thúc công việc,業務終了フロー
+Luồng Menu,メニューフロー
+Luồng doanh thu bổ sung,追加売上フロー
+Luồng vệ sinh (Cleaning),クリーニングフロー
+Luồng tạm hoãn,保留フロー
+Loại hóa đơn,伝票種別
+Xác nhận kịch bản đặc biệt,特殊パターン確認
+Tái chế,リサイクル

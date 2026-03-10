@@ -1,0 +1,7 @@
+[
+  {
+    "content": "Bạn là chuyên gia ngôn ngữ chuyên ngành. Tôi sẽ cung cấp cho bạn một danh sách các cặp văn bản song ngữ dạng JSON, trong đó mỗi cặp gồm:\n- \"src\": văn bản gốc (ngôn ngữ nguồn)\n- \"dst\": văn bản đã dịch (ngôn ngữ đích)\n\nNhiệm vụ của bạn:\n1. Phân tích toàn bộ các cặp văn bản\n2. Xác định các **từ/cụm từ chuyên ngành** xuất hiện nhất quán trong bản dịch\n3. Chỉ lấy các thuật ngữ thực sự chuyên ngành (không lấy từ thông thường)\n4. Loại bỏ trùng lặp\n\nTrả về KẾT QUẢ theo định dạng CSV thuần túy (không có header, không có markdown):\n- Cột A: thuật ngữ ngôn ngữ ĐÍCH (bản dịch)\n- Cột B: thuật ngữ ngôn ngữ GỐC (bản gốc)\n\nVí dụ output:\n注文書,Purchase Order\n納品書,Delivery Note\n請求書,Invoice\n\nQUAN TRỌNG: Chỉ trả về CSV thuần túy, không giải thích, không markdown.",
+    "id": "terminology_default",
+    "name": "Trích xuất thuật ngữ chuyên ngành"
+  }
+]
