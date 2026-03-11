@@ -1247,11 +1247,14 @@ Output yêu cầu:
                         <span id="imgZoomLabel" class="small" style="min-width:40px;text-align:center;">100%</span>
                         <button type="button" class="btn btn-outline-secondary btn-sm px-2 py-0" onclick="imgZoom(+0.15)" title="Phóng to"><i class="fas fa-search-plus"></i></button>
                         <button type="button" class="btn btn-outline-secondary btn-sm px-2 py-0" onclick="imgZoomReset()" title="Khôi phục">↺</button>
+                        <button type="button" class="btn btn-outline-info btn-sm px-2 py-0"
+                                id="imgFitBtn" onclick="imgFitToggle()" title="Vừa khung / kích thước thật">
+                            <i class="fas fa-compress-alt"></i> Fit
+                        </button>
                     </div>
-                    <div style="overflow:auto;max-height:75vh;">
-                        <div id="imgOverlayContainer" style="position:relative;display:inline-block;user-select:none;transform-origin:top left;">
-                            <!-- FIX CAUSE2: max-width:100% ensures getBoundingClientRect() matches the visible rendering area -->
-                            <img id="imgOverlayBase" src="" style="display:block;max-width:100%;height:auto;" alt="Ảnh gốc">
+                    <div id="imgOverlayWrapper" style="overflow:auto;max-height:80vh;">
+                        <div id="imgOverlayContainer" style="position:relative;display:inline-block;user-select:none;">
+                            <img id="imgOverlayBase" src="" style="display:block;" alt="Ảnh gốc">
                         </div>
                     </div>
                     <div class="mt-3">
@@ -1869,6 +1872,14 @@ Output yêu cầu:
                 window.sheetSessionKey = data.session_key;
                 document.getElementById('sheetFileName').textContent = data.display_name;
                 document.getElementById('sheetPreview').style.display = '';
+                
+                // FIX: Enable Extract button and update Inject button state
+                uploadedExcelFilename = data.display_name || 'google-sheet';
+                const extractBtn = document.getElementById('extractBtn');
+                if (extractBtn) extractBtn.disabled = false;
+                // FIX: Do NOT immediately enable injectBtn - it should only enable when BOTH source file AND JSON data exist
+                updateInjectButtonState();
+                
                 showAlert(document.getElementById('sheetLoadAlert'), 'success', '<i class="fas fa-check-circle"></i> Tải thành công! Chọn sheet và nhấn Trích xuất.');
             } catch (e) {
                 showAlert(document.getElementById('sheetLoadAlert'), 'danger', '<i class="fas fa-exclamation-circle"></i> ' + e.message);
@@ -1883,6 +1894,13 @@ Output yêu cầu:
             document.getElementById('sheetPreview').style.display = 'none';
             document.getElementById('googleSheetTabSelect').innerHTML = '<option value="">-- Tải sheet sau khi nhập link --</option>';
             document.getElementById('sheetLoadAlert').innerHTML = '';
+            
+            // FIX: Also reset uploadedExcelFilename and update button states when clearing sheet
+            uploadedExcelFilename = null;
+            const extractBtn = document.getElementById('extractBtn');
+            if (extractBtn) extractBtn.disabled = true;
+            // FIX: Update inject button state when source is removed
+            updateInjectButtonState();
         }
 
         // ==================== GIỮ NGUYÊN NGÔN NGỮ ====================
@@ -1997,6 +2015,16 @@ Output yêu cầu:
             }
         });
 
+        // FIX: Function to update inject button state based on both source file and JSON data presence
+        function updateInjectButtonState() {
+            const hasSourceFile = !!(uploadedExcelFilename || window.sheetSessionKey || mainExcelFile.files.length > 0);
+            const hasJsonData = !!(pastedJsonData.length > 0 || injectJsonFile.files.length > 0);
+            const injectBtn = document.getElementById('injectBtn');
+            if (injectBtn) {
+                injectBtn.disabled = !(hasSourceFile && hasJsonData);
+            }
+        }
+        
         // ==================== UPLOAD EXCEL CHUNG ====================
         const mainExcelFile = document.getElementById('mainExcelFile');
         const mainFileInfo = document.getElementById('mainFileInfo');
@@ -2048,8 +2076,9 @@ Output yêu cầu:
             uploadedExcelFilename = null;
             window._fromSmartUpdate = false;
             extractBtn.disabled = true;
-            injectBtn.disabled = true;
             mainAlert.innerHTML = '';
+            // FIX: Update inject button state when source file is removed
+            updateInjectButtonState();
             
             // Xóa sessionStorage
             sessionStorage.removeItem('uploadedFileName');
@@ -2517,6 +2546,8 @@ Output yêu cầu:
                 
                 // Hiển thị thông báo
                 showAlert(injectAlert, 'success', `Đã thêm JSON #${pastedJsonData.length} với ${Object.keys(parsedJson).length} cặp key-value.`);
+                // FIX: Update inject button state when JSON is added
+                updateInjectButtonState();
                 
             } catch (e) {
                 showAlert(injectAlert, 'danger', 'JSON không hợp lệ: ' + e.message);
@@ -2553,6 +2584,8 @@ Output yêu cầu:
         window.removePastedJson = function(index) {
             pastedJsonData.splice(index, 1);
             updatePastedJsonList();
+            // FIX: Update inject button state when JSON is removed
+            updateInjectButtonState();
             showAlert(injectAlert, 'info', 'Đã xóa JSON.');
         };
         
@@ -2561,6 +2594,8 @@ Output yêu cầu:
             if (confirm('Xóa tất cả JSON đã paste?')) {
                 pastedJsonData = [];
                 updatePastedJsonList();
+                // FIX: Update inject button state when all JSON is cleared
+                updateInjectButtonState();
                 showAlert(injectAlert, 'info', 'Đã xóa tất cả JSON đã paste.');
             }
         });
@@ -2582,6 +2617,8 @@ Output yêu cầu:
                 });
                 
                 injectJsonFileInfo.style.display = 'block';
+                // FIX: Update inject button state when JSON files are uploaded
+                updateInjectButtonState();
             }
         });
         
@@ -2589,6 +2626,8 @@ Output yêu cầu:
         injectJsonFileRemove.addEventListener('click', function() {
             injectJsonFile.value = '';
             injectJsonFileInfo.style.display = 'none';
+            // FIX: Update inject button state when JSON files are removed
+            updateInjectButtonState();
         });
         
         // Xử lý drag and drop cho JSON files
@@ -2639,6 +2678,8 @@ Output yêu cầu:
                     });
                     
                     injectJsonFileInfo.style.display = 'block';
+                    // FIX: Update inject button state when JSON files are drag-dropped
+                    updateInjectButtonState();
                 } else {
                     showAlert(injectAlert, 'warning', 'Chỉ chấp nhận file .json hoặc .zip!');
                 }
@@ -2649,9 +2690,9 @@ Output yêu cầu:
         injectForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             
-            // Kiểm tra xem có file được upload chưa (hoặc đến từ Smart Update)
+            // Kiểm tra xem có file nguồn được upload chưa (hoặc từ Google Sheet hoặc Smart Update)
             // Chặn chỉ khi CẢ HAI đều thiếu: không có filename và không có file thực
-            if (!uploadedExcelFilename && mainExcelFile.files.length === 0) {
+            if (!uploadedExcelFilename && mainExcelFile.files.length === 0 && !window.sheetSessionKey) {
                 showAlert(injectAlert, 'warning', 'Vui lòng upload file (Excel hoặc PowerPoint) ở Bước 1 trước!');
                 return;
             }
@@ -2670,6 +2711,10 @@ Output yêu cầu:
             const formData = new FormData();
             if (mainExcelFile.files.length > 0) {
                 formData.append('excel_file', mainExcelFile.files[0]);
+            }
+            // FIX: Gửi sheet_session_key nếu file từ Google Sheet
+            if (window.sheetSessionKey) {
+                formData.append('sheet_session_key', window.sheetSessionKey);
             }
             
             // Thêm tất cả các file JSON/ZIP
@@ -3208,6 +3253,14 @@ Output yêu cầu:
             ocrBlocks = [];
             document.getElementById('imgOverlayResult').style.display = 'none';
             imgUploadAlert.innerHTML = '';
+            // FIX: reset fit state when image is removed
+            imgFitActive = false;
+            imgZoomLevel = 1.0;
+            const fitBtn3 = document.getElementById('imgFitBtn');
+            if (fitBtn3) {
+                fitBtn3.classList.replace('btn-info', 'btn-outline-info');
+                fitBtn3.innerHTML = '<i class="fas fa-compress-alt"></i> Fit';
+            }
         });
 
         async function handleImgFile(file) {
@@ -3389,8 +3442,29 @@ Output yêu cầu:
             }
 
             // Build imgTextBlocks: pixel coords → percentage, reference from stored img dimensions
-            const imgW = (ocrBlocks[0] && ocrBlocks[0].img_w) ? ocrBlocks[0].img_w : (imgPreview.naturalWidth  || 1);
-            const imgH = (ocrBlocks[0] && ocrBlocks[0].img_h) ? ocrBlocks[0].img_h : (imgPreview.naturalHeight || 1);
+            // FIX: OCR.space returns coords in natural image space.
+            // ocrBlocks[0].img_w now holds natural dimensions (after app.py fix).
+            // Secondary fallback: use imgOverlayBase.naturalWidth which is the actual
+            // rendering reference — this guarantees % coords align with the container.
+            const imgOverlayEl = document.getElementById('imgOverlayBase');
+            const imgW = (ocrBlocks[0] && ocrBlocks[0].img_w)
+                ? ocrBlocks[0].img_w
+                : (imgOverlayEl ? imgOverlayEl.naturalWidth  : (imgPreview.naturalWidth  || 1));
+            const imgH = (ocrBlocks[0] && ocrBlocks[0].img_h)
+                ? ocrBlocks[0].img_h
+                : (imgOverlayEl ? imgOverlayEl.naturalHeight : (imgPreview.naturalHeight || 1));
+
+            // ASSERT: if ocrBlocks img_w differs from naturalWidth by more than 5%, warn
+            if (imgOverlayEl && imgOverlayEl.naturalWidth > 0) {
+                const ratio = imgW / imgOverlayEl.naturalWidth;
+                if (ratio < 0.95 || ratio > 1.05) {
+                    console.warn(
+                        '[MERGE DEBUG] \u26a0 img_w from OCR blocks differs from naturalWidth!',
+                        `ocr img_w=${imgW}, naturalWidth=${imgOverlayEl.naturalWidth}, ratio=${ratio.toFixed(3)}`,
+                        'Blocks may be mispositioned. Check app.py OCR route.'
+                    );
+                }
+            }
 
             imgTextBlocks = ocrBlocks.map((b, i) => {
                 const block = {
@@ -3539,13 +3613,46 @@ Output yêu cầu:
             selectedBlockIdxSet.clear();
 
             function doRender() {
-                // Capture base rendered dimensions once, before zoom is applied
-                imgBaseRenderedHeight = imgEl.getBoundingClientRect().height;
-                imgBaseRenderedWidth  = imgEl.getBoundingClientRect().width;
-                // DEBUG: log rendered vs natural size to spot viewport clipping issues
-                console.debug('[OVERLAY DEBUG] imgEl naturalSize:', imgEl.naturalWidth, '\u00d7', imgEl.naturalHeight);
-                console.debug('[OVERLAY DEBUG] imgEl renderedSize:', imgBaseRenderedWidth, '\u00d7', imgBaseRenderedHeight);
+                // NEW ARCH: set explicit image width = naturalWidth × zoom; container (inline-block) follows.
+                // Scale ratio is clientWidth/naturalWidth — no transform:scale, no separate proxy div.
+                // Measure wrapper available width (exclude potential scrollbar with overflow:hidden trick)
+                const wrapperEl2 = document.getElementById('imgOverlayWrapper');
+                let wrapperW = 0;
+                if (wrapperEl2) {
+                    const prevOv = wrapperEl2.style.overflow;
+                    wrapperEl2.style.overflow = 'hidden';
+                    wrapperW = wrapperEl2.clientWidth || wrapperEl2.offsetWidth;
+                    wrapperEl2.style.overflow = prevOv;
+                }
+                // Auto-fit if image wider than wrapper
+                if (wrapperW > 0 && imgEl.naturalWidth > wrapperW && imgZoomLevel === 1.0) {
+                    const wrapperH = wrapperEl2 ? (wrapperEl2.clientHeight || Math.round(window.innerHeight * 0.75)) : 0;
+                    const scaleByW = wrapperW / imgEl.naturalWidth;
+                    const scaleByH = wrapperH > 0 ? (wrapperH / imgEl.naturalHeight) : scaleByW;
+                    const autoScale = Math.min(scaleByW, scaleByH, 1.0);
+                    imgZoomLevel  = Math.max(0.1, Math.min(autoScale, 1.0));
+                    imgFitActive  = true;
+                }
+                // Apply width directly — clientWidth/Height will reflect actual rendered size
+                const renderedW = Math.round(imgEl.naturalWidth  * imgZoomLevel);
+                const renderedH = Math.round(imgEl.naturalHeight * imgZoomLevel);
+                imgEl.style.width     = renderedW + 'px';
+                imgBaseRenderedWidth  = renderedW;
+                imgBaseRenderedHeight = renderedH;
+                console.debug('[OVERLAY DEBUG] naturalSize:', imgEl.naturalWidth, '\u00d7', imgEl.naturalHeight);
+                console.debug('[OVERLAY DEBUG] renderedSize:', imgBaseRenderedWidth, '\u00d7', imgBaseRenderedHeight, 'zoom:', imgZoomLevel);
                 console.debug('[OVERLAY DEBUG] imgTextBlocks count:', imgTextBlocks.length);
+                // Update fit button in next frame if auto-fit was applied
+                if (imgFitActive) {
+                    requestAnimationFrame(() => {
+                        const fitBtn2 = document.getElementById('imgFitBtn');
+                        if (fitBtn2 && imgFitActive) {
+                            fitBtn2.classList.replace('btn-outline-info', 'btn-info');
+                            fitBtn2.innerHTML = '<i class="fas fa-expand-alt"></i> 1:1';
+                            fitBtn2.title = 'Về kích thước thật (1:1)';
+                        }
+                    });
+                }
                 imgTextBlocks.forEach((block, idx) => {
                     createOverlayBlock(block, idx, container, imgEl);
                     appendBlockListRow(block, idx, blockList);
@@ -3734,9 +3841,10 @@ Output yêu cầu:
                 }
                 // Plain click on an already-selected block (no Ctrl) → keep selection for drag
 
-                const rect  = container.getBoundingClientRect();
-                const W     = rect.width;
-                const H     = rect.height;
+                // FIX: use natural dimensions for delta — block % coords are in natural image space
+                // getBoundingClientRect() returns scaled size when transform:scale is active
+                const W = imgBaseRenderedWidth  || 1;
+                const H = imgBaseRenderedHeight || 1;
                 const startX = e.clientX;
                 const startY = e.clientY;
                 const startTop    = imgTextBlocks[idx].top_pct;
@@ -3974,51 +4082,98 @@ Output yêu cầu:
 
         // ========== ZOOM ==========
         let imgZoomLevel = 1.0;
+        let imgFitActive = false;
         window.imgZoom = function(delta) {
             imgZoomLevel = Math.max(0.2, Math.min(5, imgZoomLevel + delta));
+            // FIX: deactivate fit mode when user manually zooms
+            imgFitActive = false;
+            const fb = document.getElementById('imgFitBtn');
+            if (fb) { fb.classList.replace('btn-info','btn-outline-info');
+                      fb.innerHTML='<i class="fas fa-compress-alt"></i> Fit';}
             applyZoom();
         };
         window.imgZoomReset = function() {
             imgZoomLevel = 1.0;
+            // FIX: deactivate fit mode on zoom reset
+            imgFitActive = false;
+            const fb = document.getElementById('imgFitBtn');
+            if (fb) { fb.classList.replace('btn-info','btn-outline-info');
+                      fb.innerHTML='<i class="fas fa-compress-alt"></i> Fit';}
             applyZoom();
+        };
+        // NEW: Fit to screen toggle
+        window.imgFitToggle = function() {
+            const imgEl3  = document.getElementById('imgOverlayBase');
+            const wrapper = document.getElementById('imgOverlayWrapper');
+            const fitBtn  = document.getElementById('imgFitBtn');
+            if (!imgEl3 || !imgEl3.naturalWidth) return;
+            imgFitActive = !imgFitActive;
+            if (imgFitActive) {
+                // FIX CAUSE 2: temporarily hide overflow to measure wrapper width WITHOUT scrollbar
+                // This gives true available width before any scroll-induced narrowing
+                const prevOverflow = wrapper.style.overflow;
+                wrapper.style.overflow = 'hidden';
+                const availableW = wrapper.clientWidth;
+                const availableH = wrapper.clientHeight || Math.round(window.innerHeight * 0.75);
+                wrapper.style.overflow = prevOverflow;  // restore
+                const scaleByW   = availableW / imgEl3.naturalWidth;
+                const scaleByH   = availableH / imgEl3.naturalHeight;
+                // Fit entirely within wrapper: use smaller of width/height scale, never upscale
+                const fitScale   = Math.min(scaleByW, scaleByH, 1.0);
+                imgZoomLevel     = Math.max(0.05, fitScale);
+                applyZoom();
+                fitBtn.classList.replace('btn-outline-info', 'btn-info');
+                fitBtn.innerHTML = '<i class="fas fa-expand-alt"></i> 1:1';
+                fitBtn.title     = 'Về kích thước thật (1:1)';
+            } else {
+                imgZoomLevel = 1.0;
+                applyZoom();
+                fitBtn.classList.replace('btn-info', 'btn-outline-info');
+                fitBtn.innerHTML = '<i class="fas fa-compress-alt"></i> Fit';
+                fitBtn.title     = 'Vừa khung / kích thước thật';
+            }
         };
         function applyZoom() {
             const container = document.getElementById('imgOverlayContainer');
-            container.style.transform = `scale(${imgZoomLevel})`;
-            container.style.transformOrigin = 'top left';
-            // FIX BUG 4: use base rendered height × zoom (not post-scale bounding rect)
-            const imgEl = document.getElementById('imgOverlayBase');
-            const wrapper = container.parentElement;
-            const baseH = imgBaseRenderedHeight || imgEl.getBoundingClientRect().height / imgZoomLevel;
-            wrapper.style.height = (baseH * imgZoomLevel) + 'px';
+            const imgEl2    = document.getElementById('imgOverlayBase');
+            const baseW = imgEl2.naturalWidth  || 1;
+            const baseH = imgEl2.naturalHeight || 1;
+            // NEW ARCH: set image width directly — container (inline-block) follows automatically.
+            // Blocks use % positions → they scale with the container. No transform:scale needed.
+            const scaledW = Math.round(baseW * imgZoomLevel);
+            const scaledH = Math.round(baseH * imgZoomLevel);
+            imgEl2.style.width    = scaledW + 'px';
+            imgBaseRenderedWidth  = scaledW;
+            imgBaseRenderedHeight = scaledH;
             const lbl = document.getElementById('imgZoomLabel');
             if (lbl) lbl.textContent = Math.round(imgZoomLevel * 100) + '%';
-
-            // FIX E: recalc font sizes via shared helper
-            const baseW = imgBaseRenderedWidth || document.getElementById('imgOverlayBase').getBoundingClientRect().width / imgZoomLevel;
+            // Recalc font sizes using actual rendered dimensions
             container.querySelectorAll('.overlay-block').forEach(div => {
-                const idx = parseInt(div.dataset.idx);
+                const idx   = parseInt(div.dataset.idx);
                 const block = imgTextBlocks[idx];
                 if (!block) return;
-                div.style.fontSize = calcBlockFontSize(block, baseH, baseW) + 'px';
+                div.style.fontSize = calcBlockFontSize(block, scaledH, scaledW) + 'px';
             });
         }
 
-        // Font-size recalc on window resize
+        // Recalc on window resize: if in fit mode, recompute fit scale for new viewport size
         window.addEventListener('resize', () => {
             if (imgTextBlocks.length > 0 && document.getElementById('imgOverlayResult').style.display !== 'none') {
-                const container = document.getElementById('imgOverlayContainer');
                 const imgEl = document.getElementById('imgOverlayBase');
-                // FIX BUG 1: re-capture base rendered height after resize, then recalc fonts
-                imgBaseRenderedHeight = imgEl.getBoundingClientRect().height / imgZoomLevel;
-                imgBaseRenderedWidth  = imgEl.getBoundingClientRect().width  / imgZoomLevel;
-                // FIX E: recalc font sizes via shared helper
-                container.querySelectorAll('.overlay-block').forEach(div => {
-                    const idx = parseInt(div.dataset.idx);
-                    const block = imgTextBlocks[idx];
-                    if (!block) return;
-                    div.style.fontSize = calcBlockFontSize(block, imgBaseRenderedHeight, imgBaseRenderedWidth) + 'px';
-                });
+                if (!imgEl.naturalWidth) return;
+                if (imgFitActive) {
+                    // Remeasure wrapper (exclude scrollbar) and recalculate fit zoom
+                    const wrapper = document.getElementById('imgOverlayWrapper');
+                    const prevOv  = wrapper.style.overflow;
+                    wrapper.style.overflow = 'hidden';
+                    const availW  = wrapper.clientWidth;
+                    const availH  = wrapper.clientHeight || Math.round(window.innerHeight * 0.75);
+                    wrapper.style.overflow = prevOv;
+                    const scaleByW = availW / imgEl.naturalWidth;
+                    const scaleByH = availH / imgEl.naturalHeight;
+                    imgZoomLevel   = Math.max(0.05, Math.min(scaleByW, scaleByH, 1.0));
+                }
+                applyZoom();
             }
         });
 
@@ -4027,10 +4182,13 @@ Output yêu cầu:
             const container = document.getElementById('imgOverlayContainer');
             const btn = document.getElementById('saveImageBtn');
 
-            // Temporarily reset zoom for full-resolution capture
-            const savedZoom = imgZoomLevel;
-            imgZoomLevel = 1.0;
-            container.style.transform = 'scale(1)';
+            // Temporarily reset zoom to 1:1 for full-resolution capture
+            const savedZoom       = imgZoomLevel;
+            const imgElForCapture = document.getElementById('imgOverlayBase');
+            imgZoomLevel          = 1.0;
+            imgElForCapture.style.width = imgElForCapture.naturalWidth + 'px';
+            imgBaseRenderedWidth  = imgElForCapture.naturalWidth;
+            imgBaseRenderedHeight = imgElForCapture.naturalHeight;
 
             // Hide resize handles & selection outline during capture
             const captureStyle = document.createElement('style');
@@ -4057,9 +4215,9 @@ Output yêu cầu:
                 console.error(e);
                 alert('Lỗi khi lưu ảnh: ' + e.message);
             } finally {
-                // Restore
+                // Restore previous zoom
                 imgZoomLevel = savedZoom;
-                container.style.transform = `scale(${imgZoomLevel})`;
+                applyZoom();
                 document.getElementById('__captureStyle')?.remove();
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fas fa-download"></i> Lưu ảnh';

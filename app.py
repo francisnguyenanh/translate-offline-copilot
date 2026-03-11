@@ -2460,13 +2460,25 @@ def inject():
     Giữ nguyên định dạng, màu sắc của file gốc
     Hỗ trợ nhiều file JSON riêng lẻ hoặc file ZIP chứa nhiều file JSON
     """
-    # Kiểm tra file upload hoặc fallback từ Smart Update
+    # Kiểm tra file upload hoặc fallback từ Smart Update hoặc Google Sheet
     su_info_inject = session.get('tab1_from_smart_update')
+    sheet_session_key = request.form.get('sheet_session_key')
+    
     if 'excel_file' in request.files and request.files['excel_file'].filename:
         excel_file = request.files['excel_file']
         use_session_file_inject = False
         if not allowed_file(excel_file.filename):
             return jsonify({'error': 'File phải có định dạng .xlsx, .pptx hoặc .docx'}), 400
+    elif sheet_session_key and sheet_session_key in session:
+        # FIX: Lấy file từ Google Sheet session
+        sheet_info = session[sheet_session_key]
+        if os.path.exists(sheet_info.get('filepath', '')):
+            excel_file = None
+            use_session_file_inject = True
+            # Đặt filepath từ sheet session thay vì smart update
+            su_info_inject = sheet_info
+        else:
+            return jsonify({'error': 'File Sheet đã hết hạn hoặc không tồn tại. Vui lòng tải lại Google Sheet.'}), 400
     elif su_info_inject and os.path.exists(su_info_inject.get('filepath', '')):
         excel_file = None
         use_session_file_inject = True
@@ -2644,6 +2656,10 @@ def inject():
         
         default_ascii_name = 'download.docx' if file_ext == 'docx' else ('download.pptx' if file_ext == 'pptx' else 'download.xlsx')
         response = set_download_headers(response, output_display_name, default_ascii_name)
+        
+        # FIX: Pop sheet_session_key khỏi session sau khi inject thành công
+        if sheet_session_key:
+            session.pop(sheet_session_key, None)
         
         # Xóa tất cả file tạm sau khi gửi response
         @response.call_on_close
@@ -3158,25 +3174,39 @@ def img_translate_ocr():
                 'w':      x1 - x0,
                 'h':      y1 - y0,
                 'word_h': word_h,   # average word glyph height in OCR pixel space
-                'img_w':  ocr_img_w,  # OCR.space reference dimensions
-                'img_h':  ocr_img_h,
+                # FIX: OCR.space returns coords in the NATURAL image coordinate space,
+                # not the normalized (1024px) space. The frontend divides pixel coords by
+                # img_w/img_h to get %, so we must use the original natural dimensions here.
+                'img_w':  img_w if img_w > 0 else ocr_img_w,
+                'img_h':  img_h if img_h > 0 else ocr_img_h,
             })
 
     if not blocks:
         return jsonify({'error': 'Không nhận diện được văn bản. Thử chọn ngôn ngữ OCR khác.'}), 400
 
+    # FIX: natural_img_w/h are what the frontend uses as the % denominator
+    natural_img_w = img_w if img_w > 0 else ocr_img_w
+    natural_img_h = img_h if img_h > 0 else ocr_img_h
+    app.logger.debug(
+        f'[OCR DEBUG] Natural img: {img_w}\u00d7{img_h}, '
+        f'OCR normalized: {ocr_img_w}\u00d7{ocr_img_h}, '
+        f'Using as block ref: img_w={natural_img_w}'
+    )
     # DEBUG: return dimension resolution info alongside blocks for browser console inspection
     return jsonify({
         'blocks': blocks,
         'count':  len(blocks),
         'debug': {
-            'ocr_img_w':               ocr_img_w,
-            'ocr_img_h':               ocr_img_h,
+            'ocr_normalized_w':        ocr_img_w,
+            'ocr_normalized_h':        ocr_img_h,
+            'natural_img_w':           natural_img_w,
+            'natural_img_h':           natural_img_h,
             'frontend_img_w':          img_w,
             'frontend_img_h':          img_h,
             'imagewidth_from_response': raw_iw,
             'imageheight_from_response': raw_ih,
-            'dimensions_match':        (ocr_img_w == img_w and ocr_img_h == img_h),
+            # FIX: compare against natural dims, not normalized dims
+            'dimensions_match':        (natural_img_w == img_w and natural_img_h == img_h),
         }
     }), 200
 
