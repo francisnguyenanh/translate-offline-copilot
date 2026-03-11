@@ -1014,17 +1014,13 @@ Output yêu cầu:
                             </div>
                         </div>
                         <div id="imgUploadAlert" class="mt-2"></div>
-                        <div class="mt-3">
-                            <label class="form-label small mb-1"><i class="fas fa-font"></i> <strong>Ngôn ngữ nguồn (tùy chọn):</strong></label>
-                            <input type="text" class="form-control form-control-sm" id="imgSourceLang" placeholder="Ví dụ: tiếng Anh, tiếng Trung...">
-                        </div>
                         <div class="mt-2">
                             <label class="form-label small mb-1"><i class="fas fa-globe"></i> <strong>Ngôn ngữ đích:</strong></label>
                             <select class="form-select form-select-sm" id="imgTargetLangSelect">
                                 <option value="" disabled>Đang tải...</option>
                             </select>
                         </div>
-                        <div class="text-center mt-3">
+                        <div class="text-center mt-3"  style="display:none;">
                             <button type="button" class="btn btn-custom btn-sm" id="genPromptBtn" disabled>
                                 <i class="fas fa-magic"></i> Tạo Prompt
                             </button>
@@ -1069,8 +1065,14 @@ Output yêu cầu:
                                 </button>
                             </div>
                         </div>
+                        
                         <!-- OCR result + translate prompt -->
                         <div id="ocrDonePanel" style="display:none;" class="mt-3">
+                            <div class="d-flex justify-content-end">
+                                <button type="button" class="btn btn-outline-primary btn-sm" id="copyTranslatePromptBtn">
+                                    <i class="fas fa-copy"></i> Copy prompt
+                                </button>
+                            </div>
                             <!-- OCR text list - collapsible, closed by default -->
                             <div class="collapse-toggle p-2 mb-1" style="background:#f8f9fa;border-radius:5px;cursor:pointer;"
                                  data-bs-toggle="collapse" data-bs-target="#ocrTextListCollapse">
@@ -1082,6 +1084,7 @@ Output yêu cầu:
                                 <div id="ocrTextList" class="p-2 mb-2"
                                      style="background:#f8f9fa;border-radius:5px;font-size:0.75rem;font-family:monospace;max-height:150px;overflow-y:auto;white-space:pre-wrap;"></div>
                             </div>
+                            
                             <!-- Prompt section - collapsible, closed by default -->
                             <div class="collapse-toggle p-2 mb-1 mt-2" style="background:#f8f9fa;border-radius:5px;cursor:pointer;"
                                  data-bs-toggle="collapse" data-bs-target="#translatePromptCollapse">
@@ -1092,11 +1095,13 @@ Output yêu cầu:
                             <div class="collapse" id="translatePromptCollapse">
                                 <textarea class="form-control" id="translatePromptText" rows="5"
                                           style="font-size:0.75rem;font-family:monospace;resize:vertical;"></textarea>
+                                <!-- 
                                 <div class="d-flex gap-1 mt-1">
                                     <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="copyTranslatePromptBtn">
                                         <i class="fas fa-copy"></i> Copy
                                     </button>
                                 </div>
+                                 -->
                                 <!-- Template editor sub-collapse -->
                                 <div class="collapse-toggle p-2 mt-2" style="background:#f0f0f0;border-radius:5px;cursor:pointer;"
                                      data-bs-toggle="collapse" data-bs-target="#promptTemplateCollapse">
@@ -1117,7 +1122,7 @@ Output yêu cầu:
                             </div>
                         </div>
                         <!-- Fallback: generate AI prompt with image (old flow) -->
-                        <div class="mt-3">
+                        <div class="mt-3" style="display:none;">
                             <div class="collapse-toggle p-2" style="background:#f8f9fa;border-radius:5px;"
                                  data-bs-toggle="collapse" data-bs-target="#imgStep2Fallback">
                                 <i class="fas fa-info-circle text-warning"></i>
@@ -1136,7 +1141,7 @@ Output yêu cầu:
                                     <textarea class="form-control" id="imgPromptText" rows="6" readonly
                                               style="font-size:0.75rem;font-family:monospace;resize:vertical;"></textarea>
                                     <div class="text-center mt-2">
-                                        <button type="button" class="btn btn-outline-primary btn-sm" id="copyImgPromptBtn">
+                                        <button type="button" class="btn btn-outline-primary btn-sm mb-3" id="copyImgPromptBtn">
                                             <i class="fas fa-copy"></i> Copy Prompt
                                         </button>
                                     </div>
@@ -1201,7 +1206,7 @@ Output yêu cầu:
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <h3 class="mb-0"><i class="fas fa-eye"></i> Kết quả Overlay</h3>
                         <div class="d-flex gap-2 flex-wrap align-items-center">
-                            <button type="button" class="btn btn-outline-info btn-sm" id="copyPromptForAiBtn">
+                            <button type="button" class="btn btn-outline-info btn-sm" id="copyPromptForAiBtn" style="display:none;">
                                 <i class="fas fa-copy"></i> Copy Prompt
                             </button>
                             <div class="d-flex align-items-center gap-1">
@@ -1213,7 +1218,7 @@ Output yêu cầu:
                                     <i class="fas fa-redo"></i>
                                 </button>
                             </div>
-                            <button type="button" class="btn btn-outline-secondary btn-sm" id="toggleOriginalBtn" onclick="toggleImgOriginalText()">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" id="toggleOriginalBtn" onclick="toggleImgOriginalText()" style="display:none;">
                                 <i class="fas fa-eye-slash"></i> Ẩn/hiện chữ gốc
                             </button>
                             <button type="button" id="saveImageBtn" class="btn btn-outline-success btn-sm" onclick="saveOverlayAsImage()">
@@ -3191,14 +3196,12 @@ Output yêu cầu:
 
         // Tạo Prompt
         genPromptBtn.addEventListener('click', async function() {
-            const sourceLang = document.getElementById('imgSourceLang').value.trim();
             try {
                 const resp = await fetch('/img-translate/prompt', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        target_lang: imgCurrentLangName,
-                        source_lang: sourceLang
+                        target_lang: imgCurrentLangName
                     })
                 });
                 const data = await resp.json();
@@ -3227,8 +3230,6 @@ Output yêu cầu:
         document.getElementById('runOcrBtn').addEventListener('click', async function() {
             if (!imgCurrentFilename) return;
             // Derive OCR language from source lang input; default to jpn
-            const _sl = (document.getElementById('imgSourceLang').value || '').trim().toLowerCase();
-            const ocrLang = ({'japanese':'jpn','tiếng nhật':'jpn','chinese':'chs','中文':'chs','simplified chinese':'chs','traditional chinese':'cht','繁體中文':'cht','korean':'kor','tiếng hàn':'kor','english':'eng','tiếng anh':'eng','vietnamese':'vie','tiếng việt':'vie','jpn':'jpn','chs':'chs','cht':'cht','kor':'kor','eng':'eng','vie':'vie'})[_sl] || 'jpn';
             const ocrAlert   = document.getElementById('ocrAlert');
             const ocrProgress= document.getElementById('ocrProgress');
             const ocrDone    = document.getElementById('ocrDonePanel');
@@ -3246,7 +3247,6 @@ Output yêu cầu:
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         filename: imgCurrentFilename,
-                        ocr_lang: ocrLang,
                         img_w:    imgW,
                         img_h:    imgH
                     })

@@ -1,0 +1,7 @@
+[
+  {
+    "id": "img-ocr-default",
+    "name": "OCR Translate",
+    "content": "Translate the following numbered text items to {targetLang}.\nReturn ONLY the same numbered list with translated text. Do not add any other text.\n\n{listText}"
+  }
+]

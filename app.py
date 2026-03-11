@@ -41,8 +41,31 @@ ALLOWED_EXTENSIONS = {'xlsx', 'pptx', 'docx'}
 # Đọc password từ file
 PASSWORD_FILE = 'password.txt'
 
-# File lưu Prompt Templates
+
+# File lưu Prompt Templates (Tab 1/3)
 TEMPLATES_FILE = 'prompt_templates.json'
+# File lưu Prompt Template cho Tab 2 (Dịch ảnh)
+IMG_OCR_PROMPT_FILE = 'img_ocr_prompt_template.json'
+def load_img_ocr_prompt_template():
+    """Đọc prompt template cho Tab 2 (Dịch ảnh OCR)"""
+    try:
+        with open(IMG_OCR_PROMPT_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        if isinstance(data, list):
+            return data
+        return [data]
+    except Exception:
+        # Fallback mặc định nếu chưa có file
+        return [{
+            "id": "img-ocr-default",
+            "name": "Prompt dịch ảnh OCR (default)",
+            "content": "Translate the following numbered text items from {sourceLang} to {targetLang}.\nReturn ONLY the same numbered list with translated text. Do not add any other text.\n\n{listText}"
+        }]
+
+def save_img_ocr_prompt_template(new_templates):
+    """Ghi prompt template cho Tab 2 (Dịch ảnh OCR)"""
+    with open(IMG_OCR_PROMPT_FILE, 'w', encoding='utf-8') as f:
+        json.dump(new_templates, f, ensure_ascii=False, indent=2)
 
 GLOSSARY_DIR = 'glossaries'   # thư mục lưu các file CSV chuyên ngành
 os.makedirs(GLOSSARY_DIR, exist_ok=True)
@@ -1771,12 +1794,16 @@ def get_languages():
 
 # ==================== API: PROMPT TEMPLATES ====================
 
+
 @app.route('/api/templates', methods=['GET'])
 @login_required
 def api_get_templates():
     """Trả về danh sách prompt templates cho ngôn ngữ được chỉ định"""
     lang = request.args.get('lang', 'default')
+    if lang == 'img-ocr':
+        return jsonify(load_img_ocr_prompt_template())
     return jsonify(load_templates(lang))
+
 
 @app.route('/api/templates', methods=['POST'])
 @login_required
@@ -1787,6 +1814,9 @@ def api_save_templates():
     if not isinstance(new_templates, list):
         return jsonify({'error': 'Dữ liệu phải là array'}), 400
     try:
+        if lang == 'img-ocr':
+            save_img_ocr_prompt_template(new_templates)
+            return jsonify({'success': True})
         try:
             with open(TEMPLATES_FILE, 'r', encoding='utf-8') as f:
                 all_data = json.load(f)
