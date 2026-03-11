@@ -448,7 +448,7 @@
         .overlay-translated {
             display: block;
             width: 100%;
-            text-align: center;
+            text-align: left;
             line-height: 1.2;
             word-break: break-word;
             overflow: hidden;
@@ -3361,24 +3361,45 @@ Output yêu cầu:
 
         // Sample average bg color of the block's bounding box (5×5 center pixels)
         function sampleBlockBgColor(imgEl, block) {
+            // Sample background color from the BORDER pixels only (top/bottom/left/right edges).
+            // This avoids using center pixels where text is present, which would skew the average
+            // (e.g. black text on white bg → grey average instead of white).
             try {
                 const canvas = document.createElement('canvas');
                 canvas.width  = imgEl.naturalWidth;
                 canvas.height = imgEl.naturalHeight;
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(imgEl, 0, 0);
-                const cx = Math.round(imgEl.naturalWidth  * ((block.left_pct || 0) + (block.width_pct  || 0) / 2) / 100);
-                const cy = Math.round(imgEl.naturalHeight * ((block.top_pct  || 0) + (block.height_pct || 0) / 2) / 100);
-                const half = 2;  // 5×5 sample grid
+
+                // Convert block percent coords to pixel coords on the natural image
+                const bx = Math.round(imgEl.naturalWidth  * (block.left_pct   || 0) / 100);
+                const by = Math.round(imgEl.naturalHeight * (block.top_pct    || 0) / 100);
+                const bw = Math.max(1, Math.round(imgEl.naturalWidth  * (block.width_pct  || 0) / 100));
+                const bh = Math.max(1, Math.round(imgEl.naturalHeight * (block.height_pct || 0) / 100));
+
+                // Border thickness: 2px, but capped to half the block size for tiny blocks
+                const border = Math.min(2, Math.floor(Math.min(bw, bh) / 2));
+
                 let r = 0, g = 0, b = 0, n = 0;
-                for (let dy = -half; dy <= half; dy++) {
-                    for (let dx = -half; dx <= half; dx++) {
-                        const px = cx + dx, py = cy + dy;
-                        if (px < 0 || py < 0 || px >= canvas.width || py >= canvas.height) continue;
-                        const d = ctx.getImageData(px, py, 1, 1).data;
-                        r += d[0]; g += d[1]; b += d[2]; n++;
-                    }
+
+                // Helper: sample one pixel, accumulate if within canvas bounds
+                const sample = (px, py) => {
+                    if (px < 0 || py < 0 || px >= canvas.width || py >= canvas.height) return;
+                    const d = ctx.getImageData(px, py, 1, 1).data;
+                    r += d[0]; g += d[1]; b += d[2]; n++;
+                };
+
+                for (let t = 0; t < border; t++) {
+                    // Top edge row (by + t): scan full width
+                    for (let x = bx; x < bx + bw; x++) sample(x, by + t);
+                    // Bottom edge row (by + bh - 1 - t): scan full width
+                    for (let x = bx; x < bx + bw; x++) sample(x, by + bh - 1 - t);
+                    // Left edge column (bx + t): scan inner height only (avoid double-counting corners)
+                    for (let y = by + border; y < by + bh - border; y++) sample(bx + t, y);
+                    // Right edge column (bx + bw - 1 - t): scan inner height only
+                    for (let y = by + border; y < by + bh - border; y++) sample(bx + bw - 1 - t, y);
                 }
+
                 if (n === 0) return '#ffffff';
                 return '#' + [r, g, b].map(v => Math.round(v / n).toString(16).padStart(2, '0')).join('');
             } catch (e) {
