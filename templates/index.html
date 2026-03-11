@@ -1422,31 +1422,8 @@ Output yêu cầu:
                         <textarea class="form-control" id="termPromptTextarea" rows="8" style="font-size:0.78rem; resize:vertical;"></textarea>
                     </div>
 
-                    <!-- JSON cặp song ngữ -->
-                    <div class="mb-2">
-                        <div class="d-flex align-items-center justify-content-between mb-1">
-                            <label class="form-label small mb-0"><strong>JSON cặp song ngữ:</strong></label>
-                            <button class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size:0.72rem;" onclick="toggleTermJsonExpand()" id="termJsonExpandBtn">Mở rộng</button>
-                        </div>
-                        <textarea class="form-control" id="termPairsJsonTextarea" rows="4" readonly
-                            placeholder="Số cặp sẽ hiện ở đây sau khi Align..."
-                            style="font-size:0.73rem; font-family:monospace; resize:none;"></textarea>
-                        <!-- Container các chunks (hiển thị thay thế khi > 0 chunks) -->
-                        <div id="termJsonChunksContainer" style="display:none;"></div>
-                    </div>
-
-                    <!-- Nút copy -->
-                    <div class="d-flex flex-wrap gap-2">
-                        <button class="btn btn-custom btn-sm flex-fill" onclick="copyTermAll()">
-                            <i class="fas fa-copy"></i> Copy tất cả
-                        </button>
-                        <button class="btn btn-outline-primary btn-sm" onclick="copyTermPart('prompt')" style="font-size:0.78rem;">
-                            <i class="fas fa-align-left"></i> Prompt
-                        </button>
-                        <button class="btn btn-outline-secondary btn-sm" onclick="copyTermPart('json')" style="font-size:0.78rem;">
-                            <i class="fas fa-code"></i> JSON
-                        </button>
-                    </div>
+                    <!-- Danh sách chunk (giống tab Dịch tài liệu) -->
+                    <div id="termChunkFileList"></div>
 
                     <div id="termCopyAlert" class="mt-2" style="font-size:0.78rem;"></div>
 
@@ -3949,50 +3926,66 @@ Output yêu cầu:
         }
     };
 
-    // --- Step 2: Templates ---
+    // --- Step 2: Render chunks (đồng nhất với tab Dịch tài liệu) ---
     function renderTermJsonChunks() {
-        const container = document.getElementById('termJsonChunksContainer');
-        const ta = document.getElementById('termPairsJsonTextarea');
-        const expandBtn = document.getElementById('termJsonExpandBtn');
-        container.innerHTML = '';
+        const list = document.getElementById('termChunkFileList');
+        list.innerHTML = '';
         if (!termPairsChunks || !termPairsChunks.length) {
-            // Fall back to single textarea
-            ta.value = termPairsJson;
-            ta.style.display = '';
-            expandBtn.style.display = '';
-            container.style.display = 'none';
+            list.style.display = 'none';
             return;
         }
         const total = termPairsChunks.length;
         termPairsChunks.forEach((chunk, idx) => {
             const chunkJson = JSON.stringify(chunk, null, 2);
-            const div = document.createElement('div');
-            div.className = 'mb-2';
-            div.innerHTML = `
-                <div class="d-flex align-items-center justify-content-between mb-1">
-                    <span class="small fw-bold">Phần ${idx + 1}/${total} — ${chunk.length} cặp</span>
-                    <button class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size:0.72rem;"
-                        onclick="copyTermChunk(${idx})">
-                        <i class="fas fa-copy"></i> Copy phần ${idx + 1}
-                    </button>
-                </div>
-                <textarea class="form-control" rows="3" readonly
-                    style="font-size:0.72rem;font-family:monospace;resize:none;"
-                    id="termChunkTextarea_${idx}"></textarea>
+            const row = document.createElement('div');
+            row.className = 'json-file-row';
+            row.innerHTML = `
+                <span class="file-name">
+                    <i class="fas fa-file-code text-primary"></i>
+                    Phần ${idx + 1}/${total} — ${chunk.length} cặp
+                </span>
+                <button type="button"
+                    class="btn btn-outline-primary btn-sm btn-copy-json"
+                    title="Copy prompt + JSON phần ${idx + 1}">
+                    <i class="fas fa-copy"></i> Copy
+                </button>
             `;
-            container.appendChild(div);
-            document.getElementById(`termChunkTextarea_${idx}`).value = chunkJson;
+            row.querySelector('.btn-copy-json').addEventListener('click', function () {
+                const btnEl = this;
+                const prompt = document.getElementById('termPromptTextarea').value;
+                const textToCopy = prompt + '\n\n' + chunkJson;
+                navigator.clipboard.writeText(textToCopy).then(() => {
+                    btnEl.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                    btnEl.classList.add('copied');
+                    setTimeout(() => {
+                        btnEl.innerHTML = '<i class="fas fa-copy"></i> Copy';
+                        btnEl.classList.remove('copied');
+                    }, 2000);
+                }).catch(() => {
+                    const ta = document.createElement('textarea');
+                    ta.value = textToCopy;
+                    ta.style.position = 'fixed';
+                    ta.style.opacity = '0';
+                    document.body.appendChild(ta);
+                    ta.select();
+                    try {
+                        document.execCommand('copy');
+                        btnEl.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                        btnEl.classList.add('copied');
+                        setTimeout(() => {
+                            btnEl.innerHTML = '<i class="fas fa-copy"></i> Copy';
+                            btnEl.classList.remove('copied');
+                        }, 2000);
+                    } catch (err) {
+                        alert('Không thể copy tự động. Vui lòng copy thủ công.');
+                    }
+                    document.body.removeChild(ta);
+                });
+            });
+            list.appendChild(row);
         });
-        container.style.display = 'block';
-        ta.style.display = 'none';
-        expandBtn.style.display = 'none';
+        list.style.display = 'block';
     }
-
-    window.copyTermChunk = function (idx) {
-        const alertEl = document.getElementById('termCopyAlert');
-        const chunkJson = JSON.stringify(termPairsChunks[idx], null, 2);
-        copyToClipboard(chunkJson, alertEl, `Đã copy phần ${idx + 1} (${termPairsChunks[idx].length} cặp)!`);
-    };
 
     async function loadTermTemplates() {
         try {
@@ -4074,21 +4067,6 @@ Output yêu cầu:
         bootstrap.Modal.getInstance(document.getElementById('termAddTemplateModal'))?.hide();
     };
 
-    // JSON expand/collapse
-    window.toggleTermJsonExpand = function () {
-        const ta = document.getElementById('termPairsJsonTextarea');
-        const btn = document.getElementById('termJsonExpandBtn');
-        if (ta.rows <= 4) {
-            ta.rows = 18;
-            ta.style.resize = 'vertical';
-            btn.textContent = 'Thu gọn';
-        } else {
-            ta.rows = 4;
-            ta.style.resize = 'none';
-            btn.textContent = 'Mở rộng';
-        }
-    };
-
     // Copy helpers
     async function copyToClipboard(text, alertEl, msg) {
         try {
@@ -4099,27 +4077,6 @@ Output yêu cầu:
             showTermAlert(alertEl, 'danger', 'Copy thất bại: ' + e.message);
         }
     }
-
-    window.copyTermAll = function () {
-        const prompt = document.getElementById('termPromptTextarea').value;
-        const alertEl = document.getElementById('termCopyAlert');
-        if (termPairsChunks && termPairsChunks.length > 0) {
-            const jsonPart = JSON.stringify(termPairsChunks[0], null, 2);
-            copyToClipboard(prompt + '\n\n' + jsonPart, alertEl,
-                `Đã copy Prompt + Phần 1/${termPairsChunks.length} (${termPairsChunks[0].length} cặp). Dùng nút "Copy phần N" để copy từng phần.`);
-        } else {
-            copyToClipboard(prompt + '\n\n' + (termPairsJson || ''), alertEl, 'Đã copy toàn bộ (Prompt + JSON)!');
-        }
-    };
-
-    window.copyTermPart = function (part) {
-        const alertEl = document.getElementById('termCopyAlert');
-        if (part === 'prompt') {
-            copyToClipboard(document.getElementById('termPromptTextarea').value, alertEl, 'Đã copy Prompt!');
-        } else {
-            copyToClipboard(document.getElementById('termPairsJsonTextarea').value, alertEl, 'Đã copy JSON!');
-        }
-    };
 
     // --- Step 3: JSON/CSV preview ---
     window.previewTermInput = function () {

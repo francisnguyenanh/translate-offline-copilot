@@ -1,0 +1,35 @@
+﻿Kịch bản kiểm thử,テストパターン
+Kiểm thử tích hợp nội bộ,内部結合テスト
+Phân loại kiểm thử lớn,テスト大分類
+Phân loại kiểm thử,ﾃｽﾄ分類
+Luồng giao hàng thông thường,通常配達フロー
+Luồng đăng nhập,ログインフロー
+Luồng ghé trạm,立ち寄りフロー
+Luồng kết thúc công việc,業務終了フロー
+Luồng Menu,メニューフロー
+Luồng doanh thu bổ sung,追加売上フロー
+Luồng vệ sinh (Cleaning),クリーニングフロー
+Luồng tạm hoãn,保留フロー
+Hóa đơn giao hàng lắp đặt,配達工事伝票
+Hóa đơn thu hồi,引取伝票
+Hóa đơn cho mượn,貸出伝票
+Hóa đơn thu hồi cho mượn,貸出引取伝票
+Hóa đơn thu hồi đổi trả hàng lỗi,不良交換引取伝票
+Loại hóa đơn,伝票種別
+Hóa đơn gốc,元伝票
+Chi tiết hóa đơn gốc,元伝明細
+Đăng ký chữ ký,ご署名登録
+Đăng ký công việc bổ sung,追加作業登録
+Đăng ký tạm hoãn,保留登録
+Đăng ký chưa hoàn thành,未完了登録
+Thu hồi đồ tái chế,リサイクル引取
+Thu tiền mặt,現金集金
+Xử lý nhập kho/nhập tiền,入庫・入金処理
+Hàng ghé trạm,立ち寄り品
+Nơi nhận,届け先
+Chuyển đổi màn hình,画面遷移
+In trên biểu mẫu,帳票印字
+Cập nhật DB,更新DB
+Bằng chứng (Evidence),エビデンス
+Hamburger menu,ハンバーガーメニュー
+Xác thực,認証
