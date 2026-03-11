@@ -512,6 +512,8 @@
             border: 1px solid rgba(0,0,0,0.15);
             flex-shrink: 0;
         }
+
+        .su-color-item { color: #000000; }
     </style>
 </head>
 <body class="dark-mode">
@@ -1258,7 +1260,7 @@ Output yêu cầu:
                                 <!-- Trạng thái: chưa upload file 2 -->
                                 <div id="suColorHint" class="text-muted" style="font-size:0.78rem;">
                                     <i class="fas fa-info-circle"></i>
-                                    Upload <strong>File 2 (VN mới)</strong> để tự động liệt kê màu chữ có trong file.
+                                    Upload <strong>File mới (chưa dịch) ver 1.1</strong> để tự động liệt kê màu chữ có trong file.
                                 </div>
 
                                 <!-- Spinner khi đang fetch màu -->
@@ -1282,7 +1284,7 @@ Output yêu cầu:
                                     <div class="text-muted mt-1" style="font-size:0.71rem;">
                                         <i class="fas fa-info-circle"></i>
                                         Ô có màu chữ được tích ✓ → xem là <em>nội dung mới/chỉnh sửa</em>.
-                                        Bỏ trống = dùng mặc định (xanh lá).
+                                        Bỏ trống = dùng mặc định.
                                     </div>
                                 </div>
 
@@ -3125,6 +3127,34 @@ Output yêu cầu:
             }
         });
 
+        // FIX BUG 3: sample pixel color from image via offscreen canvas
+        function sampleImageColor(imgEl, xPct, yPct) {
+            try {
+                const canvas = document.createElement('canvas');
+                canvas.width  = imgEl.naturalWidth;
+                canvas.height = imgEl.naturalHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(imgEl, 0, 0);
+                const x = Math.round(imgEl.naturalWidth  * xPct / 100);
+                const y = Math.round(imgEl.naturalHeight * yPct / 100);
+                const [r, g, b] = ctx.getImageData(x, y, 1, 1).data;
+                return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+            } catch (e) {
+                // FIX BUG 3: cross-origin or tainted canvas — fall back silently
+                return null;
+            }
+        }
+
+        // FIX BUG 3: return true when AI color is effectively white
+        function isWhiteColor(hex) {
+            if (!hex) return true;
+            const n = hex.replace('#', '').toLowerCase();
+            return n === 'fff' || n === 'ffffff';
+        }
+
+        // FIX BUG 4: cache base rendered height before any zoom scaling
+        let imgBaseRenderedHeight = 0;
+
         function renderAllOverlays() {
             const container = document.getElementById('imgOverlayContainer');
             const imgEl     = document.getElementById('imgOverlayBase');
@@ -3141,6 +3171,8 @@ Output yêu cầu:
             selectedBlockIdxSet.clear();
 
             function doRender() {
+                // FIX BUG 4: capture base rendered height once, before zoom is applied
+                imgBaseRenderedHeight = imgEl.getBoundingClientRect().height;
                 imgTextBlocks.forEach((block, idx) => {
                     createOverlayBlock(block, idx, container, imgEl);
                     appendBlockListRow(block, idx, blockList);
@@ -3211,12 +3243,19 @@ Output yêu cầu:
             const div = document.createElement('div');
             div.className = 'overlay-block';
             div.dataset.idx = idx;
-            const bg = block.bg_color || '#ffffff';
+
+            // FIX BUG 3: use canvas-sampled color when AI returned white or missing bg
+            let bg = block.bg_color || '#ffffff';
+            if (isWhiteColor(bg)) {
+                const sampled = sampleImageColor(imgEl, block.left_pct || 0, block.top_pct || 0);
+                if (sampled) bg = sampled;
+            }
             const fg = block.text_color || '#000000';
-            // Derive font-size in px from font_size_pct (% of image height).
-            // If AI gave a value too small relative to block height, auto-scale up.
-            const blockHeightPx = imgEl.naturalHeight * (block.height_pct || 5) / 100;
-            let fsPx = imgEl.naturalHeight * (block.font_size_pct || 0) / 100;
+
+            // FIX BUG 1: use rendered height (not naturalHeight) so font scales with displayed image
+            const renderedH = imgBaseRenderedHeight || imgEl.getBoundingClientRect().height;
+            const blockHeightPx = renderedH * (block.height_pct || 5) / 100;
+            let fsPx = renderedH * (block.font_size_pct || 0) / 100;
             // Fallback: font must be at least 45% of block height (single-line readable)
             if (fsPx < blockHeightPx * 0.45) fsPx = blockHeightPx * 0.72;
             const fs = fsPx + 'px';
@@ -3232,7 +3271,8 @@ Output yêu cầu:
                 flexDirection: 'column',
                 justifyContent: 'center',
                 alignItems: 'center',
-                overflow: 'visible',
+                // FIX BUG 2: hide content that exceeds block boundaries
+                overflow: 'hidden',
                 cursor: 'move',
                 fontSize: fs,
                 lineHeight: '1.2',
@@ -3247,6 +3287,9 @@ Output yêu cầu:
             inner.style.cssText = 'display:flex;flex-direction:column;justify-content:center;align-items:center;width:100%;height:100%;overflow:hidden;pointer-events:none;';
             const textSpan = document.createElement('span');
             textSpan.className = 'overlay-translated';
+            // FIX BUG 2: allow long words to wrap instead of spilling outside
+            textSpan.style.wordBreak = 'break-word';
+            textSpan.style.overflowWrap = 'anywhere';
             textSpan.textContent = block.translated || '';
             inner.appendChild(textSpan);
             if (imgShowOriginal && block.original) {
@@ -3469,12 +3512,25 @@ Output yêu cầu:
             const container = document.getElementById('imgOverlayContainer');
             container.style.transform = `scale(${imgZoomLevel})`;
             container.style.transformOrigin = 'top left';
-            // Update scroll container height so scrollbar reflects scaled size
+            // FIX BUG 4: use base rendered height × zoom (not post-scale bounding rect)
             const imgEl = document.getElementById('imgOverlayBase');
             const wrapper = container.parentElement;
-            wrapper.style.height = (imgEl.naturalHeight * imgZoomLevel) + 'px';
+            const baseH = imgBaseRenderedHeight || imgEl.getBoundingClientRect().height / imgZoomLevel;
+            wrapper.style.height = (baseH * imgZoomLevel) + 'px';
             const lbl = document.getElementById('imgZoomLabel');
             if (lbl) lbl.textContent = Math.round(imgZoomLevel * 100) + '%';
+
+            // FIX BUG 4: recalc font sizes using base height × zoom to avoid double-scaling
+            container.querySelectorAll('.overlay-block').forEach(div => {
+                const idx = parseInt(div.dataset.idx);
+                const block = imgTextBlocks[idx];
+                if (!block) return;
+                const scaledH = baseH * imgZoomLevel;
+                const blockHeightPx = scaledH * (block.height_pct || 5) / 100;
+                let fsPx = scaledH * (block.font_size_pct || 0) / 100;
+                if (fsPx < blockHeightPx * 0.45) fsPx = blockHeightPx * 0.72;
+                div.style.fontSize = fsPx + 'px';
+            });
         }
 
         // Font-size recalc on window resize
@@ -3482,12 +3538,14 @@ Output yêu cầu:
             if (imgTextBlocks.length > 0 && document.getElementById('imgOverlayResult').style.display !== 'none') {
                 const container = document.getElementById('imgOverlayContainer');
                 const imgEl = document.getElementById('imgOverlayBase');
+                // FIX BUG 1: re-capture base rendered height after resize, then recalc fonts
+                imgBaseRenderedHeight = imgEl.getBoundingClientRect().height / imgZoomLevel;
                 container.querySelectorAll('.overlay-block').forEach(div => {
                     const idx = parseInt(div.dataset.idx);
                     const block = imgTextBlocks[idx];
                     if (!block) return;
-                    const blockHeightPx = imgEl.naturalHeight * (block.height_pct || 5) / 100;
-                    let fsPx = imgEl.naturalHeight * (block.font_size_pct || 0) / 100;
+                    const blockHeightPx = imgBaseRenderedHeight * (block.height_pct || 5) / 100;
+                    let fsPx = imgBaseRenderedHeight * (block.font_size_pct || 0) / 100;
                     if (fsPx < blockHeightPx * 0.45) fsPx = blockHeightPx * 0.72;
                     div.style.fontSize = fsPx + 'px';
                 });
@@ -3916,6 +3974,34 @@ Output yêu cầu:
             _origClearSuFile(inputId, areaId, infoId);
             if (inputId === 'suFile2') suResetColorUI();
         };
+
+        // ─── Drag & drop handler for File 2 (suArea2) ───────────────────────────
+        const suDropZone = document.getElementById('suArea2');
+        if (suDropZone) {
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                suDropZone.addEventListener(eventName, function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }, false);
+            });
+            
+            suDropZone.addEventListener('dragover', function() {
+                suDropZone.style.borderColor = '#0d6efd';
+                suDropZone.style.background = '#f8f9fa';
+            });
+            suDropZone.addEventListener('dragleave', function() {
+                suDropZone.style.borderColor = '';
+                suDropZone.style.background = '';
+            });
+            suDropZone.addEventListener('drop', function(e) {
+                suDropZone.style.borderColor = '';
+                suDropZone.style.background = '';
+                const files = e.dataTransfer.files;
+                if (files && files[0]) {
+                    suFetchColors(files[0]);
+                }
+            });
+        }
 
         // ---- Form submit ----
         const form = document.getElementById('smartUpdateForm');

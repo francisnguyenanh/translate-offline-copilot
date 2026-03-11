@@ -3441,5 +3441,5 @@ def api_terminology_import_json():
 
 if __name__ == '__main__':
     # Chạy ứng dụng Flask ở chế độ debug
-    app.run(host='0.0.0.0', port=5000)
-    #app.run(host='0.0.0.0', port=5001)
+    #app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True,host='0.0.0.0', port=5001)
