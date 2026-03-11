@@ -1000,11 +1000,15 @@ Output yêu cầu:
                         </div>
                         <div class="upload-area compact" id="imgUploadArea">
                             <i class="fas fa-image"></i>
-                            <p class="mb-2 small"><strong>Kéo thả ảnh vào đây</strong></p>
+                            <p class="mb-2 small"><strong>Kéo thả hoặc dán ảnh vào đây</strong></p>
                             <input type="file" id="imgFileInput" accept=".png,.jpg,.jpeg,.gif,.webp,.bmp" style="display:none;">
                             <label for="imgFileInput" class="btn btn-custom btn-sm">
                                 <i class="fas fa-folder-open"></i> Chọn ảnh
                             </label>
+                            <div class="mt-2">
+                                <kbd style="font-size:0.7rem;">Ctrl+V</kbd>
+                                <span class="text-muted" style="font-size:0.7rem;"> để dán ảnh từ clipboard</span>
+                            </div>
                         </div>
                         <div id="imgPreviewWrap" style="display:none;" class="mt-2 text-center">
                             <img id="imgPreview" src="" style="max-width:100%; border-radius:8px; max-height:150px; object-fit:contain;" alt="Preview">
@@ -1037,6 +1041,7 @@ Output yêu cầu:
                                         <li>Hỗ trợ: PNG, JPG, JPEG, GIF, WEBP, BMP</li>
                                         <li>Ngôn ngữ nguồn có thể bỏ trống</li>
                                         <li>Chọn ngôn ngữ đích cần dịch sang</li>
+                                        <li><kbd>Ctrl+V</kbd> để dán ảnh từ clipboard (Windows Snipping Tool)</li>
                                         <li>Nhấn <b>Tạo Prompt</b> để chuyển sang bước 2</li>
                                     </ul>
                                 </div>
@@ -3151,6 +3156,43 @@ Output yêu cầu:
             imgUploadArea.style.borderColor = '#667eea';
             if (e.dataTransfer.files.length > 0) handleImgFile(e.dataTransfer.files[0]);
         });
+
+        // NEW: clipboard paste event listener on upload area
+        imgUploadArea.addEventListener('paste', handlePasteEvent);
+
+        // NEW: global paste listener on document (only when Tab 2 is active)
+        document.addEventListener('paste', function(e) {
+            // Only trigger when Tab 2 is the active tab
+            const tab2 = document.getElementById('mainTab2');
+            if (!tab2 || !tab2.classList.contains('active')) return;
+            // Don't intercept paste inside text inputs/textareas
+            const tag = document.activeElement ? document.activeElement.tagName : '';
+            if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+            handlePasteEvent(e);
+        });
+
+        // NEW: paste event handler
+        function handlePasteEvent(e) {
+            const items = (e.clipboardData || e.originalEvent?.clipboardData)?.items;
+            if (!items) return;
+            for (const item of items) {
+                if (item.type.startsWith('image/')) {
+                    e.preventDefault();
+                    const file = item.getAsFile();
+                    if (file) {
+                        // Give pasted file a meaningful name
+                        const ext = item.type.split('/')[1] || 'png';
+                        const namedFile = new File([file], `clipboard_${Date.now()}.${ext}`, { type: item.type });
+                        handleImgFile(namedFile);
+                        // NEW: visual feedback - highlight border on paste
+                        imgUploadArea.style.borderColor = '#28a745';
+                        imgUploadArea.style.transition = 'border-color 0.3s';
+                        setTimeout(() => { imgUploadArea.style.borderColor = ''; }, 1500);
+                    }
+                    break; // only handle first image item
+                }
+            }
+        }
 
         imgRemoveBtn.addEventListener('click', function() {
             imgFileInput.value = '';
