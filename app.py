@@ -26,6 +26,11 @@ from lxml import etree as _etree
 # Khởi tạo ứng dụng Flask
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 60 * 1024 * 1024  # Giới hạn 50MB
+
+# DEBUG: enable debug-level logging for OCR coordinate diagnostics
+import logging
+app.logger.setLevel(logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['SECRET_KEY'] = os.urandom(24)  # Secret key cho session
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=5)  # Session timeout 5h
@@ -2934,52 +2939,245 @@ def img_translate_serve(filename):
     return send_file(filepath)
 
 
+# NEW: OCR route — calls OCR.space API for exact bounding boxes instead of AI coordinate guessing
+@app.route('/img-translate/ocr', methods=['POST'])
+@login_required
+def img_translate_ocr():
+    """Call OCR.space API on the uploaded image. Returns text blocks with pixel bounding boxes."""
+    data = request.get_json() or {}
+    filename = data.get('filename', '').strip()
+    # NEW: OCR.space language code (jpn, chs, cht, kor, eng, ara, fre, ger, por, rus, spa, tur)
+    ocr_lang = data.get('ocr_lang', 'jpn')
+
+    if not filename:
+        return jsonify({'error': 'Thiếu tên file'}), 400
+
+    session_folder = get_session_folder()
+    safe = secure_filename(filename)
+    filepath = os.path.join(session_folder, safe)
+    if not os.path.exists(filepath):
+        return jsonify({'error': 'File không tồn tại'}), 404
+
+    # NEW: image natural dimensions passed from frontend for pixel coord context
+    img_w = int(data.get('img_w', 0))
+    img_h = int(data.get('img_h', 0))
+
+    # NEW: OCR.space free public endpoint — 500 req/day per IP with helloworld key
+    OCR_API_URL = 'https://api.ocr.space/parse/image'
+
+    try:
+        with open(filepath, 'rb') as f:
+            # NEW: isOverlayRequired=true is MANDATORY to receive bounding box coordinates
+            resp = _requests.post(
+                OCR_API_URL,
+                files={'file': (safe, f, 'image/png')},
+                data={
+                    'apikey': 'helloworld',
+                    'language': ocr_lang,
+                    'isOverlayRequired': 'true',
+                    'detectOrientation': 'true',
+                    # FIX B: scale=false so bbox coords stay in original image space
+                    'scale': 'false',
+                    'OCREngine': '2',
+                    'isCreateSearchablePdf': 'false',
+                    'isSearchablePdfHideTextLayer': 'false',
+                },
+                timeout=30
+            )
+        result = resp.json()
+    except Exception as e:
+        return jsonify({'error': f'Lỗi gọi OCR.space: {str(e)}'}), 500
+
+    # DEBUG: log top-level response structure
+    app.logger.debug(f'[OCR DEBUG] Response keys: {list(result.keys())}')
+    app.logger.debug(f'[OCR DEBUG] IsErroredOnProcessing: {result.get("IsErroredOnProcessing")}')
+    app.logger.debug(f'[OCR DEBUG] ParsedResults count: {len(result.get("ParsedResults", []))}')
+
+    if result.get('IsErroredOnProcessing'):
+        err_msg = result.get('ErrorMessage', ['Lỗi không xác định'])
+        if isinstance(err_msg, list):
+            err_msg = ' '.join(err_msg)
+        return jsonify({'error': f'OCR.space lỗi: {err_msg}'}), 500
+
+    # NEW: parse OCR.space Lines→Words structure into our block format
+    blocks = []
+    parsed = result.get('ParsedResults', [])
+    # Keep raw_iw/raw_ih in outer scope so the return debug dict can reference them
+    raw_iw = raw_ih = None
+    ocr_img_w = ocr_img_h = 0
+    for page in parsed:
+        overlay = page.get('TextOverlay', {})
+        # FIX: read dimensions reported by OCR.space for this page
+        raw_iw = overlay.get('ImageWidth')
+        raw_ih = overlay.get('ImageHeight')
+        ocr_img_w = int(raw_iw) if raw_iw and int(raw_iw) > 0 else 0
+        ocr_img_h = int(raw_ih) if raw_ih and int(raw_ih) > 0 else 0
+
+        # FIX STEP 5: when OCR.space doesn't report dimensions, infer from Engine 2 normalization
+        # Engine 2 rescales the long side to max 1024 px; bbox coords are in that scaled space
+        if ocr_img_w == 0 or ocr_img_h == 0:
+            if img_w > 0 and img_h > 0:
+                max_side = max(img_w, img_h)
+                if max_side > 1024:
+                    scale_factor = 1024.0 / max_side
+                    ocr_img_w = round(img_w * scale_factor)
+                    ocr_img_h = round(img_h * scale_factor)
+                else:
+                    # Already within Engine 2 limit — no rescaling applied
+                    ocr_img_w = img_w
+                    ocr_img_h = img_h
+            else:
+                ocr_img_w = img_w or 1024
+                ocr_img_h = img_h or 1024
+
+        # DEBUG: log dimension resolution for each page
+        app.logger.debug(
+            f'[OCR DEBUG] TextOverlay raw ImageWidth={raw_iw}, ImageHeight={raw_ih}'
+        )
+        app.logger.debug(
+            f'[OCR DEBUG] Frontend sent img_w={img_w}, img_h={img_h}'
+        )
+        app.logger.debug(
+            f'[OCR DEBUG] Resolved reference: ocr_img_w={ocr_img_w}, ocr_img_h={ocr_img_h}'
+        )
+        app.logger.debug(
+            f'[OCR DEBUG] Lines count: {len(overlay.get("Lines", []))}'
+        )
+        lines   = overlay.get('Lines', [])
+        for line_idx, line in enumerate(lines):
+            words = line.get('Words', [])
+            if not words:
+                continue
+            line_text = ' '.join(w.get('WordText', '') for w in words).strip()
+            if not line_text:
+                continue
+
+            # Build union bounding box from individual word boxes
+            lefts   = [w['Left']             for w in words if 'Left'   in w]
+            tops    = [w['Top']              for w in words if 'Top'    in w]
+            rights  = [w['Left'] + w['Width']  for w in words if 'Left'  in w and 'Width'  in w]
+            bottoms = [w['Top']  + w['Height'] for w in words if 'Top'   in w and 'Height' in w]
+            if not lefts:
+                continue
+
+            x0 = min(lefts);  y0 = min(tops)
+            x1 = max(rights); y1 = max(bottoms)
+
+            # FIX 1: OCR.space sometimes emits MinTop=0/MinLeft=0 for a line even when the
+            # actual text is not at the image origin.  When both x0 and y0 are 0, try to use
+            # the first word's coordinates as a more reliable anchor.
+            line_min_top  = line.get('MinTop',  y0)
+            line_min_left = line.get('MinLeft', x0)
+            if line_min_top == 0 and line_min_left == 0:
+                first_word = next(
+                    (w for w in words if w.get('Left', -1) > 0 or w.get('Top', -1) > 0),
+                    None
+                )
+                if first_word:
+                    # Re-anchor: shift x0/y0 to first reliable word; keep x1/y1 from union
+                    fw_left = first_word.get('Left', x0)
+                    fw_top  = first_word.get('Top',  y0)
+                    if fw_left > 0 or fw_top > 0:
+                        x0 = min(fw_left, x0) if x0 > 0 else fw_left
+                        y0 = min(fw_top,  y0) if y0 > 0 else fw_top
+                        app.logger.debug(
+                            f'[OCR DEBUG] Line {line_idx} "{line_text[:20]}" had MinTop/MinLeft=0; '
+                            f're-anchored to first word at ({fw_left},{fw_top})'
+                        )
+
+            # FIX 2: validation — skip blocks that still resolve to (0,0) when the image is
+            # clearly larger, as these are almost certainly corrupt OCR entries that would
+            # overlap with any real corner text.
+            has_valid_size = (x1 - x0) > 2 and (y1 - y0) > 2
+            at_true_corner = x0 == 0 and y0 == 0 and ocr_img_w > 0 and ocr_img_h > 0
+            if at_true_corner and ocr_img_w > 50 and ocr_img_h > 50:
+                # Accept only if the block is a plausible corner word (small width/height)
+                plausible_corner = (x1 - x0) < ocr_img_w * 0.3 and (y1 - y0) < ocr_img_h * 0.15
+                if not plausible_corner:
+                    app.logger.warning(
+                        f'[OCR DEBUG] Skipping line {line_idx} "{line_text[:30]}" — '
+                        f'(0,0) origin with suspicious size {x1-x0}×{y1-y0} px'
+                    )
+                    continue
+
+            if not has_valid_size:
+                app.logger.debug(f'[OCR DEBUG] Skipping line {line_idx} — zero-size bbox')
+                continue
+
+            # FIX 3/4: use average word height (not full line height) for font sizing.
+            # Line bbox often includes inter-line spacing; word heights reflect actual glyphs.
+            word_heights = sorted([w['Height'] for w in words if 'Height' in w and w['Height'] > 0])
+            if word_heights:
+                avg_word_h = sum(word_heights) / len(word_heights)
+                # Prefer average over median for font size — median can be skewed by ascenders
+                word_h = round(avg_word_h)
+            else:
+                word_h = y1 - y0
+
+            # DEBUG: log each block's raw pixel coords and computed percentages
+            app.logger.debug(
+                f"[OCR DEBUG] Block '{line_text[:30]}': "
+                f"pixel x={x0},y={y0},w={x1-x0},h={y1-y0} | word_h={word_h} | "
+                f"pct top={round(y0/ocr_img_h*100,2)}, left={round(x0/ocr_img_w*100,2)}, "
+                f"w={round((x1-x0)/ocr_img_w*100,2)}, h={round((y1-y0)/ocr_img_h*100,2)}"
+            )
+            blocks.append({
+                'text':   line_text,
+                'x':      x0,
+                'y':      y0,
+                'w':      x1 - x0,
+                'h':      y1 - y0,
+                'word_h': word_h,   # average word glyph height in OCR pixel space
+                'img_w':  ocr_img_w,  # OCR.space reference dimensions
+                'img_h':  ocr_img_h,
+            })
+
+    if not blocks:
+        return jsonify({'error': 'Không nhận diện được văn bản. Thử chọn ngôn ngữ OCR khác.'}), 400
+
+    # DEBUG: return dimension resolution info alongside blocks for browser console inspection
+    return jsonify({
+        'blocks': blocks,
+        'count':  len(blocks),
+        'debug': {
+            'ocr_img_w':               ocr_img_w,
+            'ocr_img_h':               ocr_img_h,
+            'frontend_img_w':          img_w,
+            'frontend_img_h':          img_h,
+            'imagewidth_from_response': raw_iw,
+            'imageheight_from_response': raw_ih,
+            'dimensions_match':        (ocr_img_w == img_w and ocr_img_h == img_h),
+        }
+    }), 200
+
+
 @app.route('/img-translate/prompt', methods=['POST'])
 @login_required
 def img_translate_prompt():
-    """Sinh Instruction Prompt yêu cầu AI phân tích ảnh và trả JSON overlay."""
+    """Sinh Instruction Prompt yêu cầu AI phân tích ảnh và trả JSON overlay (fallback khi OCR.space không được)."""
     data = request.get_json() or {}
     target_lang = data.get('target_lang', 'tiếng Nhật')
     source_lang = data.get('source_lang', '').strip()
-    img_w = int(data.get('image_width', 0))
-    img_h = int(data.get('image_height', 0))
 
+    # NEW: removed img_w/img_h — AI internal resize makes pixel->% conversion wrong
     source_note = f" (ngôn ngữ gốc trong ảnh: {source_lang})" if source_lang else ""
 
-    if img_w > 0 and img_h > 0:
-        dim_note = f"\n\nKích thước ảnh CHÍNH XÁC: {img_w} × {img_h} pixel (rộng × cao).\n" \
-                   f"→ Quy đổi tọa độ pixel sang %: left_pct = pixel_x / {img_w} × 100, top_pct = pixel_y / {img_h} × 100\n" \
-                   f"→ Quy đổi kích thước sang %: width_pct = pixel_w / {img_w} × 100, height_pct = pixel_h / {img_h} × 100\n" \
-                   f"→ font_size_pct = chiều_cao_font_pixel / {img_h} × 100"
-        font_example = round(24 / img_h * 100, 2) if img_h else 2.5
-        dim_font_note = f"(ví dụ: chữ 24px trong ảnh {img_h}px cao → font_size_pct = {font_example})"
-    else:
-        dim_note = ""
-        font_example = 2.5
-        dim_font_note = "(ví dụ: 2.5)"
-
-    prompt = f"""Bạn là chuyên gia OCR và dịch thuật chuyên nghiệp. Tôi sẽ gửi cho bạn một bức ảnh{source_note}.{dim_note}
+    # NEW: removed bg_color, text_color, font_size_pct — frontend computes from canvas + geometry
+    prompt = f"""Bạn là chuyên gia OCR và dịch thuật chuyên nghiệp. Tôi sẽ gửi cho bạn một bức ảnh{source_note}.
 
 NHIỆM VỤ:
 1. Nhận diện (OCR) TẤT CẢ các vùng có văn bản trong ảnh.
 2. Dịch toàn bộ sang {target_lang} một cách tự nhiên, chính xác.
-3. Với mỗi vùng văn bản, xác định CÁC GIÁ TRỊ SAU:
+3. Với mỗi vùng văn bản, xác định:
 
-   top_pct    : tọa độ mép TRÊN của text box, tính bằng % chiều CAO ảnh (0 = trên cùng, 100 = dưới cùng)
-   left_pct   : tọa độ mép TRÁI của text box, tính bằng % chiều RỘNG ảnh (0 = trái, 100 = phải)
-   width_pct  : chiều RỘNG text box, % chiều rộng ảnh
-   height_pct : chiều CAO text box, % chiều cao ảnh
-   bg_color   : mã HEX màu nền THỰC TẾ ngay phía sau văn bản (để che chữ cũ)
-   text_color : mã HEX màu chữ phù hợp để đọc được trên bg_color
-   font_size_pct : cỡ chữ tính bằng % chiều cao ảnh {dim_font_note}
-                   → PHẢI xấp xỉ bằng chiều cao thực tế của 1 dòng chữ trong ảnh
-                   → KHÔNG được nhỏ hơn 60% height_pct (nếu block là 1 dòng)
-                   → Với block nhiều dòng: font_size_pct ≈ height_pct / số_dòng × 0.8
+   top_pct    : tọa độ mép TRÊN của text box, % chiều CAO ảnh bạn nhìn thấy (0–100)
+   left_pct   : tọa độ mép TRÁI của text box, % chiều RỘNG ảnh bạn nhìn thấy (0–100)
+   width_pct  : chiều RỘNG text box, % chiều rộng ảnh bạn nhìn thấy
+   height_pct : chiều CAO text box, % chiều cao ảnh bạn nhìn thấy
 
 ⚠️ YÊU CẦU BẮT BUỘC:
+- Tọa độ % tính theo kích thước ảnh BẠN ĐANG XỬ LÝ
 - Tọa độ phải bao phủ CHÍNH XÁC vùng chứa văn bản, sai số không quá 1%
-- Các box KHÔNG được chồng lên nhau (trừ khi text thực sự chồng trong ảnh)
-- bg_color lấy từ màu nền thực trong ảnh, KHÔNG đặt màu tùy ý
 - Trả về JSON THUẦN TÚY — KHÔNG giải thích, KHÔNG bọc markdown code block ```
 
 FORMAT JSON TRẢ VỀ (giữ đúng cấu trúc này):
@@ -2991,10 +3189,7 @@ FORMAT JSON TRẢ VỀ (giữ đúng cấu trúc này):
       "top_pct": 10.5,
       "left_pct": 5.2,
       "width_pct": 30.0,
-      "height_pct": 5.0,
-      "bg_color": "#FFFFFF",
-      "text_color": "#000000",
-      "font_size_pct": {font_example}
+      "height_pct": 5.0
     }}
   ]
 }}"""
@@ -3441,5 +3636,5 @@ def api_terminology_import_json():
 
 if __name__ == '__main__':
     # Chạy ứng dụng Flask ở chế độ debug
-    app.run(host='0.0.0.0', port=5000)
-    #app.run(debug=True,host='0.0.0.0', port=5001)
+    #app.run(host='0.0.0.0', port=5000)
+    app.run(debug=True,host='0.0.0.0', port=5001)

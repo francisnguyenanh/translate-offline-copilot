@@ -1049,49 +1049,95 @@ Output yêu cầu:
                     </div>
                 </div>
 
-                <!-- Bước 2: Prompt AI -->
+                <!-- Bước 2: OCR & Dịch -->
                 <div class="col-lg-4">
                     <div class="function-card">
                         <div class="text-center">
                             <span class="step-number">2</span>
-                            <h3 class="d-inline">Prompt AI</h3>
-                            <p class="text-muted small mt-2">Copy &amp; gửi cho AI cùng ảnh</p>
+                            <h3 class="d-inline">OCR &amp; Dịch</h3>
+                            <p class="text-muted small mt-2">Nhận diện &amp; lấy bản dịch từ văn bản</p>
                         </div>
-                        <div id="imgPromptEmpty" class="text-center text-muted mt-4">
-                            <i class="fas fa-arrow-left" style="font-size:2rem;opacity:0.3;"></i>
-                            <p class="mt-2 small">Upload ảnh và nhấn <br><b>Tạo Prompt</b> ở bước 1</p>
-                        </div>
-                        <div id="imgPromptWrap" style="display:none;">
-                            <div class="alert alert-info small py-2 mb-2">
-                                <i class="fas fa-lightbulb"></i> Copy prompt, mở <strong>Gemini / Grok / ChatGPT</strong>, đính kèm ảnh + prompt rồi gửi.
+                        <!-- OCR section -->
+                        <div>
+                            <label class="form-label small mb-1"><strong>Ngôn ngữ trong ảnh:</strong></label>
+                            <select class="form-select form-select-sm mb-2" id="ocrLangSelect">
+                                <option value="jpn">&#x65E5;&#x672C;&#x8A9E; (Japanese)</option>
+                                <option value="chs">&#x4E2D;&#x6587;&#x7B80;&#x4F53; (Chinese Simplified)</option>
+                                <option value="cht">&#x4E2D;&#x6587;&#x7E41;&#x9AD4; (Chinese Traditional)</option>
+                                <option value="kor">&#xD55C;&#xAD6D;&#xC5B4; (Korean)</option>
+                                <option value="eng">English</option>
+                                <option value="vie">Ti&#x1EBF;ng Vi&#x1EC7;t</option>
+                            </select>
+                            <div id="ocrProgress" style="display:none;" class="text-center text-muted small py-2">
+                                <i class="fas fa-spinner fa-spin"></i> &#x110;ang nh&#x1EAD;n di&#x1EC7;n v&#x0103;n b&#x1EA3;n...
                             </div>
-                            <textarea class="form-control" id="imgPromptText" rows="12" readonly style="font-size:0.75rem;font-family:monospace;resize:vertical;"></textarea>
-                            <div class="text-center mt-2">
-                                <button type="button" class="btn btn-outline-primary btn-sm" id="copyImgPromptBtn">
-                                    <i class="fas fa-copy"></i> Copy Prompt
+                            <div id="ocrAlert"></div>
+                            <div class="text-center">
+                                <button type="button" class="btn btn-custom btn-sm" id="runOcrBtn" disabled>
+                                    <i class="fas fa-search"></i> Ch&#x1EA1;y OCR
                                 </button>
                             </div>
                         </div>
+                        <!-- OCR result + translate prompt -->
+                        <div id="ocrDonePanel" style="display:none;" class="mt-3">
+                            <label class="form-label small mb-1"><strong>V&#x0103;n b&#x1EA3;n nh&#x1EAD;n di&#x1EC7;n:</strong></label>
+                            <div id="ocrTextList" class="p-2 mb-2"
+                                 style="background:#f8f9fa;border-radius:5px;font-size:0.75rem;font-family:monospace;max-height:100px;overflow-y:auto;white-space:pre-wrap;"></div>
+                            <label class="form-label small mb-1"><strong>Prompt d&#x1ECB;ch (copy g&#x1EED;i AI &#x2014; ch&#x1EC9; text, kh&#xF4;ng c&#x1EA7;n &#x1EA3;nh):</strong></label>
+                            <textarea class="form-control" id="translatePromptText" rows="4" readonly
+                                      style="font-size:0.75rem;font-family:monospace;resize:vertical;"></textarea>
+                            <div class="text-center mt-1">
+                                <button type="button" class="btn btn-outline-primary btn-sm" id="copyTranslatePromptBtn">
+                                    <i class="fas fa-copy"></i> Copy Prompt
+                                </button>
+                            </div>
+                            <div class="mt-2">
+                                <label class="form-label small mb-1"><strong>D&#xE1;n b&#x1EA3;n d&#x1ECB;ch t&#x1EEB; AI:</strong></label>
+                                <textarea class="form-control" id="translatedResultTextarea" rows="5"
+                                          placeholder="1. B&#x1EA3;n d&#x1ECB;ch m&#x1ED9;t&#10;2. B&#x1EA3;n d&#x1ECB;ch hai&#10;..."
+                                          style="font-size:0.75rem;font-family:monospace;resize:vertical;"></textarea>
+                            </div>
+                            <div id="mergeAlert" class="mt-1"></div>
+                            <div class="text-center mt-2">
+                                <button type="button" class="btn btn-custom btn-sm" id="mergeAndRenderBtn">
+                                    <i class="fas fa-layer-group"></i> Merge &amp; Render
+                                </button>
+                            </div>
+                        </div>
+                        <!-- Fallback: generate AI prompt with image (old flow) -->
                         <div class="mt-3">
-                            <div class="collapse-toggle p-2" style="background:#f8f9fa;border-radius:5px;" data-bs-toggle="collapse" data-bs-target="#imgStep2Guide">
-                                <i class="fas fa-info-circle text-info"></i>
-                                <small><strong>Hướng dẫn</strong></small>
+                            <div class="collapse-toggle p-2" style="background:#f8f9fa;border-radius:5px;"
+                                 data-bs-toggle="collapse" data-bs-target="#imgStep2Fallback">
+                                <i class="fas fa-info-circle text-warning"></i>
+                                <small><strong>D&#xF9;ng AI k&#xE8;m &#x1EA3;nh (fallback)</strong></small>
                                 <i class="fas fa-chevron-down float-end"></i>
                             </div>
-                            <div class="collapse mt-2" id="imgStep2Guide">
-                                <div class="p-2" style="border-radius:5px;">
-                                    <ul class="small mb-0" style="padding-left:20px;">
-                                        <li>Copy prompt và mở AI (Gemini, Grok...)</li>
-                                        <li>Đính kèm ảnh + paste prompt rồi gửi</li>
-                                        <li>AI trả về JSON chứa tọa độ và bản dịch</li>
-                                        <li>Copy toàn bộ JSON đó → sang Bước 3</li>
-                                    </ul>
+                            <div class="collapse mt-2" id="imgStep2Fallback">
+                                <div id="imgPromptEmpty" class="text-center text-muted mt-2">
+                                    <i class="fas fa-arrow-left" style="font-size:1.5rem;opacity:0.3;"></i>
+                                    <p class="mt-1 small">Upload &#x1EA3;nh v&#xE0; nh&#x1EA5;n <b>T&#x1EA1;o Prompt</b></p>
+                                </div>
+                                <div id="imgPromptWrap" style="display:none;">
+                                    <div class="alert alert-info small py-2 mb-2">
+                                        <i class="fas fa-lightbulb"></i> Copy prompt, m&#x1EDF; <strong>Gemini / Grok / ChatGPT</strong>, &#x111;&#xED;nh k&#xE8;m &#x1EA3;nh + prompt r&#x1ED3;i g&#x1EED;i.
+                                    </div>
+                                    <textarea class="form-control" id="imgPromptText" rows="6" readonly
+                                              style="font-size:0.75rem;font-family:monospace;resize:vertical;"></textarea>
+                                    <div class="text-center mt-2">
+                                        <button type="button" class="btn btn-outline-primary btn-sm" id="copyImgPromptBtn">
+                                            <i class="fas fa-copy"></i> Copy Prompt
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="text-center mt-2">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" id="genPromptBtn" disabled>
+                                        <i class="fas fa-magic"></i> T&#x1EA1;o Prompt AI
+                                    </button>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-
                 <!-- Bước 3: Paste JSON & Render -->
                 <div class="col-lg-4">
                     <div class="function-card">
@@ -1103,7 +1149,7 @@ Output yêu cầu:
                         <div>
                             <label class="form-label small mb-1"><strong>Paste JSON từ AI:</strong></label>
                             <textarea class="form-control" id="imgJsonTextarea" rows="10"
-                                placeholder='{"text_blocks": [{"original":"...","translated":"...","top_pct":10,"left_pct":5,"width_pct":30,"height_pct":5,"bg_color":"#ffffff","text_color":"#000000","font_size_pct":2.5}]}'
+                                placeholder='{"text_blocks":[{"original":"...","translated":"...","top_pct":10.5,"left_pct":5.2,"width_pct":30.0,"height_pct":5.0}]}'
                                 style="font-family:monospace;font-size:0.75rem;resize:vertical;"></textarea>
                         </div>
                         <div id="imgJsonAlert" class="mt-2"></div>
@@ -1167,7 +1213,8 @@ Output yêu cầu:
                     </div>
                     <div style="overflow:auto;max-height:75vh;">
                         <div id="imgOverlayContainer" style="position:relative;display:inline-block;user-select:none;transform-origin:top left;">
-                            <img id="imgOverlayBase" src="" style="display:block;max-width:none;" alt="Ảnh gốc">
+                            <!-- FIX CAUSE2: max-width:100% ensures getBoundingClientRect() matches the visible rendering area -->
+                            <img id="imgOverlayBase" src="" style="display:block;max-width:100%;height:auto;" alt="Ảnh gốc">
                         </div>
                     </div>
                     <div class="mt-3">
@@ -2986,6 +3033,7 @@ Output yêu cầu:
         let imgCurrentLangName = 'tiếng Nhật';
         let imgTextBlocks = [];
         let imgShowOriginal = false;
+        let ocrBlocks = [];
 
         // Populate imgTargetLangSelect từ cùng API languages
         async function loadImgLanguages() {
@@ -3039,8 +3087,12 @@ Output yêu cầu:
             imgPreviewWrap.style.display = 'none';
             genPromptBtn.disabled = true;
             renderOverlayBtn.disabled = true;
+            document.getElementById('runOcrBtn').disabled = true;
             document.getElementById('imgPromptWrap').style.display = 'none';
             document.getElementById('imgPromptEmpty').style.display = 'block';
+            document.getElementById('ocrDonePanel').style.display = 'none';
+            document.getElementById('ocrAlert').innerHTML = '';
+            ocrBlocks = [];
             document.getElementById('imgOverlayResult').style.display = 'none';
             imgUploadAlert.innerHTML = '';
         });
@@ -3064,6 +3116,7 @@ Output yêu cầu:
                 imgPreviewWrap.style.display = 'block';
                 genPromptBtn.disabled = false;
                 renderOverlayBtn.disabled = false;
+                document.getElementById('runOcrBtn').disabled = false;
                 imgUploadAlert.innerHTML = '<div class="alert alert-success small py-2"><i class="fas fa-check"></i> Upload thành công!</div>';
                 setTimeout(() => { imgUploadAlert.innerHTML = ''; }, 2500);
             } catch(err) {
@@ -3074,18 +3127,13 @@ Output yêu cầu:
         // Tạo Prompt
         genPromptBtn.addEventListener('click', async function() {
             const sourceLang = document.getElementById('imgSourceLang').value.trim();
-            // Pass actual image pixel dimensions so AI can anchor coordinates
-            const imgW = imgPreview.naturalWidth  || 0;
-            const imgH = imgPreview.naturalHeight || 0;
             try {
                 const resp = await fetch('/img-translate/prompt', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         target_lang: imgCurrentLangName,
-                        source_lang: sourceLang,
-                        image_width:  imgW,
-                        image_height: imgH
+                        source_lang: sourceLang
                     })
                 });
                 const data = await resp.json();
@@ -3110,6 +3158,166 @@ Output yêu cầu:
             });
         });
 
+        // ========== OCR (OCR.space) ==========
+        document.getElementById('runOcrBtn').addEventListener('click', async function() {
+            if (!imgCurrentFilename) return;
+            const ocrLang    = document.getElementById('ocrLangSelect').value;
+            const ocrAlert   = document.getElementById('ocrAlert');
+            const ocrProgress= document.getElementById('ocrProgress');
+            const ocrDone    = document.getElementById('ocrDonePanel');
+
+            ocrAlert.innerHTML = '';
+            ocrProgress.style.display = 'block';
+            ocrDone.style.display = 'none';
+            this.disabled = true;
+
+            try {
+                const imgW = imgPreview.naturalWidth  || 0;
+                const imgH = imgPreview.naturalHeight || 0;
+                const resp = await fetch('/img-translate/ocr', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        filename: imgCurrentFilename,
+                        ocr_lang: ocrLang,
+                        img_w:    imgW,
+                        img_h:    imgH
+                    })
+                });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.error || 'OCR that bai');
+
+                // DEBUG: log dimension resolution so coordinate mismatches are visible
+                if (data.debug) {
+                    console.debug('[OCR DEBUG] Server dimension resolution:', data.debug);
+                    if (!data.debug.dimensions_match) {
+                        console.warn(
+                            '[OCR DEBUG] \u26a0 OCR reference dimensions differ from frontend image!',
+                            `OCR used: ${data.debug.ocr_img_w}\u00d7${data.debug.ocr_img_h}`,
+                            `Frontend image: ${data.debug.frontend_img_w}\u00d7${data.debug.frontend_img_h}`
+                        );
+                    }
+                }
+
+                ocrBlocks = data.blocks || [];
+                if (ocrBlocks.length === 0) {
+                    ocrAlert.innerHTML = '<div class="alert alert-warning small py-2">Kh\u00f4ng t\u00ecm th\u1ea5y v\u0103n b\u1ea3n trong \u1ea3nh.</div>';
+                    return;
+                }
+
+                // Numbered text list
+                const listText = ocrBlocks.map((b, i) => `${i + 1}. ${b.text}`).join('\n');
+                document.getElementById('ocrTextList').textContent = listText;
+
+                // Build translate prompt (text-only, no image needed)
+                const targetLang = imgCurrentLangName || 'Vietnamese';
+                const sourceLang = document.getElementById('imgSourceLang').value.trim() || 'Japanese';
+                const prompt =
+                    `Translate the following numbered text items from ${sourceLang} to ${targetLang}.\n` +
+                    `Return ONLY the same numbered list with translated text. Do not add any other text.\n\n` +
+                    listText;
+                document.getElementById('translatePromptText').value = prompt;
+
+                ocrDone.style.display = 'block';
+                ocrAlert.innerHTML = `<div class="alert alert-success small py-2"><i class="fas fa-check"></i> Nh\u1eadn di\u1ec7n \u0111\u01b0\u1ee3c ${ocrBlocks.length} kh\u1ed1i v\u0103n b\u1ea3n.</div>`;
+            } catch(err) {
+                ocrAlert.innerHTML = `<div class="alert alert-danger small py-2">${escapeHtml(err.message)}</div>`;
+            } finally {
+                ocrProgress.style.display = 'none';
+                this.disabled = false;
+            }
+        });
+
+        // Copy translate prompt
+        document.getElementById('copyTranslatePromptBtn').addEventListener('click', function() {
+            const text = document.getElementById('translatePromptText').value;
+            navigator.clipboard.writeText(text).then(() => {
+                this.innerHTML = '<i class="fas fa-check"></i> \u0110\u00e3 copy!';
+                this.classList.replace('btn-outline-primary', 'btn-success');
+                setTimeout(() => {
+                    this.innerHTML = '<i class="fas fa-copy"></i> Copy Prompt';
+                    this.classList.replace('btn-success', 'btn-outline-primary');
+                }, 2000);
+            });
+        });
+
+        // Merge OCR bounding boxes with AI translations and render
+        document.getElementById('mergeAndRenderBtn').addEventListener('click', function() {
+            const mergeAlert = document.getElementById('mergeAlert');
+            const rawText    = document.getElementById('translatedResultTextarea').value.trim();
+
+            if (!rawText) {
+                mergeAlert.innerHTML = '<div class="alert alert-warning small py-2">Vui l\u00f2ng d\u00e1n b\u1ea3n d\u1ecbch t\u1eeb AI.</div>';
+                return;
+            }
+            if (!imgCurrentFilename) {
+                mergeAlert.innerHTML = '<div class="alert alert-warning small py-2">Vui l\u00f2ng upload \u1ea3nh tr\u01b0\u1edbc.</div>';
+                return;
+            }
+            if (ocrBlocks.length === 0) {
+                mergeAlert.innerHTML = '<div class="alert alert-warning small py-2">Vui l\u00f2ng ch\u1ea1y OCR tr\u01b0\u1edbc.</div>';
+                return;
+            }
+
+            // Parse translations: try JSON array, then numbered list, then plain lines
+            let translations = [];
+            try {
+                const parsed = JSON.parse(rawText);
+                if (Array.isArray(parsed)) translations = parsed.map(s => String(s));
+            } catch {
+                const lines   = rawText.split('\n').map(l => l.trim()).filter(l => l);
+                const numbered = lines.filter(l => /^\d+[\.\)\:]/.test(l));
+                translations = (numbered.length > 0)
+                    ? numbered.map(l => l.replace(/^\d+[\.\)\:]\s*/, ''))
+                    : lines;
+            }
+
+            if (translations.length < ocrBlocks.length) {
+                mergeAlert.innerHTML = `<div class="alert alert-warning small py-2">C\u1ea7n ${ocrBlocks.length} b\u1ea3n d\u1ecbch nh\u01b0ng ch\u1ec9 c\u00f3 ${translations.length}. Th\u1eed l\u1ea1i.</div>`;
+                return;
+            }
+
+            // Build imgTextBlocks: pixel coords → percentage, reference from stored img dimensions
+            const imgW = (ocrBlocks[0] && ocrBlocks[0].img_w) ? ocrBlocks[0].img_w : (imgPreview.naturalWidth  || 1);
+            const imgH = (ocrBlocks[0] && ocrBlocks[0].img_h) ? ocrBlocks[0].img_h : (imgPreview.naturalHeight || 1);
+
+            imgTextBlocks = ocrBlocks.map((b, i) => {
+                const block = {
+                    original:    b.text,
+                    translated:  translations[i],
+                    top_pct:     b.y / imgH * 100,
+                    left_pct:    b.x / imgW * 100,
+                    width_pct:   b.w / imgW * 100,
+                    height_pct:  b.h / imgH * 100,
+                    // FIX C: pass word-level height as % for accurate font sizing
+                    word_h_pct:  b.word_h ? (b.word_h / imgH * 100) : null,
+                };
+                // DEBUG: log first and last block conversion to verify coords are in range
+                if (i === 0 || i === ocrBlocks.length - 1) {
+                    console.debug(
+                        `[MERGE DEBUG] Block ${i} "${b.text.slice(0, 20)}":`,
+                        `pixel(${b.x},${b.y},${b.w}\u00d7${b.h}) word_h=${b.word_h}`,
+                        `\u00f7 ref(${imgW}\u00d7${imgH})`,
+                        `\u2192 pct(top=${block.top_pct.toFixed(1)}, left=${block.left_pct.toFixed(1)},`,
+                        `${block.width_pct.toFixed(1)}\u00d7${block.height_pct.toFixed(1)})`
+                    );
+                }
+                return block;
+            });
+
+            mergeAlert.innerHTML = '';
+            renderAllOverlays();
+        });
+
+        // XSS-safe HTML escaping helper
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
         // Render Overlay
         renderOverlayBtn.addEventListener('click', function() {
             const jsonText = document.getElementById('imgJsonTextarea').value.trim();
@@ -3127,33 +3335,68 @@ Output yêu cầu:
             }
         });
 
-        // FIX BUG 3: sample pixel color from image via offscreen canvas
-        function sampleImageColor(imgEl, xPct, yPct) {
+        // FIX E: shared font-size helper used by createOverlayBlock, applyZoom, and resize listener
+        function calcBlockFontSize(block, renderedH, renderedW) {
+            const blockH = renderedH * (block.height_pct || 5)  / 100;
+            const blockW = renderedW * (block.width_pct  || 20) / 100;
+            let fsPx;
+            if (block.font_size_pct) {
+                // Manual override set via edit modal — highest priority
+                fsPx = renderedH * block.font_size_pct / 100;
+            } else if (block.word_h_pct) {
+                // FIX B: word-level height is ~glyph height; 0.85 accounts for descenders
+                fsPx = renderedH * block.word_h_pct / 100 * 0.85;
+            } else {
+                // FIX B: conservative fallback — line bbox includes leading/padding
+                // 0.45 (not 0.72) to avoid oversized font for multi-line boxes
+                fsPx = blockH * 0.45;
+            }
+            // Width-based cap: prevent overflow for long translated strings
+            const textLen = (block.translated || block.original || '').length || 1;
+            const maxFsByWidth = (blockW / textLen) * 1.8;
+            fsPx = Math.min(fsPx, maxFsByWidth);
+            // Hard clamp: [8px, 90% of block height]
+            return Math.max(8, Math.min(fsPx, blockH * 0.90));
+        }
+
+        // Sample average bg color of the block's bounding box (5×5 center pixels)
+        function sampleBlockBgColor(imgEl, block) {
             try {
                 const canvas = document.createElement('canvas');
                 canvas.width  = imgEl.naturalWidth;
                 canvas.height = imgEl.naturalHeight;
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(imgEl, 0, 0);
-                const x = Math.round(imgEl.naturalWidth  * xPct / 100);
-                const y = Math.round(imgEl.naturalHeight * yPct / 100);
-                const [r, g, b] = ctx.getImageData(x, y, 1, 1).data;
-                return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+                const cx = Math.round(imgEl.naturalWidth  * ((block.left_pct || 0) + (block.width_pct  || 0) / 2) / 100);
+                const cy = Math.round(imgEl.naturalHeight * ((block.top_pct  || 0) + (block.height_pct || 0) / 2) / 100);
+                const half = 2;  // 5×5 sample grid
+                let r = 0, g = 0, b = 0, n = 0;
+                for (let dy = -half; dy <= half; dy++) {
+                    for (let dx = -half; dx <= half; dx++) {
+                        const px = cx + dx, py = cy + dy;
+                        if (px < 0 || py < 0 || px >= canvas.width || py >= canvas.height) continue;
+                        const d = ctx.getImageData(px, py, 1, 1).data;
+                        r += d[0]; g += d[1]; b += d[2]; n++;
+                    }
+                }
+                if (n === 0) return '#ffffff';
+                return '#' + [r, g, b].map(v => Math.round(v / n).toString(16).padStart(2, '0')).join('');
             } catch (e) {
-                // FIX BUG 3: cross-origin or tainted canvas — fall back silently
-                return null;
+                return '#ffffff';
             }
         }
 
-        // FIX BUG 3: return true when AI color is effectively white
-        function isWhiteColor(hex) {
-            if (!hex) return true;
-            const n = hex.replace('#', '').toLowerCase();
-            return n === 'fff' || n === 'ffffff';
+        // Return black or white depending on background luminance (WCAG contrast)
+        function contrastColor(hex) {
+            const r = parseInt(hex.slice(1, 3), 16) || 0;
+            const g = parseInt(hex.slice(3, 5), 16) || 0;
+            const b = parseInt(hex.slice(5, 7), 16) || 0;
+            return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.5 ? '#000000' : '#ffffff';
         }
 
-        // FIX BUG 4: cache base rendered height before any zoom scaling
+        // Cache base rendered dimensions before any zoom scaling
         let imgBaseRenderedHeight = 0;
+        let imgBaseRenderedWidth  = 0;
 
         function renderAllOverlays() {
             const container = document.getElementById('imgOverlayContainer');
@@ -3171,8 +3414,13 @@ Output yêu cầu:
             selectedBlockIdxSet.clear();
 
             function doRender() {
-                // FIX BUG 4: capture base rendered height once, before zoom is applied
+                // Capture base rendered dimensions once, before zoom is applied
                 imgBaseRenderedHeight = imgEl.getBoundingClientRect().height;
+                imgBaseRenderedWidth  = imgEl.getBoundingClientRect().width;
+                // DEBUG: log rendered vs natural size to spot viewport clipping issues
+                console.debug('[OVERLAY DEBUG] imgEl naturalSize:', imgEl.naturalWidth, '\u00d7', imgEl.naturalHeight);
+                console.debug('[OVERLAY DEBUG] imgEl renderedSize:', imgBaseRenderedWidth, '\u00d7', imgBaseRenderedHeight);
+                console.debug('[OVERLAY DEBUG] imgTextBlocks count:', imgTextBlocks.length);
                 imgTextBlocks.forEach((block, idx) => {
                     createOverlayBlock(block, idx, container, imgEl);
                     appendBlockListRow(block, idx, blockList);
@@ -3244,21 +3492,27 @@ Output yêu cầu:
             div.className = 'overlay-block';
             div.dataset.idx = idx;
 
-            // FIX BUG 3: use canvas-sampled color when AI returned white or missing bg
-            let bg = block.bg_color || '#ffffff';
-            if (isWhiteColor(bg)) {
-                const sampled = sampleImageColor(imgEl, block.left_pct || 0, block.top_pct || 0);
-                if (sampled) bg = sampled;
-            }
-            const fg = block.text_color || '#000000';
+            // Use canvas sampling for bg; respect explicit override (set via edit modal)
+            const hasBgOverride = block.bg_color && block.bg_color !== '#ffffff';
+            const bg = hasBgOverride ? block.bg_color : sampleBlockBgColor(imgEl, block);
+            const fg = block.text_color || contrastColor(bg);
 
-            // FIX BUG 1: use rendered height (not naturalHeight) so font scales with displayed image
+            // FIX B: use shared font helper (word_h_pct > fallback; respect manual override)
             const renderedH = imgBaseRenderedHeight || imgEl.getBoundingClientRect().height;
-            const blockHeightPx = renderedH * (block.height_pct || 5) / 100;
-            let fsPx = renderedH * (block.font_size_pct || 0) / 100;
-            // Fallback: font must be at least 45% of block height (single-line readable)
-            if (fsPx < blockHeightPx * 0.45) fsPx = blockHeightPx * 0.72;
+            const renderedW = imgBaseRenderedWidth  || imgEl.getBoundingClientRect().width;
+            const fsPx = calcBlockFontSize(block, renderedH, renderedW);
             const fs = fsPx + 'px';
+            // DEBUG: warn on out-of-range block coordinates
+            if (block.top_pct > 100 || block.left_pct > 100 || block.top_pct < 0 || block.left_pct < 0) {
+                console.warn(`[BLOCK DEBUG] Block ${idx} "${(block.translated || '').slice(0, 20)}" out-of-range:`,
+                    `top=${block.top_pct.toFixed(1)}% left=${block.left_pct.toFixed(1)}%`);
+            }
+            console.debug(
+                `[BLOCK DEBUG] Block ${idx} "${(block.translated || '').slice(0, 20)}":`,
+                `pos=${block.top_pct.toFixed(1)}%,${block.left_pct.toFixed(1)}%`,
+                `size=${block.width_pct.toFixed(1)}%\u00d7${block.height_pct.toFixed(1)}%`,
+                `font=${fs}`
+            );
             Object.assign(div.style, {
                 position: 'absolute',
                 top:    block.top_pct    + '%',
@@ -3276,7 +3530,8 @@ Output yêu cầu:
                 cursor: 'move',
                 fontSize: fs,
                 lineHeight: '1.2',
-                padding: '2px',
+                // FIX D: small horizontal padding creates visual gap between adjacent blocks
+                padding: '1px 3px',
                 zIndex: '10',
                 boxSizing: 'border-box',
                 userSelect: 'none'
@@ -3520,16 +3775,13 @@ Output yêu cầu:
             const lbl = document.getElementById('imgZoomLabel');
             if (lbl) lbl.textContent = Math.round(imgZoomLevel * 100) + '%';
 
-            // FIX BUG 4: recalc font sizes using base height × zoom to avoid double-scaling
+            // FIX E: recalc font sizes via shared helper
+            const baseW = imgBaseRenderedWidth || document.getElementById('imgOverlayBase').getBoundingClientRect().width / imgZoomLevel;
             container.querySelectorAll('.overlay-block').forEach(div => {
                 const idx = parseInt(div.dataset.idx);
                 const block = imgTextBlocks[idx];
                 if (!block) return;
-                const scaledH = baseH * imgZoomLevel;
-                const blockHeightPx = scaledH * (block.height_pct || 5) / 100;
-                let fsPx = scaledH * (block.font_size_pct || 0) / 100;
-                if (fsPx < blockHeightPx * 0.45) fsPx = blockHeightPx * 0.72;
-                div.style.fontSize = fsPx + 'px';
+                div.style.fontSize = calcBlockFontSize(block, baseH, baseW) + 'px';
             });
         }
 
@@ -3540,14 +3792,13 @@ Output yêu cầu:
                 const imgEl = document.getElementById('imgOverlayBase');
                 // FIX BUG 1: re-capture base rendered height after resize, then recalc fonts
                 imgBaseRenderedHeight = imgEl.getBoundingClientRect().height / imgZoomLevel;
+                imgBaseRenderedWidth  = imgEl.getBoundingClientRect().width  / imgZoomLevel;
+                // FIX E: recalc font sizes via shared helper
                 container.querySelectorAll('.overlay-block').forEach(div => {
                     const idx = parseInt(div.dataset.idx);
                     const block = imgTextBlocks[idx];
                     if (!block) return;
-                    const blockHeightPx = imgBaseRenderedHeight * (block.height_pct || 5) / 100;
-                    let fsPx = imgBaseRenderedHeight * (block.font_size_pct || 0) / 100;
-                    if (fsPx < blockHeightPx * 0.45) fsPx = blockHeightPx * 0.72;
-                    div.style.fontSize = fsPx + 'px';
+                    div.style.fontSize = calcBlockFontSize(block, imgBaseRenderedHeight, imgBaseRenderedWidth) + 'px';
                 });
             }
         });
