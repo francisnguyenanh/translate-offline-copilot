@@ -1416,10 +1416,19 @@ Output yêu cầu:
                     </div>
                     <div id="termTemplateSaveAlert" class="mb-1" style="font-size:0.78rem;"></div>
 
-                    <!-- Prompt textarea -->
+                    <!-- Prompt textarea — collapse -->
                     <div class="mb-2">
-                        <label class="form-label small mb-1"><strong>Prompt:</strong></label>
-                        <textarea class="form-control" id="termPromptTextarea" rows="8" style="font-size:0.78rem; resize:vertical;"></textarea>
+                        <div class="collapse-toggle p-2 mb-1" style="background:#f8f9fa; border-radius:5px; cursor:pointer;"
+                            data-bs-toggle="collapse" data-bs-target="#termPromptCollapse" aria-expanded="false">
+                            <i class="fas fa-align-left text-primary"></i>
+                            <small><strong> Xem / Chỉnh sửa Prompt</strong></small>
+                            <i class="fas fa-chevron-down float-end" id="termPromptChevron"
+                                style="transition:transform 0.2s;"></i>
+                        </div>
+                        <div class="collapse" id="termPromptCollapse">
+                            <textarea class="form-control" id="termPromptTextarea" rows="8"
+                                style="font-size:0.78rem; resize:vertical;"></textarea>
+                        </div>
                     </div>
 
                     <!-- Danh sách chunk (giống tab Dịch tài liệu) -->
@@ -1430,7 +1439,7 @@ Output yêu cầu:
                 </div>
             </div>
 
-            <!-- Bước 3: Nhập CSV & Lưu Glossary -->
+            <!-- Bước 3: Nhập JSON & Lưu Glossary -->
             <div class="col-lg-4">
                 <div class="function-card">
                     <div class="text-center">
@@ -1439,31 +1448,91 @@ Output yêu cầu:
                         <p class="text-muted small mt-2">Paste JSON từ AI → lưu Glossary</p>
                     </div>
 
-                    <!-- CSV textarea -->
-                    <div class="mb-2">
-                        <label class="form-label small mb-1"><strong>Paste JSON từ AI:</strong></label>
-                        <textarea class="form-control" id="termCsvTextarea" rows="6"
-                            placeholder='Ví dụ:&#10;{"Purchase Order": "注文書", "Delivery Note": "納品書"}'
-                            oninput="previewTermInput()"
-                            style="font-family:monospace; font-size:0.8rem; resize:vertical;"></textarea>
-                    </div>
+                    <!-- Sub-tabs: Upload File / Paste JSON -->
+                    <ul class="nav nav-tabs nav-fill mb-2" id="termImportTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="termUploadFileTab" data-bs-toggle="tab"
+                                data-bs-target="#termUploadFilePanel" type="button" role="tab">
+                                <i class="fas fa-folder-open"></i> Upload File
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="termPasteJsonTab" data-bs-toggle="tab"
+                                data-bs-target="#termPasteJsonPanel" type="button" role="tab">
+                                <i class="fas fa-paste"></i> Paste JSON
+                            </button>
+                        </li>
+                    </ul>
 
-                    <!-- Preview bảng -->
-                    <div id="termCsvPreviewWrap" style="display:none;" class="mb-2">
-                        <div class="small fw-bold mb-1">Preview:</div>
-                        <div style="max-height:150px; overflow-y:auto; border:1px solid #dee2e6; border-radius:6px;">
-                            <table class="table table-sm table-bordered mb-0" id="termCsvPreviewTable">
-                                <thead><tr><th>Đích (cột A)</th><th>Gốc (cột B)</th></tr></thead>
-                                <tbody></tbody>
-                            </table>
+                    <div class="tab-content" id="termImportTabContent">
+
+                        <!-- Panel: Upload File JSON -->
+                        <div class="tab-pane fade" id="termUploadFilePanel" role="tabpanel">
+                            <div class="upload-area compact" id="termJsonUploadArea">
+                                <i class="fas fa-file-code"></i>
+                                <p class="mb-2 small"><strong>Kéo thả file JSON vào đây</strong></p>
+                                <input type="file" id="termJsonFile" accept=".json" multiple style="display:none;">
+                                <label for="termJsonFile" class="btn btn-custom btn-sm">
+                                    <i class="fas fa-folder-open"></i> Chọn file
+                                </label>
+                            </div>
+                            <div id="termJsonFileInfo" class="file-info" style="display:none;">
+                                <div id="termJsonFileList"></div>
+                                <button type="button" class="btn btn-sm btn-outline-danger float-end mt-2"
+                                    id="termJsonFileRemove">
+                                    <i class="fas fa-times"></i> Xóa tất cả
+                                </button>
+                            </div>
                         </div>
-                    </div>
+
+                        <!-- Panel: Paste JSON -->
+                        <div class="tab-pane fade show active" id="termPasteJsonPanel" role="tabpanel">
+                            <div class="mb-2">
+                                <label class="form-label small mb-1"><strong>Paste JSON từ AI:</strong></label>
+                                <textarea class="form-control" id="termCsvTextarea" rows="5"
+                                    placeholder='Ví dụ:&#10;{"Purchase Order": "注文書", "Delivery Note": "納品書"}'
+                                    oninput="previewTermInput()"
+                                    style="font-family:monospace; font-size:0.8rem; resize:vertical;"></textarea>
+                            </div>
+
+                            <!-- Preview bảng (realtime) -->
+                            <div id="termCsvPreviewWrap" style="display:none;" class="mb-2">
+                                <div class="small fw-bold mb-1">Preview:</div>
+                                <div style="max-height:120px; overflow-y:auto; border:1px solid #dee2e6; border-radius:6px;">
+                                    <table class="table table-sm table-bordered mb-0" id="termCsvPreviewTable">
+                                        <thead><tr><th>Đích (dst)</th><th>Gốc (src)</th></tr></thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <div class="text-center mb-2">
+                                <button type="button" class="btn btn-outline-primary btn-sm" id="termAddJsonBtn">
+                                    <i class="fas fa-plus-circle"></i> Thêm JSON này
+                                </button>
+                            </div>
+
+                            <!-- Danh sách JSON đã thêm -->
+                            <div id="termPastedJsonList" style="display:none;">
+                                <div class="file-info">
+                                    <label class="form-label small mb-1"><strong>Đã thêm:</strong></label>
+                                    <div id="termPastedJsonItems"></div>
+                                    <button type="button" class="btn btn-sm btn-outline-danger mt-2"
+                                        id="termClearPastedJsonBtn">
+                                        <i class="fas fa-trash"></i> Xóa tất cả
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div><!-- /tab-content -->
 
                     <!-- Lưu vào Glossary -->
-                    <div class="mb-2">
+                    <div class="mb-2 mt-3">
                         <label class="form-label small fw-bold">Lưu vào Glossary:</label>
                         <div class="form-check">
-                            <input class="form-check-input" type="radio" name="termGlossaryMode" id="termModeNew" value="new" checked onchange="onTermGlossaryModeChange()">
+                            <input class="form-check-input" type="radio" name="termGlossaryMode"
+                                id="termModeNew" value="new" checked onchange="onTermGlossaryModeChange()">
                             <label class="form-check-label small" for="termModeNew">Tạo glossary mới</label>
                         </div>
                         <div id="termNewNameWrap" class="mt-1 mb-2">
@@ -1471,7 +1540,8 @@ Output yêu cầu:
                                 placeholder="Tên glossary mới...">
                         </div>
                         <div class="form-check">
-                            <input class="form-check-input" type="radio" name="termGlossaryMode" id="termModeMerge" value="merge" onchange="onTermGlossaryModeChange()">
+                            <input class="form-check-input" type="radio" name="termGlossaryMode"
+                                id="termModeMerge" value="merge" onchange="onTermGlossaryModeChange()">
                             <label class="form-check-label small" for="termModeMerge">Merge vào glossary có sẵn</label>
                         </div>
                         <div id="termMergeSelectWrap" style="display:none;" class="mt-1">
@@ -1482,13 +1552,16 @@ Output yêu cầu:
                     </div>
 
                     <div class="text-center">
-                        <button type="button" class="btn btn-custom btn-sm" id="termImportBtn" onclick="runTermImport()">
+                        <button type="button" class="btn btn-custom btn-sm" id="termImportBtn"
+                            onclick="runTermImport()">
                             <i class="fas fa-save"></i> Lưu vào Glossary
                         </button>
                     </div>
 
                     <div class="loading text-center mt-2" id="termImportLoading" style="display:none;">
-                        <div class="spinner-border text-primary" role="status"><span class="visually-hidden">...</span></div>
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">...</span>
+                        </div>
                     </div>
 
                     <div id="termImportAlert" class="mt-2"></div>
@@ -3795,6 +3868,7 @@ Output yêu cầu:
     let termTemplates = [];       // loaded from API
     let termPairsJson = '';       // JSON string of aligned pairs
     let termPairsChunks = [];     // paginated chunks (300 pairs each)
+    let termAccumulatedJsonData = []; // multi-JSON accumulator (Step 3)
 
     // --- File input helpers ---
     function bindTermFileInput(inputId, infoId, iconId, nameId, areaId) {
@@ -4078,6 +4152,143 @@ Output yêu cầu:
         }
     }
 
+    // ── Step 3: Multi-JSON accumulator (giống Tab 1 pattern) ──────────────────
+
+    // Cập nhật hiển thị danh sách đã thêm
+    function updateTermPastedList() {
+        const listWrap = document.getElementById('termPastedJsonList');
+        const items    = document.getElementById('termPastedJsonItems');
+        if (!termAccumulatedJsonData.length) {
+            listWrap.style.display = 'none';
+            return;
+        }
+        listWrap.style.display = 'block';
+        items.innerHTML = '';
+        termAccumulatedJsonData.forEach((obj, idx) => {
+            const div = document.createElement('div');
+            div.className = 'mb-1 d-flex justify-content-between align-items-center';
+            div.innerHTML = `
+                <div>
+                    <i class="fas fa-clipboard text-success"></i>
+                    <small><strong>JSON #${idx + 1}</strong> — ${Object.keys(obj).length} thuật ngữ</small>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-danger"
+                    onclick="removeTermPastedJson(${idx})">
+                    <i class="fas fa-times"></i>
+                </button>
+            `;
+            items.appendChild(div);
+        });
+    }
+
+    window.removeTermPastedJson = function(idx) {
+        termAccumulatedJsonData.splice(idx, 1);
+        updateTermPastedList();
+    };
+
+    // Nút "Thêm JSON này"
+    document.getElementById('termAddJsonBtn').addEventListener('click', function () {
+        const raw = document.getElementById('termCsvTextarea').value.trim();
+        const alertEl = document.getElementById('termImportAlert');
+        if (!raw) {
+            showTermAlert(alertEl, 'warning', 'Vui lòng paste nội dung JSON trước.');
+            return;
+        }
+        let parsed;
+        try {
+            let clean = raw;
+            if (clean.startsWith('```')) clean = clean.replace(/```[\w]*\n?/g, '').trim();
+            parsed = JSON.parse(clean);
+            if (typeof parsed !== 'object' || Array.isArray(parsed) || parsed === null)
+                throw new Error('Không phải JSON object {src: dst}');
+        } catch (e) {
+            showTermAlert(alertEl, 'danger', 'JSON không hợp lệ: ' + e.message);
+            return;
+        }
+        termAccumulatedJsonData.push(parsed);
+        updateTermPastedList();
+        document.getElementById('termCsvTextarea').value = '';
+        document.getElementById('termCsvPreviewWrap').style.display = 'none';
+        showTermAlert(alertEl, 'success',
+            `Đã thêm JSON #${termAccumulatedJsonData.length} với ${Object.keys(parsed).length} thuật ngữ.`);
+    });
+
+    // Nút "Xóa tất cả" JSON đã paste
+    document.getElementById('termClearPastedJsonBtn').addEventListener('click', function () {
+        if (!confirm('Xóa tất cả JSON đã thêm?')) return;
+        termAccumulatedJsonData = [];
+        updateTermPastedList();
+        showTermAlert(document.getElementById('termImportAlert'), 'info', 'Đã xóa tất cả.');
+    });
+
+    // Upload file JSON (nhiều file)
+    document.getElementById('termJsonFile').addEventListener('change', function (e) {
+        const files = Array.from(e.target.files);
+        if (!files.length) return;
+        const alertEl = document.getElementById('termImportAlert');
+        const fileList = document.getElementById('termJsonFileList');
+        const fileInfo = document.getElementById('termJsonFileInfo');
+        fileList.innerHTML = '';
+        let loaded = 0;
+        files.forEach(file => {
+            const reader = new FileReader();
+            reader.onload = function (ev) {
+                try {
+                    const parsed = JSON.parse(ev.target.result);
+                    if (typeof parsed === 'object' && !Array.isArray(parsed) && parsed !== null) {
+                        termAccumulatedJsonData.push(parsed);
+                        updateTermPastedList();
+                        const div = document.createElement('div');
+                        div.className = 'mb-1';
+                        div.innerHTML = `<i class="fas fa-file-code text-primary"></i> <small>${file.name} — ${Object.keys(parsed).length} thuật ngữ</small>`;
+                        fileList.appendChild(div);
+                    } else {
+                        showTermAlert(alertEl, 'warning', `File "${file.name}" không phải JSON object hợp lệ, bỏ qua.`);
+                    }
+                } catch (err) {
+                    showTermAlert(alertEl, 'danger', `Lỗi đọc "${file.name}": ${err.message}`);
+                }
+                loaded++;
+                if (loaded === files.length) fileInfo.style.display = 'block';
+            };
+            reader.readAsText(file, 'utf-8');
+        });
+    });
+
+    document.getElementById('termJsonFileRemove').addEventListener('click', function () {
+        document.getElementById('termJsonFile').value = '';
+        document.getElementById('termJsonFileInfo').style.display = 'none';
+        document.getElementById('termJsonFileList').innerHTML = '';
+    });
+
+    // Drag & drop cho upload area
+    (function () {
+        const area = document.getElementById('termJsonUploadArea');
+        area.addEventListener('dragover', function (e) {
+            e.preventDefault();
+            area.style.borderColor = '#764ba2';
+            area.style.background = '#e9ecef';
+        });
+        area.addEventListener('dragleave', function (e) {
+            e.preventDefault();
+            area.style.borderColor = '#667eea';
+            area.style.background = '#f8f9fa';
+        });
+        area.addEventListener('drop', function (e) {
+            e.preventDefault();
+            area.style.borderColor = '#667eea';
+            area.style.background = '#f8f9fa';
+            const dt = new DataTransfer();
+            Array.from(e.dataTransfer.files).forEach(f => {
+                if (f.name.endsWith('.json')) dt.items.add(f);
+            });
+            if (dt.files.length) {
+                document.getElementById('termJsonFile').files = dt.files;
+                document.getElementById('termJsonFile').dispatchEvent(new Event('change'));
+            }
+        });
+    })();
+
     // --- Step 3: JSON/CSV preview ---
     window.previewTermInput = function () {
         const raw = document.getElementById('termCsvTextarea').value.trim();
@@ -4162,18 +4373,41 @@ Output yêu cầu:
 
     // --- Step 3: Import JSON ---
     window.runTermImport = async function () {
-        const inputText = document.getElementById('termCsvTextarea').value.trim();
         const alertEl = document.getElementById('termImportAlert');
         const loading = document.getElementById('termImportLoading');
-        const btn = document.getElementById('termImportBtn');
+        const btn     = document.getElementById('termImportBtn');
 
-        if (!inputText) {
-            showTermAlert(alertEl, 'warning', 'Vui lòng paste nội dung JSON trước.');
+        // Gộp tất cả JSON đã tích lũy thành 1 object {src: dst}
+        const mergedObj = Object.assign({}, ...termAccumulatedJsonData);
+
+        // Nếu chưa có gì trong danh sách tích lũy, thử lấy trực tiếp từ textarea
+        if (!Object.keys(mergedObj).length) {
+            const raw = document.getElementById('termCsvTextarea').value.trim();
+            if (!raw) {
+                showTermAlert(alertEl, 'warning',
+                    'Chưa có JSON nào. Hãy paste JSON vào textarea và nhấn "Thêm JSON này", hoặc upload file.');
+                return;
+            }
+            // Fallback: parse trực tiếp textarea (không cần nhấn "Thêm" trước)
+            try {
+                let clean = raw;
+                if (clean.startsWith('```')) clean = clean.replace(/```[\w]*\n?/g, '').trim();
+                const parsed = JSON.parse(clean);
+                if (typeof parsed === 'object' && !Array.isArray(parsed))
+                    Object.assign(mergedObj, parsed);
+            } catch (e) {
+                showTermAlert(alertEl, 'danger', 'JSON không hợp lệ: ' + e.message);
+                return;
+            }
+        }
+
+        if (!Object.keys(mergedObj).length) {
+            showTermAlert(alertEl, 'warning', 'Không có dữ liệu để lưu.');
             return;
         }
 
         const mode = document.querySelector('input[name="termGlossaryMode"]:checked')?.value;
-        let body = { json_text: inputText };
+        let body = { json_text: JSON.stringify(mergedObj) };
 
         if (mode === 'new') {
             const name = document.getElementById('termNewGlossaryName').value.trim();
@@ -4210,11 +4444,21 @@ Output yêu cầu:
                 return;
             }
 
-            const skipNote = data.skipped_duplicate > 0 ? `, bỏ qua ${data.skipped_duplicate} trùng lặp` : '';
+            const skipNote = data.skipped_duplicate > 0
+                ? `, bỏ qua ${data.skipped_duplicate} trùng lặp` : '';
             showTermAlert(alertEl, 'success',
-                `✅ Đã thêm <strong>${data.added}</strong> thuật ngữ mới vào "<em>${escHtml(data.name)}</em>"${skipNote}. ` +
-                `<a href="#" onclick="document.getElementById('main-tab1').click();return false;">→ Xem trong tab Dịch tài liệu</a>`
+                `✅ Đã thêm <strong>${data.added}</strong> thuật ngữ vào "<em>${escHtml(data.name)}</em>"${skipNote}. ` +
+                `<a href="#" onclick="document.getElementById('main-tab1').click();return false;">→ Xem Glossary</a>`
             );
+
+            // Reset sau khi lưu thành công
+            termAccumulatedJsonData = [];
+            updateTermPastedList();
+            document.getElementById('termCsvTextarea').value = '';
+            document.getElementById('termCsvPreviewWrap').style.display = 'none';
+            document.getElementById('termJsonFile').value = '';
+            document.getElementById('termJsonFileInfo').style.display = 'none';
+
         } catch (e) {
             loading.style.display = 'none';
             btn.disabled = false;
@@ -4233,6 +4477,20 @@ Output yêu cầu:
 
     // Load templates on startup
     loadTermTemplates();
+
+    // Xoay chevron khi prompt collapse mở/đóng
+    (function () {
+        const collapseEl = document.getElementById('termPromptCollapse');
+        const chevron    = document.getElementById('termPromptChevron');
+        if (collapseEl && chevron) {
+            collapseEl.addEventListener('show.bs.collapse', function () {
+                chevron.style.transform = 'rotate(180deg)';
+            });
+            collapseEl.addEventListener('hide.bs.collapse', function () {
+                chevron.style.transform = 'rotate(0deg)';
+            });
+        }
+    })();
 
     // Activate when tab is shown
     document.getElementById('main-tab4').addEventListener('shown.bs.tab', function () {
