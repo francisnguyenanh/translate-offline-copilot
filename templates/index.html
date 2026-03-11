@@ -1059,15 +1059,6 @@ Output yêu cầu:
                         </div>
                         <!-- OCR section -->
                         <div>
-                            <label class="form-label small mb-1"><strong>Ngôn ngữ trong ảnh:</strong></label>
-                            <select class="form-select form-select-sm mb-2" id="ocrLangSelect">
-                                <option value="jpn">&#x65E5;&#x672C;&#x8A9E; (Japanese)</option>
-                                <option value="chs">&#x4E2D;&#x6587;&#x7B80;&#x4F53; (Chinese Simplified)</option>
-                                <option value="cht">&#x4E2D;&#x6587;&#x7E41;&#x9AD4; (Chinese Traditional)</option>
-                                <option value="kor">&#xD55C;&#xAD6D;&#xC5B4; (Korean)</option>
-                                <option value="eng">English</option>
-                                <option value="vie">Ti&#x1EBF;ng Vi&#x1EC7;t</option>
-                            </select>
                             <div id="ocrProgress" style="display:none;" class="text-center text-muted small py-2">
                                 <i class="fas fa-spinner fa-spin"></i> &#x110;ang nh&#x1EAD;n di&#x1EC7;n v&#x0103;n b&#x1EA3;n...
                             </div>
@@ -1080,28 +1071,49 @@ Output yêu cầu:
                         </div>
                         <!-- OCR result + translate prompt -->
                         <div id="ocrDonePanel" style="display:none;" class="mt-3">
-                            <label class="form-label small mb-1"><strong>V&#x0103;n b&#x1EA3;n nh&#x1EAD;n di&#x1EC7;n:</strong></label>
-                            <div id="ocrTextList" class="p-2 mb-2"
-                                 style="background:#f8f9fa;border-radius:5px;font-size:0.75rem;font-family:monospace;max-height:100px;overflow-y:auto;white-space:pre-wrap;"></div>
-                            <label class="form-label small mb-1"><strong>Prompt d&#x1ECB;ch (copy g&#x1EED;i AI &#x2014; ch&#x1EC9; text, kh&#xF4;ng c&#x1EA7;n &#x1EA3;nh):</strong></label>
-                            <textarea class="form-control" id="translatePromptText" rows="4" readonly
-                                      style="font-size:0.75rem;font-family:monospace;resize:vertical;"></textarea>
-                            <div class="text-center mt-1">
-                                <button type="button" class="btn btn-outline-primary btn-sm" id="copyTranslatePromptBtn">
-                                    <i class="fas fa-copy"></i> Copy Prompt
-                                </button>
+                            <!-- OCR text list - collapsible, closed by default -->
+                            <div class="collapse-toggle p-2 mb-1" style="background:#f8f9fa;border-radius:5px;cursor:pointer;"
+                                 data-bs-toggle="collapse" data-bs-target="#ocrTextListCollapse">
+                                <i class="fas fa-list-alt text-info"></i>
+                                <small><strong>Văn bản nhận diện (OCR)</strong></small>
+                                <i class="fas fa-chevron-down float-end"></i>
                             </div>
-                            <div class="mt-2">
-                                <label class="form-label small mb-1"><strong>D&#xE1;n b&#x1EA3;n d&#x1ECB;ch t&#x1EEB; AI:</strong></label>
-                                <textarea class="form-control" id="translatedResultTextarea" rows="5"
-                                          placeholder="1. B&#x1EA3;n d&#x1ECB;ch m&#x1ED9;t&#10;2. B&#x1EA3;n d&#x1ECB;ch hai&#10;..."
+                            <div class="collapse" id="ocrTextListCollapse">
+                                <div id="ocrTextList" class="p-2 mb-2"
+                                     style="background:#f8f9fa;border-radius:5px;font-size:0.75rem;font-family:monospace;max-height:150px;overflow-y:auto;white-space:pre-wrap;"></div>
+                            </div>
+                            <!-- Prompt section - collapsible, closed by default -->
+                            <div class="collapse-toggle p-2 mb-1 mt-2" style="background:#f8f9fa;border-radius:5px;cursor:pointer;"
+                                 data-bs-toggle="collapse" data-bs-target="#translatePromptCollapse">
+                                <i class="fas fa-clipboard text-info"></i>
+                                <small><strong>Prompt dịch</strong></small>
+                                <i class="fas fa-chevron-down float-end"></i>
+                            </div>
+                            <div class="collapse" id="translatePromptCollapse">
+                                <textarea class="form-control" id="translatePromptText" rows="5"
                                           style="font-size:0.75rem;font-family:monospace;resize:vertical;"></textarea>
-                            </div>
-                            <div id="mergeAlert" class="mt-1"></div>
-                            <div class="text-center mt-2">
-                                <button type="button" class="btn btn-custom btn-sm" id="mergeAndRenderBtn">
-                                    <i class="fas fa-layer-group"></i> Merge &amp; Render
-                                </button>
+                                <div class="d-flex gap-1 mt-1">
+                                    <button type="button" class="btn btn-outline-primary btn-sm flex-fill" id="copyTranslatePromptBtn">
+                                        <i class="fas fa-copy"></i> Copy
+                                    </button>
+                                </div>
+                                <!-- Template editor sub-collapse -->
+                                <div class="collapse-toggle p-2 mt-2" style="background:#f0f0f0;border-radius:5px;cursor:pointer;"
+                                     data-bs-toggle="collapse" data-bs-target="#promptTemplateCollapse">
+                                    <i class="fas fa-edit text-warning"></i>
+                                    <small><strong>Chỉnh sửa template prompt</strong></small>
+                                    <i class="fas fa-chevron-down float-end"></i>
+                                </div>
+                                <div class="collapse" id="promptTemplateCollapse">
+                                    <div class="small text-muted mb-1 mt-1">Dùng <code>{sourceLang}</code>, <code>{targetLang}</code>, <code>{listText}</code> làm placeholder.</div>
+                                    <textarea class="form-control mt-1" id="imgPromptTemplate" rows="4"
+                                              style="font-size:0.75rem;font-family:monospace;resize:vertical;"></textarea>
+                                    <div class="text-center mt-1">
+                                        <button type="button" class="btn btn-outline-success btn-sm" id="saveImgPromptTemplateBtn">
+                                            <i class="fas fa-save"></i> Lưu Template
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         <!-- Fallback: generate AI prompt with image (old flow) -->
@@ -1138,24 +1150,24 @@ Output yêu cầu:
                         </div>
                     </div>
                 </div>
-                <!-- Bước 3: Paste JSON & Render -->
+                <!-- Bước 3: Dán bản dịch & Render -->
                 <div class="col-lg-4">
                     <div class="function-card">
                         <div class="text-center">
                             <span class="step-number">3</span>
-                            <h3 class="d-inline">Dán JSON &amp; Render</h3>
-                            <p class="text-muted small mt-2">Paste JSON từ AI để xem kết quả</p>
+                            <h3 class="d-inline">Dán bản dịch &amp; Render</h3>
+                            <p class="text-muted small mt-2">Dán bản dịch từ AI rồi render overlay</p>
                         </div>
                         <div>
-                            <label class="form-label small mb-1"><strong>Paste JSON từ AI:</strong></label>
-                            <textarea class="form-control" id="imgJsonTextarea" rows="10"
-                                placeholder='{"text_blocks":[{"original":"...","translated":"...","top_pct":10.5,"left_pct":5.2,"width_pct":30.0,"height_pct":5.0}]}'
-                                style="font-family:monospace;font-size:0.75rem;resize:vertical;"></textarea>
+                            <label class="form-label small mb-1"><strong>Dán bản dịch từ AI:</strong></label>
+                            <textarea class="form-control" id="translatedResultTextarea" rows="10"
+                                      placeholder="1. Bản dịch một&#10;2. Bản dịch hai&#10;..."
+                                      style="font-size:0.75rem;font-family:monospace;resize:vertical;"></textarea>
                         </div>
-                        <div id="imgJsonAlert" class="mt-2"></div>
+                        <div id="mergeAlert" class="mt-2"></div>
                         <div class="text-center mt-2">
-                            <button type="button" class="btn btn-custom btn-sm" id="renderOverlayBtn" disabled>
-                                <i class="fas fa-layer-group"></i> Render Overlay
+                            <button type="button" class="btn btn-custom btn-sm" id="mergeAndRenderBtn" disabled>
+                                <i class="fas fa-layer-group"></i> Merge &amp; Render
                             </button>
                         </div>
                         <div class="mt-3">
@@ -1167,12 +1179,14 @@ Output yêu cầu:
                             <div class="collapse mt-2" id="imgStep3Guide">
                                 <div class="p-2" style="border-radius:5px;">
                                     <ul class="small mb-0" style="padding-left:20px;">
-                                        <li>Paste JSON trả về từ AI</li>
-                                        <li>Nhấn <b>Render Overlay</b> để hiển thị</li>
+                                        <li>Chạy OCR ở bước 2, copy prompt gửi AI</li>
+                                        <li>Dán văn bản dịch (đánh số) từ AI vào đây</li>
+                                        <li>Nhấn <b>Merge &amp; Render</b> để hiển thị overlay</li>
                                         <li><b>Click</b> vào khối → chỉnh sửa nội dung, màu</li>
                                         <li><b>Kéo thả</b> khối → di chuyển vị trí</li>
                                         <li><b>Kéo giãn góc/cạnh</b> → thay đổi kích thước</li>
                                         <li><b>Delete / Backspace</b> → xóa khối đã chọn</li>
+                                        <li><kbd>Ctrl</kbd>+<kbd>Z</kbd> → hoàn tác di chuyển (tối đa 10 bước)</li>
                                     </ul>
                                 </div>
                             </div>
@@ -1186,7 +1200,19 @@ Output yêu cầu:
                 <div class="function-card">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <h3 class="mb-0"><i class="fas fa-eye"></i> Kết quả Overlay</h3>
-                        <div class="d-flex gap-2 flex-wrap">
+                        <div class="d-flex gap-2 flex-wrap align-items-center">
+                            <button type="button" class="btn btn-outline-info btn-sm" id="copyPromptForAiBtn">
+                                <i class="fas fa-copy"></i> Copy Prompt
+                            </button>
+                            <div class="d-flex align-items-center gap-1">
+                                <label class="small mb-0" style="white-space:nowrap;"><i class="fas fa-text-height"></i> Font offset:</label>
+                                <input type="number" id="fontSizeOffset" value="0" step="1" min="-20" max="40"
+                                       style="width:60px;" class="form-control form-control-sm"
+                                       title="Điều chỉnh font size tất cả overlay (+/- px)">
+                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="applyFontOffset()" title="Áp dụng">
+                                    <i class="fas fa-redo"></i>
+                                </button>
+                            </div>
                             <button type="button" class="btn btn-outline-secondary btn-sm" id="toggleOriginalBtn" onclick="toggleImgOriginalText()">
                                 <i class="fas fa-eye-slash"></i> Ẩn/hiện chữ gốc
                             </button>
@@ -1201,7 +1227,8 @@ Output yêu cầu:
                         <i class="fas fa-expand-alt"></i> <b>Kéo góc/cạnh</b> = kích thước &ensp;
                         <kbd>Delete</kbd> = xóa &ensp;
                         <kbd>Ctrl</kbd>+<b>Click</b> = chọn nhiều &ensp;
-                        <i class="fas fa-object-group"></i> <b>Kéo khi chọn nhiều</b> = di chuyển đồng loạt
+                        <i class="fas fa-object-group"></i> <b>Kéo khi chọn nhiều</b> = di chuyển đồng loạt &ensp;
+                        <kbd>Ctrl</kbd>+<kbd>Z</kbd> = hoàn tác di chuyển
                     </div>
                     <!-- Zoom controls -->
                     <div class="d-flex align-items-center gap-2 mb-2">
@@ -3061,6 +3088,46 @@ Output yêu cầu:
         }
         loadImgLanguages();
 
+        // ========== IMG PROMPT TEMPLATE ==========
+        const IMG_PROMPT_DEFAULT =
+            'Translate the following numbered text items from {sourceLang} to {targetLang}.\n' +
+            'Return ONLY the same numbered list with translated text. Do not add any other text.\n\n' +
+            '{listText}';
+        let imgPromptTemplate = IMG_PROMPT_DEFAULT;
+
+        async function loadImgPromptTemplate() {
+            try {
+                const res = await fetch('/api/templates?lang=img-ocr');
+                const data = await res.json();
+                if (Array.isArray(data) && data.length > 0 && data[0].content) {
+                    imgPromptTemplate = data[0].content;
+                }
+            } catch(e) {}
+            const tplEl = document.getElementById('imgPromptTemplate');
+            if (tplEl) tplEl.value = imgPromptTemplate;
+        }
+
+        async function saveImgPromptTemplate() {
+            const tplEl = document.getElementById('imgPromptTemplate');
+            if (!tplEl) return;
+            imgPromptTemplate = tplEl.value || IMG_PROMPT_DEFAULT;
+            try {
+                await fetch('/api/templates?lang=img-ocr', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify([{id: 'img-ocr-default', name: 'OCR Translate', content: imgPromptTemplate}])
+                });
+                const btn = document.getElementById('saveImgPromptTemplateBtn');
+                if (btn) {
+                    const orig = btn.innerHTML;
+                    btn.innerHTML = '<i class="fas fa-check"></i> Đã lưu!';
+                    btn.classList.replace('btn-outline-success', 'btn-success');
+                    setTimeout(() => { btn.innerHTML = orig; btn.classList.replace('btn-success', 'btn-outline-success'); }, 2000);
+                }
+            } catch(e) { alert('Lỗi lưu template: ' + e.message); }
+        }
+        loadImgPromptTemplate();
+
         const imgFileInput    = document.getElementById('imgFileInput');
         const imgUploadArea   = document.getElementById('imgUploadArea');
         const imgPreviewWrap  = document.getElementById('imgPreviewWrap');
@@ -3069,7 +3136,6 @@ Output yêu cầu:
         const imgRemoveBtn    = document.getElementById('imgRemoveBtn');
         const imgUploadAlert  = document.getElementById('imgUploadAlert');
         const genPromptBtn    = document.getElementById('genPromptBtn');
-        const renderOverlayBtn = document.getElementById('renderOverlayBtn');
 
         imgFileInput.addEventListener('change', e => { if (e.target.files.length > 0) handleImgFile(e.target.files[0]); });
 
@@ -3086,8 +3152,8 @@ Output yêu cầu:
             imgCurrentFilename = null;
             imgPreviewWrap.style.display = 'none';
             genPromptBtn.disabled = true;
-            renderOverlayBtn.disabled = true;
             document.getElementById('runOcrBtn').disabled = true;
+            document.getElementById('mergeAndRenderBtn').disabled = true;
             document.getElementById('imgPromptWrap').style.display = 'none';
             document.getElementById('imgPromptEmpty').style.display = 'block';
             document.getElementById('ocrDonePanel').style.display = 'none';
@@ -3115,7 +3181,6 @@ Output yêu cầu:
                 imgFileNameEl.textContent = file.name;
                 imgPreviewWrap.style.display = 'block';
                 genPromptBtn.disabled = false;
-                renderOverlayBtn.disabled = false;
                 document.getElementById('runOcrBtn').disabled = false;
                 imgUploadAlert.innerHTML = '<div class="alert alert-success small py-2"><i class="fas fa-check"></i> Upload thành công!</div>';
                 setTimeout(() => { imgUploadAlert.innerHTML = ''; }, 2500);
@@ -3161,7 +3226,9 @@ Output yêu cầu:
         // ========== OCR (OCR.space) ==========
         document.getElementById('runOcrBtn').addEventListener('click', async function() {
             if (!imgCurrentFilename) return;
-            const ocrLang    = document.getElementById('ocrLangSelect').value;
+            // Derive OCR language from source lang input; default to jpn
+            const _sl = (document.getElementById('imgSourceLang').value || '').trim().toLowerCase();
+            const ocrLang = ({'japanese':'jpn','tiếng nhật':'jpn','chinese':'chs','中文':'chs','simplified chinese':'chs','traditional chinese':'cht','繁體中文':'cht','korean':'kor','tiếng hàn':'kor','english':'eng','tiếng anh':'eng','vietnamese':'vie','tiếng việt':'vie','jpn':'jpn','chs':'chs','cht':'cht','kor':'kor','eng':'eng','vie':'vie'})[_sl] || 'jpn';
             const ocrAlert   = document.getElementById('ocrAlert');
             const ocrProgress= document.getElementById('ocrProgress');
             const ocrDone    = document.getElementById('ocrDonePanel');
@@ -3209,16 +3276,15 @@ Output yêu cầu:
                 const listText = ocrBlocks.map((b, i) => `${i + 1}. ${b.text}`).join('\n');
                 document.getElementById('ocrTextList').textContent = listText;
 
-                // Build translate prompt (text-only, no image needed)
+                // Build translate prompt using editable template
                 const targetLang = imgCurrentLangName || 'Vietnamese';
-                const sourceLang = document.getElementById('imgSourceLang').value.trim() || 'Japanese';
-                const prompt =
-                    `Translate the following numbered text items from ${sourceLang} to ${targetLang}.\n` +
-                    `Return ONLY the same numbered list with translated text. Do not add any other text.\n\n` +
-                    listText;
+                const prompt = imgPromptTemplate
+                    .replace('{targetLang}', targetLang)
+                    .replace('{listText}', listText);
                 document.getElementById('translatePromptText').value = prompt;
 
                 ocrDone.style.display = 'block';
+                document.getElementById('mergeAndRenderBtn').disabled = false;
                 ocrAlert.innerHTML = `<div class="alert alert-success small py-2"><i class="fas fa-check"></i> Nh\u1eadn di\u1ec7n \u0111\u01b0\u1ee3c ${ocrBlocks.length} kh\u1ed1i v\u0103n b\u1ea3n.</div>`;
             } catch(err) {
                 ocrAlert.innerHTML = `<div class="alert alert-danger small py-2">${escapeHtml(err.message)}</div>`;
@@ -3227,6 +3293,9 @@ Output yêu cầu:
                 this.disabled = false;
             }
         });
+
+        // Save image prompt template
+        document.getElementById('saveImgPromptTemplateBtn').addEventListener('click', saveImgPromptTemplate);
 
         // Copy translate prompt
         document.getElementById('copyTranslatePromptBtn').addEventListener('click', function() {
@@ -3318,22 +3387,7 @@ Output yêu cầu:
                 .replace(/"/g, '&quot;');
         }
 
-        // Render Overlay
-        renderOverlayBtn.addEventListener('click', function() {
-            const jsonText = document.getElementById('imgJsonTextarea').value.trim();
-            const imgJsonAlert = document.getElementById('imgJsonAlert');
-            if (!jsonText) { imgJsonAlert.innerHTML = '<div class="alert alert-warning small py-2">Vui lòng paste JSON từ AI.</div>'; return; }
-            if (!imgCurrentFilename) { imgJsonAlert.innerHTML = '<div class="alert alert-warning small py-2">Vui lòng upload ảnh trước.</div>'; return; }
-            try {
-                const parsed = JSON.parse(jsonText);
-                if (!parsed.text_blocks || !Array.isArray(parsed.text_blocks)) throw new Error('thiếu trường "text_blocks"');
-                imgTextBlocks = parsed.text_blocks;
-                imgJsonAlert.innerHTML = '';
-                renderAllOverlays();
-            } catch(e) {
-                imgJsonAlert.innerHTML = `<div class="alert alert-danger small py-2">JSON không hợp lệ: ${e.message}</div>`;
-            }
-        });
+
 
         // FIX E: shared font-size helper used by createOverlayBlock, applyZoom, and resize listener
         function calcBlockFontSize(block, renderedH, renderedW) {
@@ -3415,6 +3469,14 @@ Output yêu cầu:
             return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.5 ? '#000000' : '#ffffff';
         }
 
+        // ========== UNDO HISTORY (Ctrl+Z for block move/resize) ==========
+        const IMG_UNDO_MAX = 10;
+        let imgUndoHistory = [];
+        function pushImgUndoState() {
+            imgUndoHistory.push(imgTextBlocks.map(b => ({...b})));
+            if (imgUndoHistory.length > IMG_UNDO_MAX) imgUndoHistory.shift();
+        }
+
         // Cache base rendered dimensions before any zoom scaling
         let imgBaseRenderedHeight = 0;
         let imgBaseRenderedWidth  = 0;
@@ -3487,11 +3549,21 @@ Output yêu cầu:
             }
         }
 
-        // Delete / Backspace to remove selected block(s)
+        // Delete / Backspace to remove selected block(s); Ctrl+Z to undo move
         document.addEventListener('keydown', function(e) {
-            if (selectedBlockIdxSet.size === 0) return;
             const tag = document.activeElement ? document.activeElement.tagName : '';
             if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+            if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+                e.preventDefault();
+                if (imgUndoHistory.length > 0) {
+                    imgTextBlocks = imgUndoHistory.pop().map(b => ({...b}));
+                    selectedBlockIdxSet.clear();
+                    selectedBlockIdx = -1;
+                    renderAllOverlays();
+                }
+                return;
+            }
+            if (selectedBlockIdxSet.size === 0) return;
             if (e.key === 'Delete' || e.key === 'Backspace') {
                 e.preventDefault();
                 // Remove in descending order so splicing does not shift remaining indices
@@ -3521,7 +3593,9 @@ Output yêu cầu:
             // FIX B: use shared font helper (word_h_pct > fallback; respect manual override)
             const renderedH = imgBaseRenderedHeight || imgEl.getBoundingClientRect().height;
             const renderedW = imgBaseRenderedWidth  || imgEl.getBoundingClientRect().width;
-            const fsPx = calcBlockFontSize(block, renderedH, renderedW);
+            const _fontOffsetEl = document.getElementById('fontSizeOffset');
+            const _fontOffset = _fontOffsetEl ? (parseFloat(_fontOffsetEl.value) || 0) : 0;
+            const fsPx = Math.max(6, calcBlockFontSize(block, renderedH, renderedW) + _fontOffset);
             const fs = fsPx + 'px';
             // DEBUG: warn on out-of-range block coordinates
             if (block.top_pct > 100 || block.left_pct > 100 || block.top_pct < 0 || block.left_pct < 0) {
@@ -3640,11 +3714,15 @@ Output yêu cầu:
                 });
 
                 let dragged = false;
+                let undoPushed = false;
 
                 function onMove(ev) {
                     const dx = (ev.clientX - startX) / W * 100;
                     const dy = (ev.clientY - startY) / H * 100;
-                    if (Math.abs(dx) > 0.2 || Math.abs(dy) > 0.2) dragged = true;
+                    if (Math.abs(dx) > 0.2 || Math.abs(dy) > 0.2) {
+                        dragged = true;
+                        if (!undoPushed) { pushImgUndoState(); undoPushed = true; }
+                    }
 
                     if (!dir) {
                         if (selectedBlockIdxSet.size > 1) {
@@ -3713,20 +3791,56 @@ Output yêu cầu:
             const row = document.createElement('div');
             row.className = 'json-file-row';
             row.dataset.blockRow = idx;
-            row.innerHTML = `
-                <div class="file-name" style="flex:1;">
-                    <span style="background:${block.bg_color||'#fff'};color:${block.text_color||'#000'};
-                                 padding:1px 6px;border-radius:3px;font-size:0.8rem;margin-right:6px;">
-                        ${block.translated || '(trống)'}
-                    </span>
-                    <span class="text-muted" style="font-size:0.72rem;">${block.original || ''}</span>
-                </div>
-                <button class="btn btn-outline-secondary btn-sm me-1" style="font-size:0.72rem;padding:3px 8px;" onclick="openImgEditModal(${idx})">
-                    <i class="fas fa-edit"></i>
-                </button>
-                <button class="btn btn-outline-danger btn-sm" style="font-size:0.72rem;padding:3px 8px;" onclick="deleteImgBlock(${idx})">
-                    <i class="fas fa-trash"></i>
-                </button>`;
+            row.style.alignItems = 'flex-start';
+
+            // Inline-editable translated text
+            const ta = document.createElement('textarea');
+            ta.rows = 2;
+            ta.value = block.translated || '';
+            ta.style.cssText = [
+                'flex:1', 'font-size:0.82rem', 'resize:none', 'border:none',
+                'outline:none', 'background:transparent', 'padding:2px 4px',
+                'font-family:inherit', 'line-height:1.4', 'min-height:38px',
+                'color:inherit', 'width:100%'
+            ].join(';');
+            ta.title = '\u0110\u1ea5n \u0111\u1ec3 s\u1eeda tr\u1ef1c ti\u1ebfp';
+            ta.addEventListener('blur', function() {
+                const newVal = ta.value;
+                if (imgTextBlocks[idx] && imgTextBlocks[idx].translated !== newVal) {
+                    imgTextBlocks[idx].translated = newVal;
+                    renderAllOverlays();
+                }
+            });
+            // Prevent drag from propagating when clicking inside textarea
+            ta.addEventListener('mousedown', e => e.stopPropagation());
+
+            // Original text (small, muted)
+            const origSpan = document.createElement('span');
+            origSpan.className = 'text-muted';
+            origSpan.style.cssText = 'font-size:0.68rem;display:block;padding:0 4px 2px;';
+            origSpan.textContent = block.original || '';
+
+            const textWrap = document.createElement('div');
+            textWrap.style.cssText = 'flex:1;display:flex;flex-direction:column;min-width:0;';
+            textWrap.appendChild(ta);
+            textWrap.appendChild(origSpan);
+
+            const editBtn = document.createElement('button');
+            editBtn.className = 'btn btn-outline-secondary btn-sm me-1';
+            editBtn.style.cssText = 'font-size:0.72rem;padding:3px 8px;flex-shrink:0;';
+            editBtn.innerHTML = '<i class="fas fa-palette"></i>';
+            editBtn.title = 'Ch\u1ec9nh s\u1eeda m\u00e0u / font';
+            editBtn.onclick = () => openImgEditModal(idx);
+
+            const delBtn = document.createElement('button');
+            delBtn.className = 'btn btn-outline-danger btn-sm';
+            delBtn.style.cssText = 'font-size:0.72rem;padding:3px 8px;flex-shrink:0;';
+            delBtn.innerHTML = '<i class="fas fa-trash"></i>';
+            delBtn.onclick = () => window.deleteImgBlock(idx);
+
+            row.appendChild(textWrap);
+            row.appendChild(editBtn);
+            row.appendChild(delBtn);
             listEl.appendChild(row);
         }
 
@@ -3773,6 +3887,48 @@ Output yêu cầu:
             renderAllOverlays();
             bootstrap.Modal.getInstance(document.getElementById('overlayEditModal')).hide();
         });
+
+        // ========== FONT SIZE OFFSET ==========
+        function applyFontOffset() {
+            if (!imgTextBlocks || imgTextBlocks.length === 0) return;
+            const offset = parseFloat(document.getElementById('fontSizeOffset').value) || 0;
+            const imgEl  = document.getElementById('imgOverlayBase');
+            const rH = imgBaseRenderedHeight || imgEl.getBoundingClientRect().height;
+            const rW = imgBaseRenderedWidth  || imgEl.getBoundingClientRect().width;
+            imgTextBlocks.forEach(block => {
+                const origFs = calcBlockFontSize(block, rH, rW);
+                const newFs  = Math.max(6, origFs + offset);
+                // Store as font_size_pct so calcBlockFontSize returns the same value next time
+                block.font_size_pct = (newFs / rH) * 100;
+                // Scale width/height proportionally so text still fits
+                const ratio = newFs / origFs;
+                if (ratio !== 1) {
+                    block.height_pct = (block.height_pct || 5) * ratio;
+                    block.width_pct  = (block.width_pct  || 20) * ratio;
+                }
+            });
+            renderAllOverlays();
+        }
+
+        // ========== FONT SIZE OFFSET ==========
+        function applyFontOffset() {
+            if (!imgTextBlocks || imgTextBlocks.length === 0) return;
+            const offset = parseFloat(document.getElementById('fontSizeOffset').value) || 0;
+            const imgEl  = document.getElementById('imgOverlayBase');
+            const rH = imgBaseRenderedHeight || imgEl.getBoundingClientRect().height;
+            const rW = imgBaseRenderedWidth  || imgEl.getBoundingClientRect().width;
+            imgTextBlocks.forEach(block => {
+                // Base font size without any previous pct override
+                const savedPct = block.font_size_pct;
+                delete block.font_size_pct;
+                const origFs = calcBlockFontSize(block, rH, rW);
+                block.font_size_pct = savedPct; // restore while computing ratio
+                const newFs = Math.max(6, origFs + offset);
+                // Store as pct so createOverlayBlock picks offset value directly
+                block.font_size_pct = (newFs / rH) * 100;
+            });
+            renderAllOverlays();
+        }
 
         // ========== ZOOM ==========
         let imgZoomLevel = 1.0;

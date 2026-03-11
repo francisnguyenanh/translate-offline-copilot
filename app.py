@@ -2989,9 +2989,9 @@ def img_translate_ocr():
         return jsonify({'error': f'Lỗi gọi OCR.space: {str(e)}'}), 500
 
     # DEBUG: log top-level response structure
-    app.logger.debug(f'[OCR DEBUG] Response keys: {list(result.keys())}')
-    app.logger.debug(f'[OCR DEBUG] IsErroredOnProcessing: {result.get("IsErroredOnProcessing")}')
-    app.logger.debug(f'[OCR DEBUG] ParsedResults count: {len(result.get("ParsedResults", []))}')
+    # app.logger.debug(f'[OCR DEBUG] Response keys: {list(result.keys())}')
+    # app.logger.debug(f'[OCR DEBUG] IsErroredOnProcessing: {result.get("IsErroredOnProcessing")}')
+    # app.logger.debug(f'[OCR DEBUG] ParsedResults count: {len(result.get("ParsedResults", []))}')
 
     if result.get('IsErroredOnProcessing'):
         err_msg = result.get('ErrorMessage', ['Lỗi không xác định'])
@@ -3031,18 +3031,18 @@ def img_translate_ocr():
                 ocr_img_h = img_h or 1024
 
         # DEBUG: log dimension resolution for each page
-        app.logger.debug(
-            f'[OCR DEBUG] TextOverlay raw ImageWidth={raw_iw}, ImageHeight={raw_ih}'
-        )
-        app.logger.debug(
-            f'[OCR DEBUG] Frontend sent img_w={img_w}, img_h={img_h}'
-        )
-        app.logger.debug(
-            f'[OCR DEBUG] Resolved reference: ocr_img_w={ocr_img_w}, ocr_img_h={ocr_img_h}'
-        )
-        app.logger.debug(
-            f'[OCR DEBUG] Lines count: {len(overlay.get("Lines", []))}'
-        )
+        # app.logger.debug(
+        #     f'[OCR DEBUG] TextOverlay raw ImageWidth={raw_iw}, ImageHeight={raw_ih}'
+        # )
+        # app.logger.debug(
+        #     f'[OCR DEBUG] Frontend sent img_w={img_w}, img_h={img_h}'
+        # )
+        # app.logger.debug(
+        #     f'[OCR DEBUG] Resolved reference: ocr_img_w={ocr_img_w}, ocr_img_h={ocr_img_h}'
+        # )
+        # app.logger.debug(
+        #     f'[OCR DEBUG] Lines count: {len(overlay.get("Lines", []))}'
+        # )
         lines   = overlay.get('Lines', [])
         for line_idx, line in enumerate(lines):
             words = line.get('Words', [])
@@ -3080,10 +3080,10 @@ def img_translate_ocr():
                     if fw_left > 0 or fw_top > 0:
                         x0 = min(fw_left, x0) if x0 > 0 else fw_left
                         y0 = min(fw_top,  y0) if y0 > 0 else fw_top
-                        app.logger.debug(
-                            f'[OCR DEBUG] Line {line_idx} "{line_text[:20]}" had MinTop/MinLeft=0; '
-                            f're-anchored to first word at ({fw_left},{fw_top})'
-                        )
+                        # app.logger.debug(
+                        #     f'[OCR DEBUG] Line {line_idx} "{line_text[:20]}" had MinTop/MinLeft=0; '
+                        #     f're-anchored to first word at ({fw_left},{fw_top})'
+                        # )
 
             # FIX 2: validation — skip blocks that still resolve to (0,0) when the image is
             # clearly larger, as these are almost certainly corrupt OCR entries that would
@@ -3094,14 +3094,14 @@ def img_translate_ocr():
                 # Accept only if the block is a plausible corner word (small width/height)
                 plausible_corner = (x1 - x0) < ocr_img_w * 0.3 and (y1 - y0) < ocr_img_h * 0.15
                 if not plausible_corner:
-                    app.logger.warning(
-                        f'[OCR DEBUG] Skipping line {line_idx} "{line_text[:30]}" — '
-                        f'(0,0) origin with suspicious size {x1-x0}×{y1-y0} px'
-                    )
+                    # app.logger.warning(
+                    #     f'[OCR DEBUG] Skipping line {line_idx} "{line_text[:30]}" — '
+                    #     f'(0,0) origin with suspicious size {x1-x0}×{y1-y0} px'
+                    # )
                     continue
 
             if not has_valid_size:
-                app.logger.debug(f'[OCR DEBUG] Skipping line {line_idx} — zero-size bbox')
+                # app.logger.debug(f'[OCR DEBUG] Skipping line {line_idx} — zero-size bbox')
                 continue
 
             # FIX 3/4: use average word height (not full line height) for font sizing.
@@ -3115,12 +3115,12 @@ def img_translate_ocr():
                 word_h = y1 - y0
 
             # DEBUG: log each block's raw pixel coords and computed percentages
-            app.logger.debug(
-                f"[OCR DEBUG] Block '{line_text[:30]}': "
-                f"pixel x={x0},y={y0},w={x1-x0},h={y1-y0} | word_h={word_h} | "
-                f"pct top={round(y0/ocr_img_h*100,2)}, left={round(x0/ocr_img_w*100,2)}, "
-                f"w={round((x1-x0)/ocr_img_w*100,2)}, h={round((y1-y0)/ocr_img_h*100,2)}"
-            )
+            # app.logger.debug(
+            #     f"[OCR DEBUG] Block '{line_text[:30]}': "
+            #     f"pixel x={x0},y={y0},w={x1-x0},h={y1-y0} | word_h={word_h} | "
+            #     f"pct top={round(y0/ocr_img_h*100,2)}, left={round(x0/ocr_img_w*100,2)}, "
+            #     f"w={round((x1-x0)/ocr_img_w*100,2)}, h={round((y1-y0)/ocr_img_h*100,2)}"
+            # )
             blocks.append({
                 'text':   line_text,
                 'x':      x0,
