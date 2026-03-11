@@ -481,6 +481,37 @@
         .rh-sw { bottom:-5px; left:-5px;            cursor:sw-resize; }
         .rh-w  { top:calc(50% - 5px); left:-5px;   cursor:w-resize;  }
         body.dark-mode .resize-handle { background:#5090d8; border-color:#1e3049; }
+
+        /* Smart Update — color swatch checkbox */
+        .su-color-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 3px 8px;
+            border: 1.5px solid #dee2e6;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.76rem;
+            background: #fff;
+            transition: border-color 0.15s, background 0.15s;
+            user-select: none;
+        }
+        .su-color-item:hover {
+            border-color: #667eea;
+            background: #f0f2ff;
+        }
+        .su-color-item.selected {
+            border-color: #667eea;
+            background: #eef0ff;
+        }
+        .su-color-swatch {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border-radius: 3px;
+            border: 1px solid rgba(0,0,0,0.15);
+            flex-shrink: 0;
+        }
     </style>
 </head>
 <body class="dark-mode">
@@ -1217,19 +1248,49 @@ Output yêu cầu:
                             </div>
                             </div>
 
-                            <!-- Tùy chỉnh màu chữ "nội dung mới" -->
-                            <div class="mb-3">
+                            <!-- Tùy chỉnh màu chữ "nội dung mới" — auto-detect từ file -->
+                            <div class="mb-3" id="suColorSection">
                                 <label class="form-label small mb-1">
                                     <i class="fas fa-palette" style="color:#38761D;"></i>
-                                    <strong>Mã màu chữ xác định ô mới (tùy chọn)</strong>
+                                    <strong>Màu chữ xác định ô mới (tùy chọn)</strong>
                                 </label>
-                                <input type="text" class="form-control form-control-sm" id="suNewColors" name="new_colors"
-                                    placeholder="Mặc định: 38761D, 00B050, 008000 (xanh lá)"
-                                    style="font-family:monospace;font-size:0.8rem;">
-                                <div class="text-muted" style="font-size:0.72rem;margin-top:3px;">
+
+                                <!-- Trạng thái: chưa upload file 2 -->
+                                <div id="suColorHint" class="text-muted" style="font-size:0.78rem;">
                                     <i class="fas fa-info-circle"></i>
-                                    Nhập các mã RGB6 cách nhau dấu phẩy. Ô có màu này → <code>được xem là nội dung thêm mới/chỉnh sửa</code>.
+                                    Upload <strong>File 2 (VN mới)</strong> để tự động liệt kê màu chữ có trong file.
                                 </div>
+
+                                <!-- Spinner khi đang fetch màu -->
+                                <div id="suColorLoading" style="display:none; font-size:0.78rem;" class="text-muted">
+                                    <span class="spinner-border spinner-border-sm"></span> Đang đọc màu chữ từ file...
+                                </div>
+
+                                <!-- Danh sách checkbox màu (sinh động từ API) -->
+                                <div id="suColorCheckboxList" style="display:none;" class="mt-2">
+                                    <div class="d-flex flex-wrap gap-2 align-items-center" id="suColorItems"></div>
+                                    <div class="mt-1 d-flex gap-2">
+                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2"
+                                            style="font-size:0.72rem;" onclick="suSelectAllColors(true)">
+                                            Chọn tất cả
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2"
+                                            style="font-size:0.72rem;" onclick="suSelectAllColors(false)">
+                                            Bỏ chọn
+                                        </button>
+                                    </div>
+                                    <div class="text-muted mt-1" style="font-size:0.71rem;">
+                                        <i class="fas fa-info-circle"></i>
+                                        Ô có màu chữ được tích ✓ → xem là <em>nội dung mới/chỉnh sửa</em>.
+                                        Bỏ trống = dùng mặc định (xanh lá).
+                                    </div>
+                                </div>
+
+                                <!-- Thông báo lỗi fetch màu -->
+                                <div id="suColorError" style="display:none; font-size:0.78rem;" class="text-danger mt-1"></div>
+
+                                <!-- Input ẩn: giữ tên field để form submit vẫn hoạt động -->
+                                <input type="hidden" id="suNewColors" name="new_colors" value="">
                             </div>
 
                             <div class="text-center mt-3">
@@ -3719,6 +3780,142 @@ Output yêu cầu:
         bindSuFile('suFile1', 'suArea1', 'suInfo1');
         bindSuFile('suFile2', 'suArea2', 'suInfo2');
         bindSuFile('suFile3', 'suArea3', 'suInfo3');
+
+        // ── Smart Update: auto-detect font colors from File 2 ────────────────────
+
+        document.getElementById('suFile2').addEventListener('change', async function () {
+            const file = this.files[0];
+            if (!file) {
+                suResetColorUI();
+                return;
+            }
+            await suFetchColors(file);
+        });
+
+        async function suFetchColors(file) {
+            const hint    = document.getElementById('suColorHint');
+            const loading = document.getElementById('suColorLoading');
+            const list    = document.getElementById('suColorCheckboxList');
+            const errEl   = document.getElementById('suColorError');
+            const items   = document.getElementById('suColorItems');
+
+            hint.style.display    = 'none';
+            loading.style.display = 'block';
+            list.style.display    = 'none';
+            errEl.style.display   = 'none';
+            items.innerHTML       = '';
+            document.getElementById('suNewColors').value = '';
+
+            const fd = new FormData();
+            fd.append('file', file);
+
+            try {
+                const resp = await fetch('/api/extract-colors', { method: 'POST', body: fd });
+                const data = await resp.json();
+                loading.style.display = 'none';
+
+                if (!resp.ok || data.error) {
+                    errEl.textContent = 'Không đọc được màu chữ: ' + (data.error || 'Lỗi không xác định');
+                    errEl.style.display = 'block';
+                    hint.style.display = 'block';
+                    return;
+                }
+
+                const colors = (data.colors || []).filter(Boolean);
+                if (!colors.length) {
+                    errEl.textContent = 'File không có màu chữ nào được phát hiện.';
+                    errEl.style.display = 'block';
+                    hint.style.display = 'block';
+                    return;
+                }
+
+                suRenderColorCheckboxes(colors);
+
+            } catch (e) {
+                loading.style.display = 'none';
+                errEl.textContent = 'Lỗi kết nối: ' + e.message;
+                errEl.style.display = 'block';
+                hint.style.display = 'block';
+            }
+        }
+
+        const SU_DEFAULT_NEW_COLORS = new Set(['38761D','00B050','008000','006100','00FF00']);
+
+        function suRenderColorCheckboxes(colors) {
+            const items = document.getElementById('suColorItems');
+            items.innerHTML = '';
+
+            colors.forEach(hex => {
+                const isDefault = SU_DEFAULT_NEW_COLORS.has(hex.toUpperCase());
+                const label = hex.toUpperCase() === '000000' ? 'Đen/Mặc định' : '#' + hex;
+
+                const span = document.createElement('span');
+                span.className = 'su-color-item' + (isDefault ? ' selected' : '');
+                span.dataset.hex = hex.toUpperCase();
+                span.innerHTML = `
+                    <span class="su-color-swatch" style="background:#${hex};"></span>
+                    <span>${label}</span>
+                    <i class="fas fa-check" style="font-size:0.65rem;color:#667eea;display:${isDefault ? 'inline' : 'none'};"></i>
+                `;
+                span.addEventListener('click', function () {
+                    const isSelected = span.classList.toggle('selected');
+                    span.querySelector('.fa-check').style.display = isSelected ? 'inline' : 'none';
+                    suSyncHiddenInput();
+                });
+
+                items.appendChild(span);
+            });
+
+            document.getElementById('suColorCheckboxList').style.display = 'block';
+            suSyncHiddenInput();
+        }
+
+        function suSyncHiddenInput() {
+            const selected = Array.from(
+                document.querySelectorAll('#suColorItems .su-color-item.selected')
+            ).map(el => el.dataset.hex).filter(Boolean);
+            document.getElementById('suNewColors').value = selected.join(',');
+        }
+
+        window.suSelectAllColors = function (selectAll) {
+            document.querySelectorAll('#suColorItems .su-color-item').forEach(el => {
+                const check = el.querySelector('.fa-check');
+                if (selectAll) {
+                    el.classList.add('selected');
+                    if (check) check.style.display = 'inline';
+                } else {
+                    el.classList.remove('selected');
+                    if (check) check.style.display = 'none';
+                }
+            });
+            suSyncHiddenInput();
+        };
+
+        function suResetColorUI() {
+            document.getElementById('suColorHint').style.display = 'block';
+            document.getElementById('suColorLoading').style.display = 'none';
+            document.getElementById('suColorCheckboxList').style.display = 'none';
+            document.getElementById('suColorError').style.display = 'none';
+            document.getElementById('suColorItems').innerHTML = '';
+            document.getElementById('suNewColors').value = '';
+        }
+
+        function suContrastText(hex) {
+            try {
+                const r = parseInt(hex.slice(0, 2), 16);
+                const g = parseInt(hex.slice(2, 4), 16);
+                const b = parseInt(hex.slice(4, 6), 16);
+                return (0.299 * r + 0.587 * g + 0.114 * b) > 128 ? '#333' : '#fff';
+            } catch (e) {
+                return '#333';
+            }
+        }
+
+        const _origClearSuFile = window.clearSuFile;
+        window.clearSuFile = function (inputId, areaId, infoId) {
+            _origClearSuFile(inputId, areaId, infoId);
+            if (inputId === 'suFile2') suResetColorUI();
+        };
 
         // ---- Form submit ----
         const form = document.getElementById('smartUpdateForm');
