@@ -11,6 +11,7 @@ import shutil
 import io
 import re
 import csv
+import requests as _requests
 from datetime import datetime, timedelta
 from urllib.parse import quote
 from flask import Flask, render_template, request, send_file, jsonify, session, redirect, url_for
@@ -25,6 +26,11 @@ from lxml import etree as _etree
 # Khởi tạo ứng dụng Flask
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 60 * 1024 * 1024  # Giới hạn 50MB
+
+# DEBUG: enable debug-level logging for OCR coordinate diagnostics
+import logging
+app.logger.setLevel(logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['SECRET_KEY'] = os.urandom(24)  # Secret key cho session
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=5)  # Session timeout 5h
@@ -35,11 +41,55 @@ ALLOWED_EXTENSIONS = {'xlsx', 'pptx', 'docx'}
 # Đọc password từ file
 PASSWORD_FILE = 'password.txt'
 
-# File lưu Prompt Templates
+
+# File lưu Prompt Templates (Tab 1/3)
 TEMPLATES_FILE = 'prompt_templates.json'
+# File lưu Prompt Template cho Tab 2 (Dịch ảnh)
+IMG_OCR_PROMPT_FILE = 'img_ocr_prompt_template.json'
+def load_img_ocr_prompt_template():
+    """Đọc prompt template cho Tab 2 (Dịch ảnh OCR)"""
+    try:
+        with open(IMG_OCR_PROMPT_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        if isinstance(data, list):
+            return data
+        return [data]
+    except Exception:
+        # Fallback mặc định nếu chưa có file
+        return [{
+            "id": "img-ocr-default",
+            "name": "Prompt dịch ảnh OCR (default)",
+            "content": "Translate the following numbered text items from {sourceLang} to {targetLang}.\nReturn ONLY the same numbered list with translated text. Do not add any other text.\n\n{listText}"
+        }]
+
+def save_img_ocr_prompt_template(new_templates):
+    """Ghi prompt template cho Tab 2 (Dịch ảnh OCR)"""
+    with open(IMG_OCR_PROMPT_FILE, 'w', encoding='utf-8') as f:
+        json.dump(new_templates, f, ensure_ascii=False, indent=2)
 
 GLOSSARY_DIR = 'glossaries'   # thư mục lưu các file CSV chuyên ngành
 os.makedirs(GLOSSARY_DIR, exist_ok=True)
+
+# ==================== GOOGLE SHEET HELPERS ====================
+
+def parse_google_sheet_url(url: str):
+    """
+    Trả về (spreadsheet_id, gid) từ link Google Sheet bất kỳ.
+    Hỗ trợ: .../spreadsheets/d/{ID}/edit#gid={GID} hoặc dạng khác.
+    """
+    match = re.search(r'/spreadsheets/d/([a-zA-Z0-9_-]+)', url)
+    if not match:
+        raise ValueError('URL không hợp lệ. Vui lòng dùng link Google Sheet.')
+    spreadsheet_id = match.group(1)
+    gid_match = re.search(r'[#&?]gid=(\d+)', url)
+    gid = gid_match.group(1) if gid_match else '0'
+    return spreadsheet_id, gid
+
+
+def build_sheet_export_url(spreadsheet_id: str) -> str:
+    """Tạo URL export toàn bộ file sang .xlsx (không cần auth nếu file public)."""
+    return (f'https://docs.google.com/spreadsheets/d/{spreadsheet_id}'
+            f'/export?format=xlsx&id={spreadsheet_id}')
 
 # ==================== HELPER: PROMPT TEMPLATES ====================
 def get_default_templates():
@@ -221,6 +271,118 @@ def _get_rgb6(cell) -> str:
     except Exception:
         pass
     return ''
+
+
+# ==================== COLOR FILTER HELPERS ====================
+
+def _get_font_rgb_xlsx(cell) -> str:
+    """Đọc màu chữ HEX 6 ký tự từ openpyxl cell. Trả '' nếu không xác định."""
+    try:
+        color = cell.font.color if (cell.font and cell.font.color) else None
+        if color and color.type == 'rgb' and color.rgb:
+            return str(color.rgb).upper()[-6:]  # lấy 6 ký tự cuối của ARGB
+    except Exception:
+        pass
+    return ''
+
+
+def _get_font_rgb_pptx(run) -> str:
+    """Đọc màu chữ HEX 6 ký tự từ python-pptx run. Trả '' nếu không xác định."""
+    try:
+        rgb = run.font.color.rgb
+        if rgb is not None:
+            return str(rgb).upper()
+    except Exception:
+        pass
+    return ''
+
+
+def _get_font_rgb_docx(run) -> str:
+    """Đọc màu chữ HEX 6 ký tự từ python-docx run. Trả '' nếu không xác định."""
+    try:
+        rgb = run.font.color.rgb
+        if rgb is not None:
+            return str(rgb).upper()
+    except Exception:
+        pass
+    return ''
+
+
+def _normalize_color_filter(color_list: list) -> set:
+    """Chuẩn hóa list màu HEX → set HEX 6 UPPERCASE không '#'."""
+    result = set()
+    for c in color_list:
+        c = c.strip().lstrip('#').upper()
+        if len(c) == 6:
+            result.add(c)
+    return result
+
+
+def _pptx_shape_matches_color_filter(shape, color_filter: set) -> bool:
+    """
+    Trả về True nếu bất kỳ run nào trong text_frame của shape khớp color_filter.
+    Nếu không có run nào → match khi '000000' trong filter (màu mặc định).
+    """
+    if not hasattr(shape, 'text_frame'):
+        return True  # không kiểm tra được → include mặc định
+    all_runs = [run for para in shape.text_frame.paragraphs for run in para.runs]
+    if not all_runs:
+        return '000000' in color_filter
+    return any((_get_font_rgb_pptx(run) or '000000') in color_filter for run in all_runs)
+
+
+def _pptx_cell_matches_color_filter(cell, color_filter: set) -> bool:
+    """Trả về True nếu bất kỳ run nào trong table cell của pptx khớp color_filter."""
+    tf = getattr(cell, 'text_frame', None)
+    if tf is None:
+        return True
+    all_runs = [run for para in tf.paragraphs for run in para.runs]
+    if not all_runs:
+        return '000000' in color_filter
+    return any((_get_font_rgb_pptx(run) or '000000') in color_filter for run in all_runs)
+
+
+def _docx_para_matches_color_filter(para, color_filter: set) -> bool:
+    """Trả về True nếu bất kỳ run nào trong paragraph docx khớp color_filter."""
+    if not para.runs:
+        return '000000' in color_filter
+    return any((_get_font_rgb_docx(run) or '000000') in color_filter for run in para.runs)
+
+
+def _docx_cell_matches_color_filter(cell, color_filter: set) -> bool:
+    """Trả về True nếu bất kỳ run nào trong table cell docx khớp color_filter."""
+    has_any_run = False
+    for para in cell.paragraphs:
+        for run in para.runs:
+            has_any_run = True
+            if (_get_font_rgb_docx(run) or '000000') in color_filter:
+                return True
+    if not has_any_run:
+        return '000000' in color_filter
+    return False
+
+
+def _collect_pptx_shape_colors(shape, colors: set):
+    """Thu thập màu chữ từ tất cả runs trong shape pptx (đệ quy cho grouped shapes)."""
+    if hasattr(shape, 'text_frame'):
+        for para in shape.text_frame.paragraphs:
+            for run in para.runs:
+                c = _get_font_rgb_pptx(run)
+                if c:
+                    colors.add(c)
+    if hasattr(shape, 'has_table') and shape.has_table:
+        for row in shape.table.rows:
+            for cell in row.cells:
+                tf = getattr(cell, 'text_frame', None)
+                if tf:
+                    for para in tf.paragraphs:
+                        for run in para.runs:
+                            c = _get_font_rgb_pptx(run)
+                            if c:
+                                colors.add(c)
+    if hasattr(shape, 'shapes'):
+        for child_shape in shape.shapes:
+            _collect_pptx_shape_colors(child_shape, colors)
 
 
 def is_new_or_modified_cell(cell_vn11, new_colors=None, red_colors=None) -> bool:
@@ -685,16 +847,18 @@ def internal_server_error(error):
         return jsonify({'error': f'Lỗi máy chủ: {str(error)}'}), 500
     return str(error), 500
 
-def extract_text_from_shape(shape, shape_path, extracted_data):
+def extract_text_from_shape(shape, shape_path, extracted_data, color_filter=None):
     """
     Hàm đệ quy để trích xuất text từ shape, bao gồm cả grouped shapes
     shape_path: đường dẫn đến shape, ví dụ "Shape1" hoặc "Shape1_2_3"
+    color_filter: set HEX strings hoặc None (không lọc)
     """
     # Trích xuất text từ text frame của shape hiện tại
     if hasattr(shape, "text") and shape.text:
         text_content = shape.text.strip()
         if text_content:  # Chỉ lấy nội dung không rỗng
-            extracted_data[shape_path] = text_content
+            if color_filter is None or _pptx_shape_matches_color_filter(shape, color_filter):
+                extracted_data[shape_path] = text_content
     
     # Trích xuất text từ table nếu có
     if hasattr(shape, "has_table") and shape.has_table:
@@ -702,21 +866,23 @@ def extract_text_from_shape(shape, shape_path, extracted_data):
         for row_idx, row in enumerate(table.rows, start=1):
             for col_idx, cell in enumerate(row.cells, start=1):
                 if cell.text.strip():
-                    key = f"{shape_path}!Table_R{row_idx}C{col_idx}"
-                    extracted_data[key] = cell.text.strip()
+                    if color_filter is None or _pptx_cell_matches_color_filter(cell, color_filter):
+                        key = f"{shape_path}!Table_R{row_idx}C{col_idx}"
+                        extracted_data[key] = cell.text.strip()
     
     # Kiểm tra xem shape có phải là GroupShape không (chứa các shape con)
     if hasattr(shape, "shapes"):
         # Đây là grouped shape, duyệt qua các shape con
         for child_idx, child_shape in enumerate(shape.shapes, start=1):
             child_path = f"{shape_path}_{child_idx}"
-            extract_text_from_shape(child_shape, child_path, extracted_data)
+            extract_text_from_shape(child_shape, child_path, extracted_data, color_filter)
 
-def extract_text_from_pptx(filepath):
+def extract_text_from_pptx(filepath, color_filter=None):
     """
     Trích xuất text từ file PPTX, bao gồm cả text trong grouped shapes
     Trả về dictionary với format: {"SlideX!ShapeY": "Content"}
     Với nested shapes: {"SlideX!ShapeY_Z": "Content"} (Z là shape con)
+    color_filter: set HEX strings hoặc None (không lọc)
     """
     extracted_data = {}
     prs = Presentation(filepath)
@@ -724,7 +890,7 @@ def extract_text_from_pptx(filepath):
     for slide_idx, slide in enumerate(prs.slides, start=1):
         for shape_idx, shape in enumerate(slide.shapes, start=1):
             shape_path = f"Slide{slide_idx}!Shape{shape_idx}"
-            extract_text_from_shape(shape, shape_path, extracted_data)
+            extract_text_from_shape(shape, shape_path, extracted_data, color_filter)
     
     return extracted_data
 
@@ -1124,6 +1290,66 @@ def _xlsx_set_cell_inline_text(sheet_root, cell_ref, text_value):
         cell_elem = _etree.Element(f'{{{_NS_WB}}}c', r=cell_ref.upper())
         row_elem.append(cell_elem)
 
+    text_str = '' if text_value is None else str(text_value)
+
+    # Check if cell already has an <is> with rich-text runs
+    existing_is = cell_elem.find(f'{{{_NS_WB}}}is')
+    r_tag = f'{{{_NS_WB}}}r'
+    t_tag = f'{{{_NS_WB}}}t'
+    xml_space_attr = '{http://www.w3.org/XML/1998/namespace}space'
+
+    if existing_is is not None:
+        runs = existing_is.findall(r_tag)
+        if len(runs) > 1:
+            # Rich text: distribute new_text across runs by original char-count ratio
+            orig_lengths = [len((r.findtext(t_tag) or '')) for r in runs]
+            total_orig = sum(orig_lengths)
+            new_total = len(text_str)
+            pos = 0
+            for i, (run_elem, orig_len) in enumerate(zip(runs, orig_lengths)):
+                t_elem = run_elem.find(t_tag)
+                if t_elem is None:
+                    t_elem = _etree.SubElement(run_elem, t_tag)
+                if i == len(runs) - 1:
+                    part = text_str[pos:]
+                else:
+                    if total_orig > 0:
+                        count = round(new_total * orig_len / total_orig)
+                        count = min(count, new_total - pos - (len(runs) - i - 1))
+                        count = max(count, 0)
+                    else:
+                        count = 0
+                    part = text_str[pos:pos + count]
+                    pos += count
+                t_elem.text = part
+                if part != part.strip() or '\n' in part:
+                    t_elem.set(xml_space_attr, 'preserve')
+                elif xml_space_attr in t_elem.attrib:
+                    del t_elem.attrib[xml_space_attr]
+            # Ensure cell type is inlineStr
+            cell_elem.set('t', 'inlineStr')
+            for child in list(cell_elem):
+                if child.tag in {f'{{{_NS_WB}}}v', f'{{{_NS_WB}}}f'}:
+                    cell_elem.remove(child)
+            return
+        elif len(runs) == 1:
+            # Single run: just replace the text element, keep rPr
+            t_elem = runs[0].find(t_tag)
+            if t_elem is None:
+                t_elem = _etree.SubElement(runs[0], t_tag)
+            t_elem.text = text_str
+            if text_str != text_str.strip() or '\n' in text_str:
+                t_elem.set(xml_space_attr, 'preserve')
+            elif xml_space_attr in t_elem.attrib:
+                del t_elem.attrib[xml_space_attr]
+            cell_elem.set('t', 'inlineStr')
+            for child in list(cell_elem):
+                if child.tag in {f'{{{_NS_WB}}}v', f'{{{_NS_WB}}}f'}:
+                    cell_elem.remove(child)
+            return
+        # else: plain <is><t>...</t></is> — fall through to rewrite below
+
+    # No existing <is>, or plain <is><t> only: rewrite from scratch
     cell_elem.set('t', 'inlineStr')
     for child in list(cell_elem):
         if child.tag in {
@@ -1134,11 +1360,10 @@ def _xlsx_set_cell_inline_text(sheet_root, cell_ref, text_value):
             cell_elem.remove(child)
 
     is_elem = _etree.SubElement(cell_elem, f'{{{_NS_WB}}}is')
-    t_elem = _etree.SubElement(is_elem, f'{{{_NS_WB}}}t')
-    text_str = '' if text_value is None else str(text_value)
+    t_elem = _etree.SubElement(is_elem, t_tag)
     t_elem.text = text_str
     if text_str != text_str.strip() or '\n' in text_str:
-        t_elem.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
+        t_elem.set(xml_space_attr, 'preserve')
 
 
 def inject_xlsx_shapes(source_filepath, output_filepath, json_data):
@@ -1181,6 +1406,13 @@ def inject_xlsx_shapes(source_filepath, output_filepath, json_data):
         sheet_root = _etree.fromstring(files[sheet_path])
         for cell_ref, value in updates.items():
             _xlsx_set_cell_inline_text(sheet_root, cell_ref, value)
+        # Sync hyperlink display attributes to match updated cell values
+        hyperlinks_elem = sheet_root.find(f'{{{_NS_WB}}}hyperlinks')
+        if hyperlinks_elem is not None:
+            for hl in hyperlinks_elem.findall(f'{{{_NS_WB}}}hyperlink'):
+                ref = hl.get('ref', '')
+                if ref in updates and hl.get('display') is not None:
+                    hl.set('display', str(updates[ref]))
         files[sheet_path] = _etree.tostring(sheet_root, xml_declaration=True, encoding='UTF-8', standalone=True)
 
     if shape_updates:
@@ -1228,26 +1460,29 @@ def inject_xlsx_shapes(source_filepath, output_filepath, json_data):
             z_out.writestr(name, content)
 
 
-def extract_text_from_docx(filepath):
+def extract_text_from_docx(filepath, color_filter=None):
     """
     Trích xuất text từ file DOCX, bao gồm paragraphs, tables, headers, footers
     Trả về dictionary với format:
     - Paragraphs: {"ParagraphX": "Content"}
-    - Tables: {"TableX!RyC z": "Content"}
+    - Tables: {"TableX!RyCz": "Content"}
     - Headers: {"Header_SectionX!ParagraphY": "Content"}
     - Footers: {"Footer_SectionX!ParagraphY": "Content"}
+    color_filter: set HEX strings hoặc None (không lọc)
     """
     extracted_data = {}
     doc = Document(filepath)
     
     # 1. Trích xuất text từ các paragraph thông thường (không trong table)
+    # Luôn đếm TẤT CẢ paragraph không rỗng để giữ index nhất quán với inject
     paragraph_idx = 0
     for para in doc.paragraphs:
         text_content = para.text.strip()
-        if text_content:  # Chỉ lấy paragraph không rỗng
+        if text_content:  # Đếm tất cả paragraph không rỗng
             paragraph_idx += 1
-            key = f"Paragraph{paragraph_idx}"
-            extracted_data[key] = text_content
+            if color_filter is None or _docx_para_matches_color_filter(para, color_filter):
+                key = f"Paragraph{paragraph_idx}"
+                extracted_data[key] = text_content
     
     # 2. Trích xuất text từ các bảng
     for table_idx, table in enumerate(doc.tables, start=1):
@@ -1255,8 +1490,9 @@ def extract_text_from_docx(filepath):
             for col_idx, cell in enumerate(row.cells, start=1):
                 text_content = cell.text.strip()
                 if text_content:
-                    key = f"Table{table_idx}!R{row_idx}C{col_idx}"
-                    extracted_data[key] = text_content
+                    if color_filter is None or _docx_cell_matches_color_filter(cell, color_filter):
+                        key = f"Table{table_idx}!R{row_idx}C{col_idx}"
+                        extracted_data[key] = text_content
     
     # 3. Trích xuất text từ headers
     for section_idx, section in enumerate(doc.sections, start=1):
@@ -1264,8 +1500,9 @@ def extract_text_from_docx(filepath):
         for para_idx, para in enumerate(header.paragraphs, start=1):
             text_content = para.text.strip()
             if text_content:
-                key = f"Header_Section{section_idx}!Paragraph{para_idx}"
-                extracted_data[key] = text_content
+                if color_filter is None or _docx_para_matches_color_filter(para, color_filter):
+                    key = f"Header_Section{section_idx}!Paragraph{para_idx}"
+                    extracted_data[key] = text_content
         
         # Trích xuất từ table trong header (nếu có)
         for table_idx, table in enumerate(header.tables, start=1):
@@ -1273,8 +1510,9 @@ def extract_text_from_docx(filepath):
                 for col_idx, cell in enumerate(row.cells, start=1):
                     text_content = cell.text.strip()
                     if text_content:
-                        key = f"Header_Section{section_idx}!Table{table_idx}!R{row_idx}C{col_idx}"
-                        extracted_data[key] = text_content
+                        if color_filter is None or _docx_cell_matches_color_filter(cell, color_filter):
+                            key = f"Header_Section{section_idx}!Table{table_idx}!R{row_idx}C{col_idx}"
+                            extracted_data[key] = text_content
     
     # 4. Trích xuất text từ footers
     for section_idx, section in enumerate(doc.sections, start=1):
@@ -1282,8 +1520,9 @@ def extract_text_from_docx(filepath):
         for para_idx, para in enumerate(footer.paragraphs, start=1):
             text_content = para.text.strip()
             if text_content:
-                key = f"Footer_Section{section_idx}!Paragraph{para_idx}"
-                extracted_data[key] = text_content
+                if color_filter is None or _docx_para_matches_color_filter(para, color_filter):
+                    key = f"Footer_Section{section_idx}!Paragraph{para_idx}"
+                    extracted_data[key] = text_content
         
         # Trích xuất từ table trong footer (nếu có)
         for table_idx, table in enumerate(footer.tables, start=1):
@@ -1291,33 +1530,43 @@ def extract_text_from_docx(filepath):
                 for col_idx, cell in enumerate(row.cells, start=1):
                     text_content = cell.text.strip()
                     if text_content:
-                        key = f"Footer_Section{section_idx}!Table{table_idx}!R{row_idx}C{col_idx}"
-                        extracted_data[key] = text_content
+                        if color_filter is None or _docx_cell_matches_color_filter(cell, color_filter):
+                            key = f"Footer_Section{section_idx}!Table{table_idx}!R{row_idx}C{col_idx}"
+                            extracted_data[key] = text_content
     
     return extracted_data
 
 def replace_text_keep_format_docx(paragraph, new_text):
     """
-    Thay thế text trong paragraph của Word nhưng giữ nguyên định dạng (font, màu, bold, italic...)
-    Chiến lược:
-    1. Lưu định dạng của run đầu tiên
-    2. Xóa text của tất cả runs
-    3. Gán text mới vào run đầu tiên (giữ nguyên định dạng)
+    Thay thế text trong paragraph nhưng GIỮ NGUYÊN format của từng run riêng lẻ.
+    Chiến lược: phân phối new_text vào các runs theo tỉ lệ ký tự gốc.
     """
     if not paragraph.runs:
-        # Không có run nào, tạo mới
         paragraph.text = new_text
         return
-    
-    # Lưu định dạng của run đầu tiên
-    first_run = paragraph.runs[0]
-    
-    # Xóa text của tất cả runs
-    for run in paragraph.runs:
-        run.text = ""
-    
-    # Gán text mới vào run đầu tiên (giữ nguyên định dạng)
-    first_run.text = new_text
+
+    runs = paragraph.runs
+    orig_lengths = [len(run.text) for run in runs]
+    total_orig = sum(orig_lengths)
+
+    if total_orig == 0:
+        # All runs empty — assign everything to first run
+        runs[0].text = new_text
+        for run in runs[1:]:
+            run.text = ""
+        return
+
+    new_total = len(new_text)
+    pos = 0
+    for i, (run, orig_len) in enumerate(zip(runs, orig_lengths)):
+        if i == len(runs) - 1:
+            run.text = new_text[pos:]
+        else:
+            count = round(new_total * orig_len / total_orig)
+            count = min(count, new_total - pos - (len(runs) - i - 1))
+            count = max(count, 0)
+            run.text = new_text[pos:pos + count]
+            pos += count
 
 def inject_text_to_docx(filepath, json_data):
     """
@@ -1545,12 +1794,16 @@ def get_languages():
 
 # ==================== API: PROMPT TEMPLATES ====================
 
+
 @app.route('/api/templates', methods=['GET'])
 @login_required
 def api_get_templates():
     """Trả về danh sách prompt templates cho ngôn ngữ được chỉ định"""
     lang = request.args.get('lang', 'default')
+    if lang == 'img-ocr':
+        return jsonify(load_img_ocr_prompt_template())
     return jsonify(load_templates(lang))
+
 
 @app.route('/api/templates', methods=['POST'])
 @login_required
@@ -1561,6 +1814,9 @@ def api_save_templates():
     if not isinstance(new_templates, list):
         return jsonify({'error': 'Dữ liệu phải là array'}), 400
     try:
+        if lang == 'img-ocr':
+            save_img_ocr_prompt_template(new_templates)
+            return jsonify({'success': True})
         try:
             with open(TEMPLATES_FILE, 'r', encoding='utf-8') as f:
                 all_data = json.load(f)
@@ -1685,6 +1941,69 @@ def api_delete_glossary(gid):
     return jsonify({'success': True})
 
 
+# ==================== API: EXTRACT COLORS ====================
+
+@app.route('/api/extract-colors', methods=['POST'])
+@login_required
+def api_extract_colors():
+    """
+    Trả về danh sách màu chữ duy nhất có trong file xlsx/pptx/docx.
+    Luôn bao gồm '000000' để đại diện cho màu đen/auto (mặc định).
+    """
+    if 'file' not in request.files or not request.files['file'].filename:
+        return jsonify({'error': 'Không có file'}), 400
+
+    f = request.files['file']
+    if not allowed_file(f.filename):
+        return jsonify({'error': 'Chỉ chấp nhận file .xlsx, .pptx hoặc .docx'}), 400
+
+    ext = f.filename.rsplit('.', 1)[1].lower()
+    file_bytes = f.read()
+    colors = set()
+
+    try:
+        if ext == 'xlsx':
+            wb = load_workbook(io.BytesIO(file_bytes))
+            for ws in wb.worksheets:
+                for row in ws.iter_rows():
+                    for cell in row:
+                        if cell.value is not None:
+                            c = _get_font_rgb_xlsx(cell)
+                            if c:
+                                colors.add(c)
+            wb.close()
+
+        elif ext == 'pptx':
+            prs = Presentation(io.BytesIO(file_bytes))
+            for slide in prs.slides:
+                for shape in slide.shapes:
+                    _collect_pptx_shape_colors(shape, colors)
+
+        elif ext == 'docx':
+            doc = Document(io.BytesIO(file_bytes))
+            for para in doc.paragraphs:
+                for run in para.runs:
+                    c = _get_font_rgb_docx(run)
+                    if c:
+                        colors.add(c)
+            for table in doc.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        for para in cell.paragraphs:
+                            for run in para.runs:
+                                c = _get_font_rgb_docx(run)
+                                if c:
+                                    colors.add(c)
+
+    except Exception as e:
+        return jsonify({'error': f'Lỗi đọc màu: {str(e)}'}), 500
+
+    # Luôn bao gồm 000000 cho màu đen/auto
+    colors.add('000000')
+
+    return jsonify({'colors': sorted(colors)})
+
+
 @app.route('/extract', methods=['POST'])
 @login_required
 def extract():
@@ -1734,6 +2053,11 @@ def extract():
 
         # Xác định loại file và trích xuất
         file_ext = original_ext
+
+        # Đọc color filter nếu có (chuỗi HEX cách nhau bằng dấu phẩy)
+        color_filter_raw = request.form.get('color_filter', '')
+        color_list = [c.strip() for c in color_filter_raw.split(',') if c.strip()]
+        color_filter = _normalize_color_filter(color_list) if color_list else None
         
         if file_ext == 'xlsx':
             # Mở file Excel bằng openpyxl
@@ -1757,11 +2081,13 @@ def extract():
                         if isinstance(cell.value, str):
                             # Bỏ qua công thức (bắt đầu bằng '=')
                             if not cell.value.startswith('='):
-                                # Tạo key theo format "SheetName!CellCoordinate"
-                                key = f"{sheet_name}!{cell.coordinate}"
-                                extracted_data[key] = cell.value
+                                if color_filter is None or (_get_font_rgb_xlsx(cell) or '000000') in color_filter:
+                                    # Tạo key theo format "SheetName!CellCoordinate"
+                                    key = f"{sheet_name}!{cell.coordinate}"
+                                    extracted_data[key] = cell.value
             
             # Trích xuất text từ shapes/objects (text-box) trong xlsx
+            # TODO: color filter for xlsx shapes not yet implemented
             shapes_from_xlsx = extract_xlsx_shapes(filepath)
             extracted_data.update(shapes_from_xlsx)
 
@@ -1770,11 +2096,11 @@ def extract():
         
         elif file_ext == 'pptx':
             # Trích xuất text từ PPTX
-            extracted_data = extract_text_from_pptx(filepath)
+            extracted_data = extract_text_from_pptx(filepath, color_filter)
         
         elif file_ext == 'docx':
             # Trích xuất text từ DOCX
-            extracted_data = extract_text_from_docx(filepath)
+            extracted_data = extract_text_from_docx(filepath, color_filter)
         
         # Áp dụng glossary nếu có
         glossary_ids_raw = request.form.get('glossary_ids', '')
@@ -1783,7 +2109,7 @@ def extract():
             extracted_data = apply_glossary(extracted_data, glossary_ids)
 
         # Tách dữ liệu thành nhiều file, mỗi file 400 cặp key-value
-        CHUNK_SIZE = 400
+        CHUNK_SIZE = 300
         data_items = list(extracted_data.items())
         total_items = len(data_items)
         num_files = (total_items + CHUNK_SIZE - 1) // CHUNK_SIZE  # Làm tròn lên
@@ -1881,6 +2207,188 @@ def extract():
         # Xử lý lỗi
         return jsonify({'error': f'Lỗi khi xử lý file: {str(e)}'}), 500
 
+
+# ==================== HELPER: core extract logic ====================
+
+def _run_extract(filepath, original_filename, glossary_ids, session_folder, color_filter=None):
+    """
+    Chạy toàn bộ logic extract từ cột filepath.
+    Trả về dict cho jsonify (cùng format như route /extract).
+    Ném Exception nếu có lỗi.
+    color_filter: set HEX strings hoặc None (không lọc)
+    """
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    original_ext = original_filename.rsplit('.', 1)[-1].lower() if '.' in original_filename else 'xlsx'
+
+    if original_ext == 'xlsx':
+        workbook = load_workbook(filepath)
+        extracted_data = {}
+        for sheet_name in workbook.sheetnames:
+            sheet = workbook[sheet_name]
+            for row in sheet.iter_rows():
+                for cell in row:
+                    if cell.value is None:
+                        continue
+                    if isinstance(cell.value, str) and not cell.value.startswith('='):
+                        if color_filter is None or (_get_font_rgb_xlsx(cell) or '000000') in color_filter:
+                            extracted_data[f"{sheet_name}!{cell.coordinate}"] = cell.value
+        # TODO: color filter for xlsx shapes not yet implemented
+        extracted_data.update(extract_xlsx_shapes(filepath))
+        workbook.close()
+    elif original_ext == 'pptx':
+        extracted_data = extract_text_from_pptx(filepath, color_filter)
+    elif original_ext == 'docx':
+        extracted_data = extract_text_from_docx(filepath, color_filter)
+    else:
+        raise ValueError(f'Không hỗ trợ định dạng .{original_ext}')
+
+    if glossary_ids:
+        extracted_data = apply_glossary(extracted_data, glossary_ids)
+
+    CHUNK_SIZE = 400
+    data_items  = list(extracted_data.items())
+    total_items = len(data_items)
+    num_files   = max(1, (total_items + CHUNK_SIZE - 1) // CHUNK_SIZE)
+
+    base_filename = os.path.splitext(original_filename)[0] or f'file_{timestamp}'
+    safe_base     = f'extracted_{timestamp}'
+    folder_name   = f'{base_filename}_json_to_translate'
+    temp_dir      = os.path.join(session_folder, f'{safe_base}_temp_{timestamp}')
+    os.makedirs(temp_dir, exist_ok=True)
+
+    json_files = []
+    json_display_names = []
+    for i in range(num_files):
+        chunk_data  = dict(data_items[i*CHUNK_SIZE:(i+1)*CHUNK_SIZE])
+        disp_name   = f'{base_filename}_part{i+1:02d}_of_{num_files:02d}.json'
+        safe_name   = f'{safe_base}_part{i+1:02d}.json'
+        jpath       = os.path.join(temp_dir, safe_name)
+        with open(jpath, 'w', encoding='utf-8') as jf:
+            json.dump(chunk_data, jf, ensure_ascii=False, indent=2)
+        json_files.append(jpath)
+        json_display_names.append(disp_name)
+
+    files_data = []
+    for idx, jpath in enumerate(json_files):
+        with open(jpath, 'r', encoding='utf-8') as f:
+            files_data.append({'name': json_display_names[idx], 'content': f.read()})
+
+    zip_display = f'{base_filename}_json_to_translate.zip'
+    safe_zip    = f'{safe_base}_json_{timestamp}.zip'
+    zip_path    = os.path.join(session_folder, safe_zip)
+    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_STORED) as zf:
+        for idx, jpath in enumerate(json_files):
+            zf.write(jpath, os.path.join(folder_name, json_display_names[idx]))
+
+    session['extract_zip'] = {
+        'path': zip_path,
+        'display_name': zip_display,
+        'input_path': filepath,
+        'json_files': json_files,
+        'temp_dir': temp_dir,
+    }
+
+    dedup_files, dedup_mapping, dedup_stats = build_dedup_data(extracted_data, CHUNK_SIZE)
+    dedup_map_path = os.path.join(session_folder, 'dedup_mapping.json')
+    with open(dedup_map_path, 'w', encoding='utf-8') as f:
+        json.dump(dedup_mapping, f, ensure_ascii=False, indent=2)
+
+    return {
+        'success': True,
+        'total_files': num_files,
+        'total_items': total_items,
+        'files': files_data,
+        'zip_display_name': zip_display,
+        'dedup_files': dedup_files,
+        'dedup_stats': dedup_stats,
+    }
+
+
+@app.route('/load-google-sheet', methods=['POST'])
+@login_required
+def load_google_sheet():
+    """
+    Nhận link Google Sheet, tải file xlsx về, lưu vào session folder.
+    Trả về: { session_key, display_name, sheets }
+    """
+    data = request.get_json() or {}
+    url  = data.get('url', '').strip()
+    if not url:
+        return jsonify({'error': 'Thiếu link Google Sheet'}), 400
+
+    try:
+        spreadsheet_id, _ = parse_google_sheet_url(url)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
+    export_url = build_sheet_export_url(spreadsheet_id)
+    try:
+        resp = _requests.get(export_url, timeout=30, allow_redirects=True)
+        ct   = resp.headers.get('Content-Type', '')
+        if resp.status_code != 200 or (
+            'spreadsheet' not in ct and 'officedocument' not in ct and len(resp.content) < 1000
+        ):
+            return jsonify({'error': (
+                'Không thể tải file. Hãy kiểm tra file đã được share công khai '
+                '(Anyone with link → View).'
+            )}), 400
+    except Exception as e:
+        return jsonify({'error': f'Lỗi kết nối: {e}'}), 500
+
+    session_folder = get_session_folder()
+    filename = f'gsheet_{spreadsheet_id[:12]}.xlsx'
+    filepath = os.path.join(session_folder, filename)
+    with open(filepath, 'wb') as f:
+        f.write(resp.content)
+
+    try:
+        wb = load_workbook(filepath, read_only=True)
+        sheet_names = wb.sheetnames
+        wb.close()
+    except Exception:
+        sheet_names = []
+
+    session_key = f'gsheet_{uuid.uuid4().hex[:8]}'
+    session[session_key] = {
+        'filepath':     filepath,
+        'display_name': f'GoogleSheet_{spreadsheet_id[:12]}.xlsx',
+        'sheets':       sheet_names,
+    }
+
+    return jsonify({
+        'session_key':  session_key,
+        'display_name': f'GoogleSheet_{spreadsheet_id[:12]}.xlsx',
+        'sheets':       sheet_names,
+    })
+
+
+@app.route('/extract-from-sheet', methods=['POST'])
+@login_required
+def extract_from_sheet():
+    """
+    Extract nội dung từ Google Sheet đã tải về (lưu trong session).
+    Nhận: { session_key, sheet_name, glossary_ids }
+    """
+    data         = request.get_json() or {}
+    session_key  = data.get('session_key')
+    glossary_ids = data.get('glossary_ids', [])
+
+    if not session_key or session_key not in session:
+        return jsonify({'error': 'Phiên làm việc hết hạn. Vui lòng tải lại Google Sheet.'}), 400
+
+    info     = session[session_key]
+    filepath = info['filepath']
+    if not os.path.exists(filepath):
+        return jsonify({'error': 'File tạm không còn tồn tại. Vui lòng tải lại Google Sheet.'}), 400
+
+    try:
+        session_folder = get_session_folder()
+        result = _run_extract(filepath, info['display_name'], glossary_ids, session_folder)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': f'Lỗi khi xử lý sheet: {str(e)}'}), 500
+
+
 @app.route('/download-zip', methods=['GET'])
 @login_required
 def download_zip():
@@ -1952,13 +2460,25 @@ def inject():
     Giữ nguyên định dạng, màu sắc của file gốc
     Hỗ trợ nhiều file JSON riêng lẻ hoặc file ZIP chứa nhiều file JSON
     """
-    # Kiểm tra file upload hoặc fallback từ Smart Update
+    # Kiểm tra file upload hoặc fallback từ Smart Update hoặc Google Sheet
     su_info_inject = session.get('tab1_from_smart_update')
+    sheet_session_key = request.form.get('sheet_session_key')
+    
     if 'excel_file' in request.files and request.files['excel_file'].filename:
         excel_file = request.files['excel_file']
         use_session_file_inject = False
         if not allowed_file(excel_file.filename):
             return jsonify({'error': 'File phải có định dạng .xlsx, .pptx hoặc .docx'}), 400
+    elif sheet_session_key and sheet_session_key in session:
+        # FIX: Lấy file từ Google Sheet session
+        sheet_info = session[sheet_session_key]
+        if os.path.exists(sheet_info.get('filepath', '')):
+            excel_file = None
+            use_session_file_inject = True
+            # Đặt filepath từ sheet session thay vì smart update
+            su_info_inject = sheet_info
+        else:
+            return jsonify({'error': 'File Sheet đã hết hạn hoặc không tồn tại. Vui lòng tải lại Google Sheet.'}), 400
     elif su_info_inject and os.path.exists(su_info_inject.get('filepath', '')):
         excel_file = None
         use_session_file_inject = True
@@ -2136,6 +2656,10 @@ def inject():
         
         default_ascii_name = 'download.docx' if file_ext == 'docx' else ('download.pptx' if file_ext == 'pptx' else 'download.xlsx')
         response = set_download_headers(response, output_display_name, default_ascii_name)
+        
+        # FIX: Pop sheet_session_key khỏi session sau khi inject thành công
+        if sheet_session_key:
+            session.pop(sheet_session_key, None)
         
         # Xóa tất cả file tạm sau khi gửi response
         @response.call_on_close
@@ -2461,52 +2985,259 @@ def img_translate_serve(filename):
     return send_file(filepath)
 
 
+# NEW: OCR route — calls OCR.space API for exact bounding boxes instead of AI coordinate guessing
+@app.route('/img-translate/ocr', methods=['POST'])
+@login_required
+def img_translate_ocr():
+    """Call OCR.space API on the uploaded image. Returns text blocks with pixel bounding boxes."""
+    data = request.get_json() or {}
+    filename = data.get('filename', '').strip()
+    # NEW: OCR.space language code (jpn, chs, cht, kor, eng, ara, fre, ger, por, rus, spa, tur)
+    ocr_lang = data.get('ocr_lang', 'jpn')
+
+    if not filename:
+        return jsonify({'error': 'Thiếu tên file'}), 400
+
+    session_folder = get_session_folder()
+    safe = secure_filename(filename)
+    filepath = os.path.join(session_folder, safe)
+    if not os.path.exists(filepath):
+        return jsonify({'error': 'File không tồn tại'}), 404
+
+    # NEW: image natural dimensions passed from frontend for pixel coord context
+    img_w = int(data.get('img_w', 0))
+    img_h = int(data.get('img_h', 0))
+
+    # NEW: OCR.space free public endpoint — 500 req/day per IP with helloworld key
+    OCR_API_URL = 'https://api.ocr.space/parse/image'
+
+    try:
+        with open(filepath, 'rb') as f:
+            # NEW: isOverlayRequired=true is MANDATORY to receive bounding box coordinates
+            resp = _requests.post(
+                OCR_API_URL,
+                files={'file': (safe, f, 'image/png')},
+                data={
+                    'apikey': 'helloworld',
+                    'language': ocr_lang,
+                    'isOverlayRequired': 'true',
+                    'detectOrientation': 'true',
+                    # FIX B: scale=false so bbox coords stay in original image space
+                    'scale': 'false',
+                    'OCREngine': '2',
+                    'isCreateSearchablePdf': 'false',
+                    'isSearchablePdfHideTextLayer': 'false',
+                },
+                timeout=30
+            )
+        result = resp.json()
+    except Exception as e:
+        return jsonify({'error': f'Lỗi gọi OCR.space: {str(e)}'}), 500
+
+    # DEBUG: log top-level response structure
+    # app.logger.debug(f'[OCR DEBUG] Response keys: {list(result.keys())}')
+    # app.logger.debug(f'[OCR DEBUG] IsErroredOnProcessing: {result.get("IsErroredOnProcessing")}')
+    # app.logger.debug(f'[OCR DEBUG] ParsedResults count: {len(result.get("ParsedResults", []))}')
+
+    if result.get('IsErroredOnProcessing'):
+        err_msg = result.get('ErrorMessage', ['Lỗi không xác định'])
+        if isinstance(err_msg, list):
+            err_msg = ' '.join(err_msg)
+        return jsonify({'error': f'OCR.space lỗi: {err_msg}'}), 500
+
+    # NEW: parse OCR.space Lines→Words structure into our block format
+    blocks = []
+    parsed = result.get('ParsedResults', [])
+    # Keep raw_iw/raw_ih in outer scope so the return debug dict can reference them
+    raw_iw = raw_ih = None
+    ocr_img_w = ocr_img_h = 0
+    for page in parsed:
+        overlay = page.get('TextOverlay', {})
+        # FIX: read dimensions reported by OCR.space for this page
+        raw_iw = overlay.get('ImageWidth')
+        raw_ih = overlay.get('ImageHeight')
+        ocr_img_w = int(raw_iw) if raw_iw and int(raw_iw) > 0 else 0
+        ocr_img_h = int(raw_ih) if raw_ih and int(raw_ih) > 0 else 0
+
+        # FIX STEP 5: when OCR.space doesn't report dimensions, infer from Engine 2 normalization
+        # Engine 2 rescales the long side to max 1024 px; bbox coords are in that scaled space
+        if ocr_img_w == 0 or ocr_img_h == 0:
+            if img_w > 0 and img_h > 0:
+                max_side = max(img_w, img_h)
+                if max_side > 1024:
+                    scale_factor = 1024.0 / max_side
+                    ocr_img_w = round(img_w * scale_factor)
+                    ocr_img_h = round(img_h * scale_factor)
+                else:
+                    # Already within Engine 2 limit — no rescaling applied
+                    ocr_img_w = img_w
+                    ocr_img_h = img_h
+            else:
+                ocr_img_w = img_w or 1024
+                ocr_img_h = img_h or 1024
+
+        # DEBUG: log dimension resolution for each page
+        # app.logger.debug(
+        #     f'[OCR DEBUG] TextOverlay raw ImageWidth={raw_iw}, ImageHeight={raw_ih}'
+        # )
+        # app.logger.debug(
+        #     f'[OCR DEBUG] Frontend sent img_w={img_w}, img_h={img_h}'
+        # )
+        # app.logger.debug(
+        #     f'[OCR DEBUG] Resolved reference: ocr_img_w={ocr_img_w}, ocr_img_h={ocr_img_h}'
+        # )
+        # app.logger.debug(
+        #     f'[OCR DEBUG] Lines count: {len(overlay.get("Lines", []))}'
+        # )
+        lines   = overlay.get('Lines', [])
+        for line_idx, line in enumerate(lines):
+            words = line.get('Words', [])
+            if not words:
+                continue
+            line_text = ' '.join(w.get('WordText', '') for w in words).strip()
+            if not line_text:
+                continue
+
+            # Build union bounding box from individual word boxes
+            lefts   = [w['Left']             for w in words if 'Left'   in w]
+            tops    = [w['Top']              for w in words if 'Top'    in w]
+            rights  = [w['Left'] + w['Width']  for w in words if 'Left'  in w and 'Width'  in w]
+            bottoms = [w['Top']  + w['Height'] for w in words if 'Top'   in w and 'Height' in w]
+            if not lefts:
+                continue
+
+            x0 = min(lefts);  y0 = min(tops)
+            x1 = max(rights); y1 = max(bottoms)
+
+            # FIX 1: OCR.space sometimes emits MinTop=0/MinLeft=0 for a line even when the
+            # actual text is not at the image origin.  When both x0 and y0 are 0, try to use
+            # the first word's coordinates as a more reliable anchor.
+            line_min_top  = line.get('MinTop',  y0)
+            line_min_left = line.get('MinLeft', x0)
+            if line_min_top == 0 and line_min_left == 0:
+                first_word = next(
+                    (w for w in words if w.get('Left', -1) > 0 or w.get('Top', -1) > 0),
+                    None
+                )
+                if first_word:
+                    # Re-anchor: shift x0/y0 to first reliable word; keep x1/y1 from union
+                    fw_left = first_word.get('Left', x0)
+                    fw_top  = first_word.get('Top',  y0)
+                    if fw_left > 0 or fw_top > 0:
+                        x0 = min(fw_left, x0) if x0 > 0 else fw_left
+                        y0 = min(fw_top,  y0) if y0 > 0 else fw_top
+                        # app.logger.debug(
+                        #     f'[OCR DEBUG] Line {line_idx} "{line_text[:20]}" had MinTop/MinLeft=0; '
+                        #     f're-anchored to first word at ({fw_left},{fw_top})'
+                        # )
+
+            # FIX 2: validation — skip blocks that still resolve to (0,0) when the image is
+            # clearly larger, as these are almost certainly corrupt OCR entries that would
+            # overlap with any real corner text.
+            has_valid_size = (x1 - x0) > 2 and (y1 - y0) > 2
+            at_true_corner = x0 == 0 and y0 == 0 and ocr_img_w > 0 and ocr_img_h > 0
+            if at_true_corner and ocr_img_w > 50 and ocr_img_h > 50:
+                # Accept only if the block is a plausible corner word (small width/height)
+                plausible_corner = (x1 - x0) < ocr_img_w * 0.3 and (y1 - y0) < ocr_img_h * 0.15
+                if not plausible_corner:
+                    # app.logger.warning(
+                    #     f'[OCR DEBUG] Skipping line {line_idx} "{line_text[:30]}" — '
+                    #     f'(0,0) origin with suspicious size {x1-x0}×{y1-y0} px'
+                    # )
+                    continue
+
+            if not has_valid_size:
+                # app.logger.debug(f'[OCR DEBUG] Skipping line {line_idx} — zero-size bbox')
+                continue
+
+            # FIX 3/4: use average word height (not full line height) for font sizing.
+            # Line bbox often includes inter-line spacing; word heights reflect actual glyphs.
+            word_heights = sorted([w['Height'] for w in words if 'Height' in w and w['Height'] > 0])
+            if word_heights:
+                avg_word_h = sum(word_heights) / len(word_heights)
+                # Prefer average over median for font size — median can be skewed by ascenders
+                word_h = round(avg_word_h)
+            else:
+                word_h = y1 - y0
+
+            # DEBUG: log each block's raw pixel coords and computed percentages
+            # app.logger.debug(
+            #     f"[OCR DEBUG] Block '{line_text[:30]}': "
+            #     f"pixel x={x0},y={y0},w={x1-x0},h={y1-y0} | word_h={word_h} | "
+            #     f"pct top={round(y0/ocr_img_h*100,2)}, left={round(x0/ocr_img_w*100,2)}, "
+            #     f"w={round((x1-x0)/ocr_img_w*100,2)}, h={round((y1-y0)/ocr_img_h*100,2)}"
+            # )
+            blocks.append({
+                'text':   line_text,
+                'x':      x0,
+                'y':      y0,
+                'w':      x1 - x0,
+                'h':      y1 - y0,
+                'word_h': word_h,   # average word glyph height in OCR pixel space
+                # FIX: OCR.space returns coords in the NATURAL image coordinate space,
+                # not the normalized (1024px) space. The frontend divides pixel coords by
+                # img_w/img_h to get %, so we must use the original natural dimensions here.
+                'img_w':  img_w if img_w > 0 else ocr_img_w,
+                'img_h':  img_h if img_h > 0 else ocr_img_h,
+            })
+
+    if not blocks:
+        return jsonify({'error': 'Không nhận diện được văn bản. Thử chọn ngôn ngữ OCR khác.'}), 400
+
+    # FIX: natural_img_w/h are what the frontend uses as the % denominator
+    natural_img_w = img_w if img_w > 0 else ocr_img_w
+    natural_img_h = img_h if img_h > 0 else ocr_img_h
+    app.logger.debug(
+        f'[OCR DEBUG] Natural img: {img_w}\u00d7{img_h}, '
+        f'OCR normalized: {ocr_img_w}\u00d7{ocr_img_h}, '
+        f'Using as block ref: img_w={natural_img_w}'
+    )
+    # DEBUG: return dimension resolution info alongside blocks for browser console inspection
+    return jsonify({
+        'blocks': blocks,
+        'count':  len(blocks),
+        'debug': {
+            'ocr_normalized_w':        ocr_img_w,
+            'ocr_normalized_h':        ocr_img_h,
+            'natural_img_w':           natural_img_w,
+            'natural_img_h':           natural_img_h,
+            'frontend_img_w':          img_w,
+            'frontend_img_h':          img_h,
+            'imagewidth_from_response': raw_iw,
+            'imageheight_from_response': raw_ih,
+            # FIX: compare against natural dims, not normalized dims
+            'dimensions_match':        (natural_img_w == img_w and natural_img_h == img_h),
+        }
+    }), 200
+
+
 @app.route('/img-translate/prompt', methods=['POST'])
 @login_required
 def img_translate_prompt():
-    """Sinh Instruction Prompt yêu cầu AI phân tích ảnh và trả JSON overlay."""
+    """Sinh Instruction Prompt yêu cầu AI phân tích ảnh và trả JSON overlay (fallback khi OCR.space không được)."""
     data = request.get_json() or {}
     target_lang = data.get('target_lang', 'tiếng Nhật')
     source_lang = data.get('source_lang', '').strip()
-    img_w = int(data.get('image_width', 0))
-    img_h = int(data.get('image_height', 0))
 
+    # NEW: removed img_w/img_h — AI internal resize makes pixel->% conversion wrong
     source_note = f" (ngôn ngữ gốc trong ảnh: {source_lang})" if source_lang else ""
 
-    if img_w > 0 and img_h > 0:
-        dim_note = f"\n\nKích thước ảnh CHÍNH XÁC: {img_w} × {img_h} pixel (rộng × cao).\n" \
-                   f"→ Quy đổi tọa độ pixel sang %: left_pct = pixel_x / {img_w} × 100, top_pct = pixel_y / {img_h} × 100\n" \
-                   f"→ Quy đổi kích thước sang %: width_pct = pixel_w / {img_w} × 100, height_pct = pixel_h / {img_h} × 100\n" \
-                   f"→ font_size_pct = chiều_cao_font_pixel / {img_h} × 100"
-        font_example = round(24 / img_h * 100, 2) if img_h else 2.5
-        dim_font_note = f"(ví dụ: chữ 24px trong ảnh {img_h}px cao → font_size_pct = {font_example})"
-    else:
-        dim_note = ""
-        font_example = 2.5
-        dim_font_note = "(ví dụ: 2.5)"
-
-    prompt = f"""Bạn là chuyên gia OCR và dịch thuật chuyên nghiệp. Tôi sẽ gửi cho bạn một bức ảnh{source_note}.{dim_note}
+    # NEW: removed bg_color, text_color, font_size_pct — frontend computes from canvas + geometry
+    prompt = f"""Bạn là chuyên gia OCR và dịch thuật chuyên nghiệp. Tôi sẽ gửi cho bạn một bức ảnh{source_note}.
 
 NHIỆM VỤ:
 1. Nhận diện (OCR) TẤT CẢ các vùng có văn bản trong ảnh.
 2. Dịch toàn bộ sang {target_lang} một cách tự nhiên, chính xác.
-3. Với mỗi vùng văn bản, xác định CÁC GIÁ TRỊ SAU:
+3. Với mỗi vùng văn bản, xác định:
 
-   top_pct    : tọa độ mép TRÊN của text box, tính bằng % chiều CAO ảnh (0 = trên cùng, 100 = dưới cùng)
-   left_pct   : tọa độ mép TRÁI của text box, tính bằng % chiều RỘNG ảnh (0 = trái, 100 = phải)
-   width_pct  : chiều RỘNG text box, % chiều rộng ảnh
-   height_pct : chiều CAO text box, % chiều cao ảnh
-   bg_color   : mã HEX màu nền THỰC TẾ ngay phía sau văn bản (để che chữ cũ)
-   text_color : mã HEX màu chữ phù hợp để đọc được trên bg_color
-   font_size_pct : cỡ chữ tính bằng % chiều cao ảnh {dim_font_note}
-                   → PHẢI xấp xỉ bằng chiều cao thực tế của 1 dòng chữ trong ảnh
-                   → KHÔNG được nhỏ hơn 60% height_pct (nếu block là 1 dòng)
-                   → Với block nhiều dòng: font_size_pct ≈ height_pct / số_dòng × 0.8
+   top_pct    : tọa độ mép TRÊN của text box, % chiều CAO ảnh bạn nhìn thấy (0–100)
+   left_pct   : tọa độ mép TRÁI của text box, % chiều RỘNG ảnh bạn nhìn thấy (0–100)
+   width_pct  : chiều RỘNG text box, % chiều rộng ảnh bạn nhìn thấy
+   height_pct : chiều CAO text box, % chiều cao ảnh bạn nhìn thấy
 
 ⚠️ YÊU CẦU BẮT BUỘC:
+- Tọa độ % tính theo kích thước ảnh BẠN ĐANG XỬ LÝ
 - Tọa độ phải bao phủ CHÍNH XÁC vùng chứa văn bản, sai số không quá 1%
-- Các box KHÔNG được chồng lên nhau (trừ khi text thực sự chồng trong ảnh)
-- bg_color lấy từ màu nền thực trong ảnh, KHÔNG đặt màu tùy ý
 - Trả về JSON THUẦN TÚY — KHÔNG giải thích, KHÔNG bọc markdown code block ```
 
 FORMAT JSON TRẢ VỀ (giữ đúng cấu trúc này):
@@ -2518,10 +3249,7 @@ FORMAT JSON TRẢ VỀ (giữ đúng cấu trúc này):
       "top_pct": 10.5,
       "left_pct": 5.2,
       "width_pct": 30.0,
-      "height_pct": 5.0,
-      "bg_color": "#FFFFFF",
-      "text_color": "#000000",
-      "font_size_pct": {font_example}
+      "height_pct": 5.0
     }}
   ]
 }}"""
@@ -2529,6 +3257,444 @@ FORMAT JSON TRẢ VỀ (giữ đúng cấu trúc này):
     return jsonify({'prompt': prompt}), 200
 
 
+# ==================== TERMINOLOGY EXTRACTOR ====================
+
+TERMINOLOGY_PROMPTS_FILE = 'terminology_prompts.json'
+
+
+def get_default_terminology_prompts() -> list:
+    """Trả về danh sách prompt mặc định cho việc trích xuất thuật ngữ."""
+    return [
+        {
+            "id": "terminology_default",
+            "name": "Trích xuất thuật ngữ chuyên ngành",
+            "content": (
+                "Bạn là chuyên gia ngôn ngữ chuyên ngành. Tôi sẽ cung cấp một danh sách "
+                "các cặp văn bản song ngữ dạng JSON (mỗi cặp gồm \"src\": văn bản gốc, \"dst\": văn bản đã dịch).\n\n"
+                "Nhiệm vụ:\n"
+                "1. Phân tích toàn bộ các cặp văn bản\n"
+                "2. Xác định các từ/cụm từ CHUYÊN NGÀNH xuất hiện nhất quán trong bản dịch\n"
+                "3. Chỉ lấy thuật ngữ thực sự chuyên ngành — loại bỏ từ thông thường, giới từ, động từ phổ thông\n"
+                "4. Loại bỏ trùng lặp (giữ lại 1 cặp duy nhất cho mỗi thuật ngữ)\n\n"
+                "Trả về KẾT QUẢ là JSON object thuần túy theo format sau:\n"
+                "{\n"
+                "  \"src_text_1\": \"dst_text_1\",\n"
+                "  \"src_text_2\": \"dst_text_2\"\n"
+                "}\n\n"
+                "Trong đó:\n"
+                "- KEY = thuật ngữ ngôn ngữ GỐC (src)\n"
+                "- VALUE = thuật ngữ ngôn ngữ ĐÍCH (dst)\n\n"
+                "⚠️ QUAN TRỌNG:\n"
+                "- Chỉ trả về JSON object thuần túy, không markdown, không giải thích\n"
+                "- Không bọc trong ```json``` hay bất kỳ code block nào\n"
+                "- Đảm bảo JSON hợp lệ, không có trailing comma\n"
+                "- Nếu không tìm thấy thuật ngữ chuyên ngành, trả về {}"
+            )
+        }
+    ]
+
+
+def load_terminology_prompts() -> list:
+    try:
+        with open(TERMINOLOGY_PROMPTS_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        return data if isinstance(data, list) and data else get_default_terminology_prompts()
+    except Exception:
+        return get_default_terminology_prompts()
+
+
+def save_terminology_prompts(prompts: list) -> None:
+    with open(TERMINOLOGY_PROMPTS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(prompts, f, ensure_ascii=False, indent=2)
+
+
+def align_bilingual_texts(src_dict: dict, dst_dict: dict) -> list:
+    """
+    Ghép hai dict extract theo key chung.
+    Chỉ lấy các key có mặt trong CẢ HAI và cả hai value đều không rỗng.
+    Loại bỏ các cặp có src == dst (không thực sự được dịch).
+    Trả về list of {"src": str, "dst": str}.
+    """
+    import unicodedata
+    pairs = []
+    common_keys = set(src_dict.keys()) & set(dst_dict.keys())
+    for key in sorted(common_keys):
+        src_text = unicodedata.normalize('NFC', str(src_dict[key]).strip())
+        dst_text = unicodedata.normalize('NFC', str(dst_dict[key]).strip())
+        if src_text and dst_text and src_text != dst_text:
+            pairs.append({"src": src_text, "dst": dst_text})
+    return pairs
+
+
+def extract_text_from_file(filepath: str, ext: str) -> dict:
+    """
+    Wrapper tái sử dụng logic extract hiện có.
+    ext: 'xlsx' | 'pptx' | 'docx'
+    Trả về dict {key: text}.
+    """
+    if ext == 'xlsx':
+        wb = load_workbook(filepath, data_only=True)
+        result = {}
+        for sheet_name in wb.sheetnames:
+            ws = wb[sheet_name]
+            for row in ws.iter_rows():
+                for cell in row:
+                    if cell.value is None:
+                        continue
+                    if isinstance(cell.value, str) and not cell.value.startswith('='):
+                        result[f"{sheet_name}!{cell.coordinate}"] = cell.value
+        result.update(extract_xlsx_shapes(filepath))
+        wb.close()
+        return result
+    elif ext == 'pptx':
+        return extract_text_from_pptx(filepath)
+    elif ext == 'docx':
+        return extract_text_from_docx(filepath)
+    return {}
+
+
+@app.route('/api/terminology/align', methods=['POST'])
+@login_required
+def api_terminology_align():
+    """
+    Nhận file_src + file_dst, extract cả hai, ghép cặp song ngữ theo key.
+    """
+    if 'file_src' not in request.files or 'file_dst' not in request.files:
+        return jsonify({'error': 'Cần upload cả file gốc (file_src) và file đã dịch (file_dst)'}), 400
+
+    f_src = request.files['file_src']
+    f_dst = request.files['file_dst']
+
+    if not f_src.filename or not f_dst.filename:
+        return jsonify({'error': 'Tên file không hợp lệ'}), 400
+
+    if not allowed_file(f_src.filename) or not allowed_file(f_dst.filename):
+        return jsonify({'error': 'Chỉ chấp nhận file .xlsx, .pptx hoặc .docx'}), 400
+
+    ext_src = f_src.filename.rsplit('.', 1)[1].lower()
+    ext_dst = f_dst.filename.rsplit('.', 1)[1].lower()
+    if ext_src != ext_dst:
+        return jsonify({'error': f'Hai file phải cùng định dạng (file gốc: .{ext_src}, file dịch: .{ext_dst})'}), 400
+
+    session_folder = get_session_folder()
+    ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+    path_src = os.path.join(session_folder, f'term_src_{ts}.{ext_src}')
+    path_dst = os.path.join(session_folder, f'term_dst_{ts}.{ext_dst}')
+
+    try:
+        f_src.save(path_src)
+        f_dst.save(path_dst)
+
+        src_dict = extract_text_from_file(path_src, ext_src)
+        dst_dict = extract_text_from_file(path_dst, ext_dst)
+
+        pairs = align_bilingual_texts(src_dict, dst_dict)
+
+        # Lưu pairs vào file tạm (tránh giới hạn ~4KB của Flask session cookie)
+        session_folder = get_session_folder()
+        pairs_cache_path = os.path.join(session_folder, 'terminology_pairs_cache.json')
+        try:
+            with open(pairs_cache_path, 'w', encoding='utf-8') as _f:
+                json.dump(pairs, _f, ensure_ascii=False)
+            session['terminology_pairs_cache'] = pairs_cache_path
+        except Exception:
+            pass  # non-critical
+
+        pairs_json_str = json.dumps(pairs, ensure_ascii=False, indent=2)
+
+        return jsonify({
+            'success': True,
+            'pairs': pairs[:50],         # trả về tối đa 50 cho preview
+            'total': len(src_dict),
+            'matched': len(pairs),
+            'pairs_json': pairs_json_str,
+        })
+    except Exception as e:
+        return jsonify({'error': f'Lỗi khi xử lý file: {str(e)}'}), 500
+    finally:
+        for p in [path_src, path_dst]:
+            try:
+                if os.path.exists(p):
+                    os.remove(p)
+            except Exception:
+                pass
+
+
+@app.route('/api/terminology/prompts', methods=['GET'])
+@login_required
+def api_get_terminology_prompts():
+    return jsonify(load_terminology_prompts())
+
+
+@app.route('/api/terminology/prompts', methods=['POST'])
+@login_required
+def api_save_terminology_prompts_route():
+    data = request.get_json()
+    if not isinstance(data, list):
+        return jsonify({'error': 'Phải là array'}), 400
+    try:
+        save_terminology_prompts(data)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/terminology/import-csv', methods=['POST'])
+@login_required
+def api_terminology_import_csv():
+    """
+    Parse CSV text từ AI output và lưu vào glossary (mới hoặc merge).
+    Body JSON: { csv_text, target_glossary_id?, new_glossary_name? }
+    """
+    import time as _time
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Body rỗng'}), 400
+
+    csv_text = (data.get('csv_text') or '').strip()
+    if not csv_text:
+        return jsonify({'error': 'CSV rỗng'}), 400
+
+    target_gid = (data.get('target_glossary_id') or '').strip()
+    new_name = (data.get('new_glossary_name') or '').strip()
+
+    # Parse CSV — thử dấu phẩy trước, fallback tab
+    rows_raw = []
+    for line in csv_text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            parsed = list(csv.reader([line]))[0]
+        except Exception:
+            parsed = [line]
+
+        if len(parsed) >= 2:
+            rows_raw.append((parsed[0].strip(), parsed[1].strip()))
+        elif len(parsed) == 1 and '\t' in parsed[0]:
+            parts = parsed[0].split('\t', 1)
+            rows_raw.append((parts[0].strip(), parts[1].strip()))
+        # else: bỏ qua dòng không đủ cột
+
+    valid_rows = [(dst, src) for dst, src in rows_raw if dst and src]
+    if not valid_rows:
+        return jsonify({'error': 'Không tìm thấy dữ liệu hợp lệ trong CSV'}), 400
+
+    added = 0
+    skipped = 0
+
+    if target_gid:
+        # Merge vào glossary có sẵn
+        csv_path = os.path.join(GLOSSARY_DIR, f'{target_gid}.csv')
+        if not os.path.exists(csv_path):
+            return jsonify({'error': f'Không tìm thấy glossary: {target_gid}'}), 404
+
+        # Đọc existing rows để dedup
+        existing_set = set()
+        existing_rows = []
+        try:
+            with open(csv_path, 'r', encoding='utf-8-sig') as f:
+                for row in csv.reader(f):
+                    if len(row) >= 2:
+                        existing_rows.append(row)
+                        existing_set.add((row[1].strip().lower(), row[0].strip().lower()))
+        except Exception:
+            pass
+
+        new_rows = []
+        for dst, src in valid_rows:
+            key = (src.lower(), dst.lower())
+            if key in existing_set:
+                skipped += 1
+            else:
+                new_rows.append([dst, src])
+                existing_set.add(key)
+                added += 1
+
+        with open(csv_path, 'w', encoding='utf-8-sig', newline='') as f:
+            w = csv.writer(f)
+            for r in existing_rows:
+                w.writerow(r)
+            for r in new_rows:
+                w.writerow(r)
+
+        # Lấy tên từ meta
+        meta_path = os.path.join(GLOSSARY_DIR, f'{target_gid}.meta.json')
+        gid_name = target_gid
+        try:
+            with open(meta_path, 'r', encoding='utf-8') as f:
+                gid_name = json.load(f).get('name', target_gid)
+        except Exception:
+            pass
+
+        return jsonify({
+            'success': True,
+            'gid': target_gid,
+            'name': gid_name,
+            'added': added,
+            'skipped_duplicate': skipped,
+            'total_rows': len(existing_rows) + added,
+        })
+
+    else:
+        # Tạo glossary mới
+        if not new_name:
+            new_name = f'Thuật ngữ {datetime.now().strftime("%Y-%m-%d %H:%M")}'
+
+        gid = f'glossary_{int(_time.time())}'
+        csv_path = os.path.join(GLOSSARY_DIR, f'{gid}.csv')
+        meta_path = os.path.join(GLOSSARY_DIR, f'{gid}.meta.json')
+
+        seen = set()
+        with open(csv_path, 'w', encoding='utf-8-sig', newline='') as f:
+            w = csv.writer(f)
+            for dst, src in valid_rows:
+                key = (src.lower(), dst.lower())
+                if key in seen:
+                    skipped += 1
+                else:
+                    w.writerow([dst, src])
+                    seen.add(key)
+                    added += 1
+
+        with open(meta_path, 'w', encoding='utf-8') as f:
+            json.dump({'name': new_name}, f, ensure_ascii=False)
+
+        return jsonify({
+            'success': True,
+            'gid': gid,
+            'name': new_name,
+            'added': added,
+            'skipped_duplicate': skipped,
+            'total_rows': added,
+        })
+
+
+@app.route('/api/terminology/import-json', methods=['POST'])
+@login_required
+def api_terminology_import_json():
+    """
+    Parse JSON object {src: dst} từ AI output và lưu vào glossary (mới hoặc merge).
+    Body JSON: { json_text: str, target_glossary_id?: str, new_glossary_name?: str }
+    """
+    import time as _time
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Body rỗng'}), 400
+
+    json_text = (data.get('json_text') or '').strip()
+    if not json_text:
+        return jsonify({'error': 'JSON rỗng'}), 400
+
+    target_gid = (data.get('target_glossary_id') or '').strip()
+    new_name = (data.get('new_glossary_name') or '').strip()
+
+    # Strip markdown code fence nếu AI bọc kết quả
+    clean_text = json_text.strip()
+    if clean_text.startswith('```'):
+        lines = clean_text.splitlines()
+        lines = [l for l in lines if not l.strip().startswith('```')]
+        clean_text = '\n'.join(lines).strip()
+
+    try:
+        parsed = json.loads(clean_text)
+    except json.JSONDecodeError as e:
+        return jsonify({'error': f'JSON không hợp lệ: {str(e)}'}), 400
+
+    if not isinstance(parsed, dict):
+        return jsonify({'error': 'Dữ liệu phải là JSON object {src: dst}'}), 400
+
+    # Chuyển thành list (cột A=dst, cột B=src — chuẩn glossary CSV)
+    valid_rows = []
+    for src_text, dst_text in parsed.items():
+        src = str(src_text).strip()
+        dst = str(dst_text).strip()
+        if src and dst:
+            valid_rows.append((dst, src))
+
+    if not valid_rows:
+        return jsonify({'error': 'Không tìm thấy cặp thuật ngữ hợp lệ trong JSON'}), 400
+
+    added = 0
+    skipped = 0
+
+    if target_gid:
+        csv_path = os.path.join(GLOSSARY_DIR, f'{target_gid}.csv')
+        if not os.path.exists(csv_path):
+            return jsonify({'error': f'Không tìm thấy glossary: {target_gid}'}), 404
+
+        existing_set = set()
+        existing_rows = []
+        try:
+            with open(csv_path, 'r', encoding='utf-8-sig') as f:
+                for row in csv.reader(f):
+                    if len(row) >= 2:
+                        existing_rows.append(row)
+                        existing_set.add((row[1].strip().lower(), row[0].strip().lower()))
+        except Exception:
+            pass
+
+        new_rows = []
+        for dst, src in valid_rows:
+            key = (src.lower(), dst.lower())
+            if key in existing_set:
+                skipped += 1
+            else:
+                new_rows.append([dst, src])
+                existing_set.add(key)
+                added += 1
+
+        with open(csv_path, 'w', encoding='utf-8-sig', newline='') as f:
+            w = csv.writer(f)
+            for r in existing_rows:
+                w.writerow(r)
+            for r in new_rows:
+                w.writerow(r)
+
+        meta_path = os.path.join(GLOSSARY_DIR, f'{target_gid}.meta.json')
+        gid_name = target_gid
+        try:
+            with open(meta_path, 'r', encoding='utf-8') as f:
+                gid_name = json.load(f).get('name', target_gid)
+        except Exception:
+            pass
+
+        return jsonify({
+            'success': True, 'gid': target_gid, 'name': gid_name,
+            'added': added, 'skipped_duplicate': skipped,
+            'total_rows': len(existing_rows) + added,
+        })
+
+    else:
+        if not new_name:
+            new_name = f'Thuật ngữ {datetime.now().strftime("%Y-%m-%d %H:%M")}'
+        gid = f'glossary_{int(_time.time())}'
+        csv_path = os.path.join(GLOSSARY_DIR, f'{gid}.csv')
+        meta_path = os.path.join(GLOSSARY_DIR, f'{gid}.meta.json')
+
+        seen = set()
+        with open(csv_path, 'w', encoding='utf-8-sig', newline='') as f:
+            w = csv.writer(f)
+            for dst, src in valid_rows:
+                key = (src.lower(), dst.lower())
+                if key not in seen:
+                    w.writerow([dst, src])
+                    seen.add(key)
+                    added += 1
+                else:
+                    skipped += 1
+
+        with open(meta_path, 'w', encoding='utf-8') as f:
+            json.dump({'name': new_name}, f, ensure_ascii=False)
+
+        return jsonify({
+            'success': True, 'gid': gid, 'name': new_name,
+            'added': added, 'skipped_duplicate': skipped,
+            'total_rows': added,
+        })
+
+
 if __name__ == '__main__':
     # Chạy ứng dụng Flask ở chế độ debug
     app.run(host='0.0.0.0', port=5000)
+    #app.run(debug=True,host='0.0.0.0', port=5001)
