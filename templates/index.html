@@ -1251,21 +1251,292 @@ Output yêu cầu:
             <!-- Bước 1: Upload file (reuses same logic as Tab 1) -->
             <div class="col-lg-4">
               <div class="function-card" id="proofStep1Card">
-                <!-- PROOF_STEP1_PLACEHOLDER -->
+                <div class="text-center">
+                  <span class="step-number" id="proofBadge1">1</span>
+                  <h3 class="d-inline">Upload File</h3>
+                  <p class="text-muted small mt-2">File cần kiểm tra ngữ pháp (.xlsx/.pptx/.docx)</p>
+                </div>
+
+                <div class="upload-area compact" id="proofUploadArea">
+                  <i class="fas fa-cloud-upload-alt"></i>
+                  <p class="mb-2 small"><strong>Kéo thả file vào đây</strong></p>
+                  <p class="text-muted mb-1" style="font-size:0.72rem;">
+                    1 hoặc nhiều file .xlsx / .pptx / .docx
+                  </p>
+                  <input type="file" class="form-control" id="proofExcelFile"
+                         name="files" accept=".xlsx,.pptx,.docx" multiple
+                         style="display:none;">
+                  <label for="proofExcelFile" class="btn btn-custom btn-sm">
+                    <i class="fas fa-folder-open"></i> Chọn file
+                  </label>
+                </div>
+
+                <div id="proofFileInfo" class="file-info" style="display:none;">
+                  <div id="proofFileInfoContent"
+                       class="d-flex align-items-center gap-2 flex-grow-1 text-truncate">
+                    <i id="proofFileIcon" class="fas fa-file text-secondary flex-shrink-0"></i>
+                    <span id="proofFileName" class="small text-truncate"></span>
+                  </div>
+                  <div id="proofFileList" style="display:none; margin-top:8px;"></div>
+                  <button type="button" class="btn btn-sm btn-outline-danger flex-shrink-0"
+                          id="proofFileRemove">
+                    <i class="fas fa-times"></i>
+                  </button>
+                </div>
+                <div id="proofMainAlert"></div>
+
+                <div class="mt-3">
+                  <div class="collapse-toggle p-2" style="background:#f8f9fa;border-radius:5px;"
+                       data-bs-toggle="collapse" data-bs-target="#proofStep1Guide">
+                    <i class="fas fa-info-circle text-info"></i>
+                    <small><strong>Hướng dẫn sử dụng</strong></small>
+                    <i class="fas fa-chevron-down float-end"></i>
+                  </div>
+                  <div class="collapse mt-2" id="proofStep1Guide">
+                    <div class="p-2" style="border-radius:5px;">
+                      <ul class="small mb-0" style="padding-left:20px;">
+                        <li>Hỗ trợ Excel (.xlsx), PowerPoint (.pptx) và Word (.docx)</li>
+                        <li>File sẽ dùng cho cả Extract và Map ngược kết quả</li>
+                        <li>Mục đích: kiểm tra ngữ pháp / chính tả ngôn ngữ gốc — không dịch</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
             <!-- Bước 2: Trích xuất & Copy Prompt -->
             <div class="col-lg-4">
               <div class="function-card" id="proofStep2Card">
-                <!-- PROOF_STEP2_PLACEHOLDER -->
+                <div class="text-center">
+                  <span class="step-number" id="proofBadge2">2</span>
+                  <h3 class="d-inline">Trích xuất &amp; Prompt</h3>
+                  <p class="text-muted small mt-2">Lấy nội dung gốc → copy cho AI kiểm tra</p>
+                </div>
+
+                <form id="proofExtractForm" enctype="multipart/form-data">
+                  <div class="text-center mt-2">
+                    <button type="submit" class="btn btn-custom btn-sm"
+                            id="proofExtractBtn" disabled>
+                      <i class="fas fa-cog"></i> Trích xuất JSON
+                    </button>
+                  </div>
+
+                  <div class="loading text-center" id="proofExtractLoading"
+                       style="display:none;">
+                    <div class="spinner-border text-primary" role="status">
+                      <span class="visually-hidden">Đang xử lý...</span>
+                    </div>
+                    <p class="mt-2 small">Đang trích xuất dữ liệu...</p>
+                  </div>
+                  <div id="proofExtractAlert"></div>
+                </form>
+
+                <!-- Prompt AI kiểm tra ngữ pháp -->
+                <div class="mt-3">
+                  <div class="d-flex align-items-center gap-2 mb-1">
+                    <small><strong>Template prompt:</strong></small>
+                    <select class="form-select form-select-sm"
+                            id="proofTemplateSelect" style="font-size:0.78rem;"></select>
+                    <button class="btn btn-outline-primary btn-sm py-0 px-2"
+                            style="font-size:0.72rem;flex-shrink:0"
+                            onclick="openProofTemplateModal()">
+                      <i class="fas fa-edit"></i>
+                    </button>
+                  </div>
+                  <div class="text-center">
+                    <button class="btn btn-outline-secondary btn-sm"
+                            data-bs-toggle="collapse"
+                            data-bs-target="#proofPromptDetail">
+                      <i class="fas fa-eye"></i> Xem Prompt AI
+                    </button>
+                  </div>
+                </div>
+
+                <div class="collapse mt-2" id="proofPromptDetail">
+                  <div style="background:#e3f2fd;padding:10px;border-radius:5px;
+                              border:1px solid #90caf9;">
+                    <pre id="proofAiPrompt"
+                         style="margin:0;font-size:0.7rem;white-space:pre-wrap;
+                                word-wrap:break-word;max-height:200px;overflow-y:auto;">Bạn là chuyên gia kiểm tra ngữ pháp và chính tả.
+
+Hãy kiểm tra các giá trị (values) trong file JSON dưới đây.
+
+Quy tắc bắt buộc:
+1. Giữ nguyên 100% các keys — không thay đổi dù 1 ký tự
+2. Nếu value không có lỗi → GIỮ NGUYÊN value đó (copy y hệt)
+3. Nếu value có lỗi ngữ pháp / chính tả / dùng từ → sửa và trả về value đã sửa
+4. KHÔNG thêm giải thích, ghi chú, hay văn bản nào khác
+5. Giữ nguyên format JSON chuẩn, encoding UTF-8
+
+Output yêu cầu:
+- Trả về ĐÚNG cấu trúc JSON gốc (cùng số lượng keys)
+- Chỉ thay đổi values có lỗi; values đúng giữ nguyên hoàn toàn
+- KHÔNG thêm key mới, KHÔNG xóa key cũ</pre>
+                  </div>
+                </div>
+
+                <!-- Kết quả sau khi trích xuất -->
+                <div id="proofExtractResult" style="display:none;">
+                  <hr class="my-2">
+                  <div id="proofDedupPanel" style="display:none;"></div>
+                  <div id="proofJsonFileList"></div>
+                  <div class="text-center mb-2">
+                    <a id="proofDownloadZipBtn" href="#" class="btn btn-success btn-sm"
+                       style="display:none;">
+                      <i class="fas fa-file-archive"></i> Tải ZIP
+                    </a>
+                    <span id="proofExtractSummary" class="text-muted small ms-2"></span>
+                  </div>
+                </div>
+
+                <div class="mt-3">
+                  <div class="collapse-toggle p-2"
+                       style="background:#f8f9fa;border-radius:5px;"
+                       data-bs-toggle="collapse" data-bs-target="#proofStep2Guide">
+                    <i class="fas fa-info-circle text-info"></i>
+                    <small><strong>Hướng dẫn sử dụng</strong></small>
+                    <i class="fas fa-chevron-down float-end"></i>
+                  </div>
+                  <div class="collapse mt-2" id="proofStep2Guide">
+                    <div class="p-2" style="border-radius:5px;">
+                      <ul class="small mb-0" style="padding-left:20px;">
+                        <li>Click "Trích xuất JSON" để lấy nội dung văn bản gốc</li>
+                        <li>Click <strong>Copy</strong> trên từng file → paste vào AI
+                            kèm prompt kiểm tra ngữ pháp</li>
+                        <li>AI trả về JSON cùng cấu trúc — values nào sai sẽ được sửa,
+                            values đúng giữ nguyên</li>
+                        <li>Mang JSON kết quả sang Bước 3 để map ngược vào file gốc</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
             <!-- Bước 3: Paste kết quả AI & Map ngược -->
             <div class="col-lg-4">
               <div class="function-card" id="proofStep3Card">
-                <!-- PROOF_STEP3_PLACEHOLDER -->
+                <div class="text-center">
+                  <span class="step-number" id="proofBadge3">3</span>
+                  <h3 class="d-inline">Map k&#7871;t qu&#7843;</h3>
+                  <p class="text-muted small mt-2">Paste JSON AI &#8594; ghi v&#224;o file g&#7889;c</p>
+                </div>
+
+                <!-- Color picker cho ph&#7847;n s&#7917;a -->
+                <div class="mb-3">
+                  <label class="form-label small mb-1">
+                    <i class="fas fa-palette" style="color:#667eea;"></i>
+                    <strong>M&#224;u ch&#7919; cho n&#7897;i dung &#273;&#227; s&#7917;a:</strong>
+                  </label>
+                  <div class="d-flex align-items-center gap-2">
+                    <input type="color" id="proofCorrectionColor" value="#FF0000"
+                           class="form-control form-control-color"
+                           style="width:44px;height:34px;padding:2px;cursor:pointer;"
+                           title="Ch&#7885;n m&#224;u cho d&#242;ng &#273;&#227; s&#7917;a">
+                    <div class="flex-grow-1">
+                      <select class="form-select form-select-sm" id="proofColorPresets"
+                              onchange="applyProofColorPreset(this.value)"
+                              style="font-size:0.78rem;">
+                        <option value="">&#8212; M&#224;u nhanh &#8212;</option>
+                        <option value="#FF0000">&#272;&#7887; (Red)</option>
+                        <option value="#FF6600">Cam (Orange)</option>
+                        <option value="#0070C0">Xanh d&#432;&#417;ng (Blue)</option>
+                        <option value="#00B050">Xanh l&#225; (Green)</option>
+                        <option value="#7030A0">T&#237;m (Purple)</option>
+                        <option value="#FF00FF">H&#7891;ng (Magenta)</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="mt-1" style="font-size:0.72rem;color:#888;">
+                    <i class="fas fa-info-circle"></i>
+                    D&#242;ng g&#7889;c gi&#7919; nguy&#234;n m&#224;u g&#7889;c. D&#242;ng s&#7917;a th&#234;m v&#224;o b&#7857;ng m&#224;u n&#224;y.
+                    N&#7871;u value kh&#244;ng thay &#273;&#7893;i &#8594; kh&#244;ng th&#234;m d&#242;ng n&#224;o.
+                  </div>
+                </div>
+
+                <!-- Paste JSON -->
+                <form id="proofMapForm" enctype="multipart/form-data">
+                  <div class="mb-2">
+                    <label class="form-label small mb-1">
+                      <strong>D&#225;n JSON k&#7871;t qu&#7843; t&#7915; AI:</strong>
+                    </label>
+                    <div class="json-editor-outer">
+                      <div id="proofPasteJsonEditable"
+                           class="json-editor-editable"
+                           contenteditable="true"
+                           spellcheck="false"
+                           data-placeholder='Paste JSON ki&#7875;m tra ng&#7919; ph&#225;p v&#224;o &#273;&#226;y...'></div>
+                      <textarea id="proofPasteJsonTextarea" style="display:none;"></textarea>
+                    </div>
+                    <div class="json-badge-wrap" id="proofPasteJsonBadge"></div>
+                    <div class="d-flex justify-content-end mt-1">
+                      <button type="button"
+                              class="btn btn-outline-secondary btn-sm py-0 px-2"
+                              style="font-size:0.72rem;" id="proofFormatJsonBtn">
+                        <i class="fas fa-indent"></i> Format JSON
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="text-center mb-2">
+                    <button type="button" class="btn btn-outline-primary btn-sm"
+                            id="proofAddPastedJsonBtn">
+                      <i class="fas fa-plus-circle"></i> Th&#234;m JSON n&#224;y
+                    </button>
+                  </div>
+
+                  <div id="proofPastedJsonList" style="display:none;">
+                    <div class="file-info">
+                      <label class="form-label small mb-1"><strong>&#272;&#227; th&#234;m:</strong></label>
+                      <div id="proofPastedJsonItems"></div>
+                      <button type="button" class="btn btn-sm btn-outline-danger mt-2"
+                              id="proofClearPastedJsonBtn">
+                        <i class="fas fa-trash"></i> X&#243;a t&#7845;t c&#7843;
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="text-center mt-2">
+                    <button type="submit" class="btn btn-custom btn-sm"
+                            id="proofMapBtn" disabled>
+                      <i class="fas fa-magic"></i> Map &amp; T&#7843;i v&#7873;
+                    </button>
+                  </div>
+
+                  <div class="loading text-center" id="proofMapLoading"
+                       style="display:none;">
+                    <div class="spinner-border text-primary" role="status">
+                      <span class="visually-hidden">&#272;ang x&#7917; l&#253;...</span>
+                    </div>
+                    <p class="mt-2 small" id="proofMapLoadingText">
+                      &#272;ang ghi k&#7871;t qu&#7843; ki&#7875;m tra v&#224;o file...
+                    </p>
+                  </div>
+                  <div id="proofMapAlert"></div>
+                </form>
+
+                <div class="mt-3">
+                  <div class="collapse-toggle p-2"
+                       style="background:#f8f9fa;border-radius:5px;"
+                       data-bs-toggle="collapse" data-bs-target="#proofStep3Guide">
+                    <i class="fas fa-info-circle text-info"></i>
+                    <small><strong>H&#432;&#7899;ng d&#7851;n s&#7917; d&#7909;ng</strong></small>
+                    <i class="fas fa-chevron-down float-end"></i>
+                  </div>
+                  <div class="collapse mt-2" id="proofStep3Guide">
+                    <div class="p-2" style="border-radius:5px;">
+                      <ul class="small mb-0" style="padding-left:20px;">
+                        <li>Ch&#7885;n m&#224;u s&#7869; d&#249;ng &#273;&#7875; &#273;&#225;nh d&#7845;u ph&#7847;n AI &#273;&#227; s&#7917;a</li>
+                        <li>Paste JSON t&#7915; AI (c&#249;ng keys v&#7899;i JSON &#273;&#227; tr&#237;ch xu&#7845;t)</li>
+                        <li>Nh&#7845;n &#8220;Map &amp; T&#7843;i v&#7873;&#8221; &#8212; file output s&#7869; c&#243; 2 d&#242;ng m&#7895;i
+                            &#244; b&#7883; s&#7917;a: d&#242;ng g&#7889;c + d&#242;ng s&#7917;a (m&#224;u &#273;&#227; ch&#7885;n)</li>
+                        <li>&#212; kh&#244;ng c&#243; l&#7895;i &#8594; kh&#244;ng thay &#273;&#7893;i g&#236;</li>
+                        <li>H&#7895; tr&#7907;: .xlsx, .pptx, .docx</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
