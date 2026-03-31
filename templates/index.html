@@ -190,12 +190,21 @@
             flex-shrink: 0;
             font-size: 0.75rem;
             padding: 3px 10px;
+            transition: all 0.3s ease;
         }
         
         .btn-copy-json.copied {
             background-color: #28a745 !important;
             border-color: #28a745 !important;
             color: white !important;
+            box-shadow: 0 0 8px rgba(40, 167, 69, 0.5) !important;
+            transform: scale(1.05);
+        }
+        
+        body.dark-mode .btn-copy-json.copied {
+            background-color: #20c997 !important;
+            border-color: #20c997 !important;
+            box-shadow: 0 0 8px rgba(32, 201, 151, 0.5) !important;
         }
 
         /* ===== INPUT MODE TOGGLE ===== */
@@ -595,10 +604,13 @@
                             </div>
                             
                             <div id="mainFileInfo" class="file-info" style="display: none;">
+                                <!-- Single file -->
                                 <div id="mainFileInfoContent" class="d-flex align-items-center gap-2 flex-grow-1 text-truncate">
                                     <i id="mainFileIcon" class="fas fa-file text-secondary flex-shrink-0"></i>
                                     <span id="mainFileName" class="small text-truncate"></span>
                                 </div>
+                                <!-- Multiple files list -->
+                                <div id="mainFileList" style="display: none; margin-top: 8px;"></div>
                                 <button type="button" class="btn btn-sm btn-outline-danger flex-shrink-0" id="mainFileRemove">
                                     <i class="fas fa-times"></i>
                                 </button>
@@ -2311,6 +2323,9 @@ Output yêu cầu:
             const files = e.target.files;
             if (!files || files.length === 0) return;
             const fileIcon = document.getElementById('mainFileIcon');
+            const mainFileList = document.getElementById('mainFileList');
+            const mainFileInfoContent = document.getElementById('mainFileInfoContent');
+            
             if (files.length === 1) {
                 const file = files[0];
                 uploadedExcelFilename = file.name;
@@ -2322,10 +2337,31 @@ Output yêu cầu:
                 else                           fileIcon.className = 'fas fa-file text-secondary';
                 // Fetch màu chữ từ file
                 fetchExtractColors(file);
+                // Ẩn list, show single file
+                mainFileInfoContent.style.display = 'flex';
+                mainFileList.style.display = 'none';
             } else {
                 uploadedExcelFilename = files[0].name;
-                mainFileName.textContent = files.length + ' file đã chọn';
                 fileIcon.className = 'fas fa-layer-group text-primary';
+                // Ẩn single file, show list
+                mainFileInfoContent.style.display = 'none';
+                mainFileList.style.display = 'block';
+                mainFileList.innerHTML = '';
+                
+                // Tạo danh sách file
+                const fileListHtml = Array.from(files).map(f => {
+                    const fn = f.name.toLowerCase();
+                    let icon = 'fas fa-file text-secondary';
+                    if (fn.endsWith('.xlsx'))      icon = 'fas fa-file-excel text-success';
+                    else if (fn.endsWith('.pptx')) icon = 'fas fa-file-powerpoint text-danger';
+                    else if (fn.endsWith('.docx')) icon = 'fas fa-file-word text-primary';
+                    return `<div style="display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 0.85rem;">
+                        <i class="${icon} flex-shrink-0"></i>
+                        <span class="text-truncate">${f.name}</span>
+                    </div>`;
+                }).join('');
+                mainFileList.innerHTML = fileListHtml;
+                
                 // Ẩn bộ lọc màu khi nhiều file
                 resetColorFilter();
             }
@@ -2630,10 +2666,6 @@ Output yêu cầu:
                     navigator.clipboard.writeText(textToCopy).then(function() {
                         btnEl.innerHTML = '<i class="fas fa-check"></i> Copied!';
                         btnEl.classList.add('copied');
-                        setTimeout(function() {
-                            btnEl.innerHTML = '<i class="fas fa-copy"></i> Copy';
-                            btnEl.classList.remove('copied');
-                        }, 2000);
                     }).catch(function() {
                         const textarea = document.createElement('textarea');
                         textarea.value = textToCopy;
@@ -2645,10 +2677,6 @@ Output yêu cầu:
                             document.execCommand('copy');
                             btnEl.innerHTML = '<i class="fas fa-check"></i> Copied!';
                             btnEl.classList.add('copied');
-                            setTimeout(function() {
-                                btnEl.innerHTML = '<i class="fas fa-copy"></i> Copy';
-                                btnEl.classList.remove('copied');
-                            }, 2000);
                         } catch(err) {
                             alert('Không thể copy tự động. Vui lòng copy thủ công.');
                         }
@@ -2716,17 +2744,13 @@ Output yêu cầu:
                     navigator.clipboard.writeText(textToCopy).then(() => {
                         btnEl.innerHTML = '<i class="fas fa-check"></i> Copied!';
                         btnEl.classList.add('copied');
-                        setTimeout(() => {
-                            btnEl.innerHTML = '<i class="fas fa-copy"></i> Copy Dedup';
-                            btnEl.classList.remove('copied');
-                        }, 2000);
                     }).catch(() => {
                         const ta = document.createElement('textarea');
                         ta.value = textToCopy;
                         ta.style.cssText = 'position:fixed;opacity:0';
                         document.body.appendChild(ta);
                         ta.select();
-                        try { document.execCommand('copy'); btnEl.innerHTML = '<i class="fas fa-check"></i> Copied!'; setTimeout(() => { btnEl.innerHTML = '<i class="fas fa-copy"></i> Copy Dedup'; }, 2000); }
+                        try { document.execCommand('copy'); btnEl.innerHTML = '<i class="fas fa-check"></i> Copied!'; }
                         catch(e) { alert('Không thể copy tự động.'); }
                         document.body.removeChild(ta);
                     });
@@ -3454,10 +3478,6 @@ Output yêu cầu:
             navigator.clipboard.writeText(text).then(() => {
                 this.innerHTML = '<i class="fas fa-check"></i> Đã copy!';
                 this.classList.replace('btn-outline-primary', 'btn-success');
-                setTimeout(() => {
-                    this.innerHTML = '<i class="fas fa-copy"></i> Copy Prompt';
-                    this.classList.replace('btn-success', 'btn-outline-primary');
-                }, 2000);
             });
         });
 
@@ -3538,10 +3558,6 @@ Output yêu cầu:
             navigator.clipboard.writeText(text).then(() => {
                 this.innerHTML = '<i class="fas fa-check"></i> \u0110\u00e3 copy!';
                 this.classList.replace('btn-outline-primary', 'btn-success');
-                setTimeout(() => {
-                    this.innerHTML = '<i class="fas fa-copy"></i> Copy Prompt';
-                    this.classList.replace('btn-success', 'btn-outline-primary');
-                }, 2000);
             });
         });
 
@@ -4901,10 +4917,6 @@ Output yêu cầu:
             navigator.clipboard.writeText(raw).then(() => {
                 btn.classList.add('copied');
                 btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
-                setTimeout(() => {
-                    btn.classList.remove('copied');
-                    btn.innerHTML = '<i class="fas fa-copy"></i> Copy';
-                }, 2000);
             });
         };
     })();
@@ -5082,10 +5094,6 @@ Output yêu cầu:
                 navigator.clipboard.writeText(textToCopy).then(() => {
                     btnEl.innerHTML = '<i class="fas fa-check"></i> Copied!';
                     btnEl.classList.add('copied');
-                    setTimeout(() => {
-                        btnEl.innerHTML = '<i class="fas fa-copy"></i> Copy';
-                        btnEl.classList.remove('copied');
-                    }, 2000);
                 }).catch(() => {
                     const ta = document.createElement('textarea');
                     ta.value = textToCopy;
@@ -5097,10 +5105,6 @@ Output yêu cầu:
                         document.execCommand('copy');
                         btnEl.innerHTML = '<i class="fas fa-check"></i> Copied!';
                         btnEl.classList.add('copied');
-                        setTimeout(() => {
-                            btnEl.innerHTML = '<i class="fas fa-copy"></i> Copy';
-                            btnEl.classList.remove('copied');
-                        }, 2000);
                     } catch (err) {
                         alert('Không thể copy tự động. Vui lòng copy thủ công.');
                     }
