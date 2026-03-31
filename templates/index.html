@@ -58,6 +58,13 @@
                     <i class="fas fa-spell-check"></i> Thuật ngữ
                 </button>
             </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="main-tab5"
+                        data-bs-toggle="tab" data-bs-target="#mainTab5"
+                        type="button" role="tab" aria-selected="false">
+                    <i class="fas fa-spell-check"></i> Kiểm tra ngữ pháp
+                </button>
+            </li>
         </ul>
         <div class="tab-content" id="mainTabContent">
         <div class="tab-pane fade show active" id="mainTab1" role="tabpanel" aria-labelledby="main-tab1">
@@ -1236,6 +1243,312 @@ Output yêu cầu:
 
         </div><!-- /row -->
         </div><!-- /tab-pane tab4 Terminology -->
+
+        <div class="tab-pane fade" id="mainTab5" role="tabpanel"
+             aria-labelledby="main-tab5">
+          <div class="row g-3">
+
+            <!-- Bước 1: Upload file (reuses same logic as Tab 1) -->
+            <div class="col-lg-4">
+              <div class="function-card" id="proofStep1Card">
+                <div class="text-center">
+                  <span class="step-number" id="proofBadge1">1</span>
+                  <h3 class="d-inline">Upload File</h3>
+                  <p class="text-muted small mt-2">File cần kiểm tra ngữ pháp (.xlsx/.pptx/.docx)</p>
+                </div>
+
+                <div class="upload-area compact" id="proofUploadArea">
+                  <i class="fas fa-cloud-upload-alt"></i>
+                  <p class="mb-2 small"><strong>Kéo thả file vào đây</strong></p>
+                  <p class="text-muted mb-1" style="font-size:0.72rem;">
+                    1 hoặc nhiều file .xlsx / .pptx / .docx
+                  </p>
+                  <input type="file" class="form-control" id="proofExcelFile"
+                         name="files" accept=".xlsx,.pptx,.docx" multiple
+                         style="display:none;">
+                  <label for="proofExcelFile" class="btn btn-custom btn-sm">
+                    <i class="fas fa-folder-open"></i> Chọn file
+                  </label>
+                </div>
+
+                <div id="proofFileInfo" class="file-info" style="display:none;">
+                  <div id="proofFileInfoContent"
+                       class="d-flex align-items-center gap-2 flex-grow-1 text-truncate">
+                    <i id="proofFileIcon" class="fas fa-file text-secondary flex-shrink-0"></i>
+                    <span id="proofFileName" class="small text-truncate"></span>
+                  </div>
+                  <div id="proofFileList" style="display:none; margin-top:8px;"></div>
+                  <button type="button" class="btn btn-sm btn-outline-danger flex-shrink-0"
+                          id="proofFileRemove">
+                    <i class="fas fa-times"></i>
+                  </button>
+                </div>
+                <div id="proofMainAlert"></div>
+
+                <div class="mt-3">
+                  <div class="collapse-toggle p-2" style="background:#f8f9fa;border-radius:5px;"
+                       data-bs-toggle="collapse" data-bs-target="#proofStep1Guide">
+                    <i class="fas fa-info-circle text-info"></i>
+                    <small><strong>Hướng dẫn sử dụng</strong></small>
+                    <i class="fas fa-chevron-down float-end"></i>
+                  </div>
+                  <div class="collapse mt-2" id="proofStep1Guide">
+                    <div class="p-2" style="border-radius:5px;">
+                      <ul class="small mb-0" style="padding-left:20px;">
+                        <li>Hỗ trợ Excel (.xlsx), PowerPoint (.pptx) và Word (.docx)</li>
+                        <li>File sẽ dùng cho cả Extract và Map ngược kết quả</li>
+                        <li>Mục đích: kiểm tra ngữ pháp / chính tả ngôn ngữ gốc — không dịch</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Bước 2: Trích xuất & Copy Prompt -->
+            <div class="col-lg-4">
+              <div class="function-card" id="proofStep2Card">
+                <div class="text-center">
+                  <span class="step-number" id="proofBadge2">2</span>
+                  <h3 class="d-inline">Trích xuất &amp; Prompt</h3>
+                  <p class="text-muted small mt-2">Lấy nội dung gốc → copy cho AI kiểm tra</p>
+                </div>
+
+                <form id="proofExtractForm" enctype="multipart/form-data">
+                  <div class="text-center mt-2">
+                    <button type="submit" class="btn btn-custom btn-sm"
+                            id="proofExtractBtn" disabled>
+                      <i class="fas fa-cog"></i> Trích xuất JSON
+                    </button>
+                  </div>
+
+                  <div class="loading text-center" id="proofExtractLoading"
+                       style="display:none;">
+                    <div class="spinner-border text-primary" role="status">
+                      <span class="visually-hidden">Đang xử lý...</span>
+                    </div>
+                    <p class="mt-2 small">Đang trích xuất dữ liệu...</p>
+                  </div>
+                  <div id="proofExtractAlert"></div>
+                </form>
+
+                <!-- Prompt AI kiểm tra ngữ pháp -->
+                <div class="mt-3">
+                  <div class="d-flex align-items-center gap-2 mb-1">
+                    <small><strong>Template prompt:</strong></small>
+                    <select class="form-select form-select-sm"
+                            id="proofTemplateSelect" style="font-size:0.78rem;"></select>
+                    <button class="btn btn-outline-primary btn-sm py-0 px-2"
+                            style="font-size:0.72rem;flex-shrink:0"
+                            onclick="openProofTemplateModal()">
+                      <i class="fas fa-edit"></i>
+                    </button>
+                  </div>
+                  <div class="text-center">
+                    <button class="btn btn-outline-secondary btn-sm"
+                            data-bs-toggle="collapse"
+                            data-bs-target="#proofPromptDetail">
+                      <i class="fas fa-eye"></i> Xem Prompt AI
+                    </button>
+                  </div>
+                </div>
+
+                <div class="collapse mt-2" id="proofPromptDetail">
+                  <div style="background:#e3f2fd;padding:10px;border-radius:5px;
+                              border:1px solid #90caf9;">
+                    <pre id="proofAiPrompt"
+                         style="margin:0;font-size:0.7rem;white-space:pre-wrap;
+                                word-wrap:break-word;max-height:200px;overflow-y:auto;">Bạn là chuyên gia kiểm tra ngữ pháp và chính tả.
+
+Hãy kiểm tra các giá trị (values) trong file JSON dưới đây.
+
+Quy tắc bắt buộc:
+1. Giữ nguyên 100% các keys — không thay đổi dù 1 ký tự
+2. CHỈ sửa phần văn bản tự nhiên (câu/chữ) có lỗi ngữ pháp / chính tả / dùng từ
+3. KHÔNG được sửa các chuỗi sau (giữ nguyên từng ký tự):
+    - URL, email, domain, đường dẫn file/folder
+    - Mã kỹ thuật, mã lỗi, ID, SKU, hash, token, UUID, key kỹ thuật
+    - Placeholder/biến như {name}, ${var}, %s, {{value}}, [TAG], HTML/XML/Markdown tags
+    - Số, ngày tháng năm, thời gian, phiên bản, đơn vị đo, tiền tệ, tỷ lệ phần trăm
+    - Ký hiệu, toán tử, dấu câu đặc biệt, emoji, ký tự kỹ thuật
+4. Nếu value không có lỗi hoặc chỉ chứa nội dung kỹ thuật ở trên → GIỮ NGUYÊN value đó (copy y hệt)
+5. KHÔNG dịch sang ngôn ngữ khác, chỉ sửa lỗi ngôn ngữ gốc
+6. KHÔNG thêm giải thích, ghi chú, hay văn bản nào khác
+7. Giữ nguyên format JSON chuẩn, encoding UTF-8
+
+Output yêu cầu:
+- Trả về ĐÚNG cấu trúc JSON gốc (cùng số lượng keys)
+- Chỉ thay đổi values có lỗi; values đúng giữ nguyên hoàn toàn
+- KHÔNG thêm key mới, KHÔNG xóa key cũ</pre>
+                  </div>
+                </div>
+
+                <!-- Kết quả sau khi trích xuất -->
+                <div id="proofExtractResult" style="display:none;">
+                  <hr class="my-2">
+                  <div id="proofDedupPanel" style="display:none;"></div>
+                  <div id="proofJsonFileList"></div>
+                  <div class="text-center mb-2">
+                    <a id="proofDownloadZipBtn" href="#" class="btn btn-success btn-sm"
+                       style="display:none;">
+                      <i class="fas fa-file-archive"></i> Tải ZIP
+                    </a>
+                    <span id="proofExtractSummary" class="text-muted small ms-2"></span>
+                  </div>
+                </div>
+
+                <div class="mt-3">
+                  <div class="collapse-toggle p-2"
+                       style="background:#f8f9fa;border-radius:5px;"
+                       data-bs-toggle="collapse" data-bs-target="#proofStep2Guide">
+                    <i class="fas fa-info-circle text-info"></i>
+                    <small><strong>Hướng dẫn sử dụng</strong></small>
+                    <i class="fas fa-chevron-down float-end"></i>
+                  </div>
+                  <div class="collapse mt-2" id="proofStep2Guide">
+                    <div class="p-2" style="border-radius:5px;">
+                      <ul class="small mb-0" style="padding-left:20px;">
+                        <li>Click "Trích xuất JSON" để lấy nội dung văn bản gốc</li>
+                        <li>Click <strong>Copy</strong> trên từng file → paste vào AI
+                            kèm prompt kiểm tra ngữ pháp</li>
+                        <li>AI trả về JSON cùng cấu trúc — values nào sai sẽ được sửa,
+                            values đúng giữ nguyên</li>
+                        <li>Mang JSON kết quả sang Bước 3 để map ngược vào file gốc</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Bước 3: Paste kết quả AI & Map ngược -->
+            <div class="col-lg-4">
+              <div class="function-card" id="proofStep3Card">
+                <div class="text-center">
+                  <span class="step-number" id="proofBadge3">3</span>
+                  <h3 class="d-inline">Map k&#7871;t qu&#7843;</h3>
+                  <p class="text-muted small mt-2">Paste JSON AI &#8594; ghi v&#224;o file g&#7889;c</p>
+                </div>
+
+                <!-- Color picker cho ph&#7847;n s&#7917;a -->
+                <div class="mb-3">
+                  <label class="form-label small mb-1">
+                    <i class="fas fa-palette" style="color:#667eea;"></i>
+                    <strong>M&#224;u ch&#7919; cho n&#7897;i dung &#273;&#227; s&#7917;a:</strong>
+                  </label>
+                  <div class="d-flex align-items-center gap-2">
+                    <input type="color" id="proofCorrectionColor" value="#FF0000"
+                           class="form-control form-control-color"
+                           style="width:44px;height:34px;padding:2px;cursor:pointer;"
+                           title="Ch&#7885;n m&#224;u cho d&#242;ng &#273;&#227; s&#7917;a">
+                    <div class="flex-grow-1">
+                      <select class="form-select form-select-sm" id="proofColorPresets"
+                              onchange="applyProofColorPreset(this.value)"
+                              style="font-size:0.78rem;">
+                        <option value="">&#8212; M&#224;u nhanh &#8212;</option>
+                        <option value="#FF0000">&#272;&#7887; (Red)</option>
+                        <option value="#FF6600">Cam (Orange)</option>
+                        <option value="#0070C0">Xanh d&#432;&#417;ng (Blue)</option>
+                        <option value="#00B050">Xanh l&#225; (Green)</option>
+                        <option value="#7030A0">T&#237;m (Purple)</option>
+                        <option value="#FF00FF">H&#7891;ng (Magenta)</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="mt-1" style="font-size:0.72rem;color:#888;">
+                    <i class="fas fa-info-circle"></i>
+                    D&#242;ng g&#7889;c gi&#7919; nguy&#234;n m&#224;u g&#7889;c. D&#242;ng s&#7917;a th&#234;m v&#224;o b&#7857;ng m&#224;u n&#224;y.
+                    N&#7871;u value kh&#244;ng thay &#273;&#7893;i &#8594; kh&#244;ng th&#234;m d&#242;ng n&#224;o.
+                  </div>
+                </div>
+
+                <!-- Paste JSON -->
+                <form id="proofMapForm" enctype="multipart/form-data">
+                  <div class="mb-2">
+                    <label class="form-label small mb-1">
+                      <strong>D&#225;n JSON k&#7871;t qu&#7843; t&#7915; AI:</strong>
+                    </label>
+                    <div class="json-editor-outer">
+                      <div id="proofPasteJsonEditable"
+                           class="json-editor-editable"
+                           contenteditable="true"
+                           spellcheck="false"
+                           data-placeholder='Paste JSON ki&#7875;m tra ng&#7919; ph&#225;p v&#224;o &#273;&#226;y...'></div>
+                      <textarea id="proofPasteJsonTextarea" style="display:none;"></textarea>
+                    </div>
+                    <div class="json-badge-wrap" id="proofPasteJsonBadge"></div>
+                    <div class="d-flex justify-content-end mt-1">
+                      <button type="button"
+                              class="btn btn-outline-secondary btn-sm py-0 px-2"
+                              style="font-size:0.72rem;" id="proofFormatJsonBtn">
+                        <i class="fas fa-indent"></i> Format JSON
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="text-center mb-2">
+                    <button type="button" class="btn btn-outline-primary btn-sm"
+                            id="proofAddPastedJsonBtn">
+                      <i class="fas fa-plus-circle"></i> Th&#234;m JSON n&#224;y
+                    </button>
+                  </div>
+
+                  <div id="proofPastedJsonList" style="display:none;">
+                    <div class="file-info">
+                      <label class="form-label small mb-1"><strong>&#272;&#227; th&#234;m:</strong></label>
+                      <div id="proofPastedJsonItems"></div>
+                      <button type="button" class="btn btn-sm btn-outline-danger mt-2"
+                              id="proofClearPastedJsonBtn">
+                        <i class="fas fa-trash"></i> X&#243;a t&#7845;t c&#7843;
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="text-center mt-2">
+                    <button type="submit" class="btn btn-custom btn-sm"
+                            id="proofMapBtn" disabled>
+                      <i class="fas fa-magic"></i> Map &amp; T&#7843;i v&#7873;
+                    </button>
+                  </div>
+
+                  <div class="loading text-center" id="proofMapLoading"
+                       style="display:none;">
+                    <div class="spinner-border text-primary" role="status">
+                      <span class="visually-hidden">&#272;ang x&#7917; l&#253;...</span>
+                    </div>
+                    <p class="mt-2 small" id="proofMapLoadingText">
+                      &#272;ang ghi k&#7871;t qu&#7843; ki&#7875;m tra v&#224;o file...
+                    </p>
+                  </div>
+                  <div id="proofMapAlert"></div>
+                </form>
+
+                <div class="mt-3">
+                  <div class="collapse-toggle p-2"
+                       style="background:#f8f9fa;border-radius:5px;"
+                       data-bs-toggle="collapse" data-bs-target="#proofStep3Guide">
+                    <i class="fas fa-info-circle text-info"></i>
+                    <small><strong>H&#432;&#7899;ng d&#7851;n s&#7917; d&#7909;ng</strong></small>
+                    <i class="fas fa-chevron-down float-end"></i>
+                  </div>
+                  <div class="collapse mt-2" id="proofStep3Guide">
+                    <div class="p-2" style="border-radius:5px;">
+                      <ul class="small mb-0" style="padding-left:20px;">
+                        <li>Ch&#7885;n m&#224;u s&#7869; d&#249;ng &#273;&#7875; &#273;&#225;nh d&#7845;u ph&#7847;n AI &#273;&#227; s&#7917;a</li>
+                        <li>Paste JSON t&#7915; AI (c&#249;ng keys v&#7899;i JSON &#273;&#227; tr&#237;ch xu&#7845;t)</li>
+                        <li>Nh&#7845;n &#8220;Map &amp; T&#7843;i v&#7873;&#8221; &#8212; file output s&#7869; c&#243; 2 d&#242;ng m&#7895;i
+                            &#244; b&#7883; s&#7917;a: d&#242;ng g&#7889;c + d&#242;ng s&#7917;a (m&#224;u &#273;&#227; ch&#7885;n)</li>
+                        <li>&#212; kh&#244;ng c&#243; l&#7895;i &#8594; kh&#244;ng thay &#273;&#7893;i g&#236;</li>
+                        <li>H&#7895; tr&#7907;: .xlsx, .pptx, .docx</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div><!-- /tab-pane tab5 Kiểm tra ngữ pháp -->
 
         </div><!-- /tab-content -->
     </div>
@@ -5365,6 +5678,451 @@ Output yêu cầu:
     });
 
 })();
+
+// ── TAB 5: PROOF-READ (Grammar Check) ──
+
+// 1. File upload
+document.getElementById('proofExcelFile').addEventListener('change', function() {
+    const files = Array.from(this.files).filter(f => /\.(xlsx|pptx|docx)$/i.test(f.name));
+    const info = document.getElementById('proofFileInfo');
+    const icon = document.getElementById('proofFileIcon');
+    const name = document.getElementById('proofFileName');
+    const list = document.getElementById('proofFileList');
+    const btn  = document.getElementById('proofExtractBtn');
+
+    if (!files.length) { info.style.display = 'none'; btn.disabled = true; return; }
+
+    const extIcons = { xlsx: 'fa-file-excel', pptx: 'fa-file-powerpoint', docx: 'fa-file-word' };
+    if (files.length === 1) {
+        const ext = files[0].name.split('.').pop().toLowerCase();
+        icon.className = `fas ${extIcons[ext] || 'fa-file'} text-secondary flex-shrink-0`;
+        name.textContent = files[0].name;
+        list.style.display = 'none';
+        document.getElementById('proofFileInfoContent').style.display = 'flex';
+    } else {
+        document.getElementById('proofFileInfoContent').style.display = 'none';
+        list.style.display = 'block';
+        list.innerHTML = files.map(f => {
+            const ext = f.name.split('.').pop().toLowerCase();
+            return `<div class="d-flex align-items-center gap-1 mb-1">
+        <i class="fas ${extIcons[ext] || 'fa-file'} text-secondary" style="font-size:0.8rem;"></i>
+        <span class="small text-truncate">${f.name}</span>
+      </div>`;
+        }).join('');
+    }
+    info.style.display = 'flex';
+    btn.disabled = false;
+});
+
+document.getElementById('proofFileRemove').addEventListener('click', function() {
+    document.getElementById('proofExcelFile').value = '';
+    document.getElementById('proofFileInfo').style.display = 'none';
+    document.getElementById('proofExtractBtn').disabled = true;
+    document.getElementById('proofExtractResult').style.display = 'none';
+    document.getElementById('proofMapBtn').disabled = true;
+});
+
+// Drag-and-drop support for #proofUploadArea
+(function() {
+    const area = document.getElementById('proofUploadArea');
+    const pickBtn = area.querySelector('label[for="proofExcelFile"]');
+    area.addEventListener('dragover', e => {
+        e.preventDefault(); area.classList.add('drag-over');
+    });
+    area.addEventListener('dragleave', () => area.classList.remove('drag-over'));
+    area.addEventListener('drop', e => {
+        e.preventDefault(); area.classList.remove('drag-over');
+        const inp = document.getElementById('proofExcelFile');
+        const dt = new DataTransfer();
+        Array.from(e.dataTransfer.files)
+             .filter(f => /\.(xlsx|pptx|docx)$/i.test(f.name))
+             .forEach(f => dt.items.add(f));
+        inp.files = dt.files;
+        inp.dispatchEvent(new Event('change'));
+    });
+    if (pickBtn) {
+        pickBtn.addEventListener('click', function(e) {
+            // Prevent bubbling to area click handler to avoid double file-picker popup
+            e.stopPropagation();
+        });
+    }
+    area.addEventListener('click', (e) => {
+        if (e.target.closest('label[for="proofExcelFile"]')) return;
+        document.getElementById('proofExcelFile').click();
+    });
+})();
+
+// 2. Extract form submit
+document.getElementById('proofExtractForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const inp   = document.getElementById('proofExcelFile');
+    const files = Array.from(inp.files);
+    if (!files.length) return;
+
+    const loading = document.getElementById('proofExtractLoading');
+    const alertEl = document.getElementById('proofExtractAlert');
+    const btn     = document.getElementById('proofExtractBtn');
+
+    loading.style.display = 'block';
+    alertEl.innerHTML = '';
+    btn.disabled = true;
+
+    try {
+        const fd = new FormData();
+        fd.append('file', files[0]);
+        fd.append('proofread_mode', '1');
+        const resp = await fetch('/extract', { method: 'POST', body: fd });
+
+        if (!resp.ok) {
+            const errData = await resp.json().catch(() => ({}));
+            throw new Error(errData.error || 'Lỗi trích xuất');
+        }
+
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let donePayload = null;
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const parts = buffer.split('\n\n');
+            buffer = parts.pop();
+
+            for (const part of parts) {
+                if (!part.startsWith('data: ')) continue;
+                let evt;
+                try { evt = JSON.parse(part.slice(6)); } catch { continue; }
+
+                if (evt.step === 'error') {
+                    throw new Error(evt.error || 'Lỗi trích xuất');
+                }
+
+                if (evt.step === 'done') {
+                    donePayload = evt.result || {};
+                }
+            }
+        }
+
+        const data = donePayload || {};
+        if (!data.files) {
+            throw new Error('Không nhận được dữ liệu trích xuất hợp lệ');
+        }
+
+        window.proofExtractedFiles = data.files || [];
+        window.proofDedupChunks   = data.dedup_files || [];
+        window.proofDedupData     = data.dedup_files || [];
+
+        document.getElementById('proofExtractResult').style.display = 'block';
+        document.getElementById('proofMapBtn').disabled = false;
+
+        if (data.dedup_stats && data.dedup_files && data.dedup_files.length) {
+            renderProofDedupPanel(data.dedup_files, data.dedup_stats);
+        }
+        renderProofJsonFileRows(data.files || []);
+
+        const summary = document.getElementById('proofExtractSummary');
+        if (data.total_items !== undefined) {
+            summary.textContent = `${data.total_items} nội dung cần kiểm tra`;
+        }
+
+        if (data.zip_display_name) {
+            const zipBtn = document.getElementById('proofDownloadZipBtn');
+            zipBtn.href = '/download-zip';
+            zipBtn.style.display = 'inline-block';
+        }
+
+        document.getElementById('proofBadge2').innerHTML =
+            '<i class="fas fa-check" style="font-size:0.8rem"></i>';
+        document.getElementById('proofBadge2').style.background =
+            'linear-gradient(135deg,#28a745,#20c997)';
+
+    } catch(err) {
+        alertEl.innerHTML =
+            `<div class="alert alert-danger mt-2">Lỗi kết nối: ${err.message}</div>`;
+    } finally {
+        loading.style.display = 'none';
+        btn.disabled = false;
+    }
+});
+
+// 3. Render JSON file rows for proof tab
+function renderProofJsonFileRows(files) {
+    const container = document.getElementById('proofJsonFileList');
+    container.innerHTML = '';
+    files.forEach(function(file, idx) {
+        const row = document.createElement('div');
+        row.className = 'json-file-row';
+        row.innerHTML = `
+      <span class="file-name" title="${file.name}">
+        <i class="fas fa-file-code text-primary"></i> ${file.name}
+      </span>
+      <button type="button"
+        class="btn btn-outline-primary btn-sm btn-proof-copy"
+        data-idx="${idx}"
+        title="Copy prompt kiểm tra ngữ pháp + JSON này">
+        <i class="fas fa-copy"></i> Copy
+      </button>`;
+        row.querySelector('.btn-proof-copy').addEventListener('click', function() {
+            const btnEl = this;
+            const promptText = document.getElementById('proofAiPrompt').textContent;
+            const textToCopy = promptText + '\n\n' + file.content;
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                btnEl.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                btnEl.classList.add('copied');
+                setTimeout(() => {
+                    btnEl.innerHTML = '<i class="fas fa-copy"></i> Copy';
+                    btnEl.classList.remove('copied');
+                }, 2500);
+            }).catch(() => {
+                const ta = document.createElement('textarea');
+                ta.value = textToCopy;
+                ta.style.cssText = 'position:fixed;opacity:0';
+                document.body.appendChild(ta);
+                ta.select();
+                try {
+                    document.execCommand('copy');
+                    btnEl.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                    btnEl.classList.add('copied');
+                } catch(e) { alert('Không thể copy. Vui lòng copy thủ công.'); }
+                document.body.removeChild(ta);
+            });
+        });
+        container.appendChild(row);
+    });
+}
+
+function renderProofDedupPanel(dedupChunks, stats) {
+    const panel = document.getElementById('proofDedupPanel');
+    if (!panel) return;
+    const savedPct = stats.saved > 0
+        ? `<span class="badge bg-success ms-1">-${stats.percent_saved}%</span>` : '';
+    let rowsHtml = dedupChunks.map((file, idx) => `
+    <div class="json-file-row d-flex align-items-center gap-2" style="margin-top:4px">
+      <span class="file-name text-truncate" style="flex:1;font-size:0.78rem"
+            title="${file.name}">
+        <i class="fas fa-compress-alt text-success"></i> ${file.name}
+      </span>
+      <button type="button"
+        class="btn btn-outline-success btn-sm btn-proof-copy-dedup"
+        data-dedup-idx="${idx}"
+        title="Copy prompt + dedup JSON">
+        <i class="fas fa-copy"></i> Copy Dedup
+      </button>
+    </div>`).join('');
+    panel.innerHTML = `
+    <div class="dedup-banner alert py-2 px-3 mb-2">
+      <strong><i class="fas fa-compress-arrows-alt text-success me-1"></i>Dedup Mode</strong>
+      — Tổng <strong>${stats.total}</strong> →
+      chỉ kiểm tra <strong>${stats.unique}</strong> unique values
+      ${savedPct}
+      <div class="mt-1" id="proofDedupFileRows">${rowsHtml}</div>
+    </div>`;
+    panel.style.display = 'block';
+
+    panel.querySelectorAll('.btn-proof-copy-dedup').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const btnEl = this;
+            const idx   = parseInt(this.dataset.dedupIdx);
+            const file  = window.proofDedupData[idx];
+            const prompt = document.getElementById('proofAiPrompt').textContent;
+            const text  = prompt + '\n\n' + file.content;
+            navigator.clipboard.writeText(text).then(() => {
+                btnEl.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                btnEl.classList.add('copied');
+                setTimeout(() => {
+                    btnEl.innerHTML = '<i class="fas fa-copy"></i> Copy Dedup';
+                    btnEl.classList.remove('copied');
+                }, 2500);
+            });
+        });
+    });
+}
+
+// 4. Paste JSON editor
+let proofPastedJsonAccumulated = {};
+
+document.getElementById('proofPasteJsonEditable').addEventListener('input', function() {
+    const text = this.innerText || this.textContent;
+    document.getElementById('proofPasteJsonTextarea').value = text;
+    const badge = document.getElementById('proofPasteJsonBadge');
+    try {
+        const parsed = JSON.parse(text.trim());
+        const n = Object.keys(parsed).length;
+        badge.innerHTML =
+            `<span class="badge bg-success" style="font-size:0.68rem;">
+         JSON hợp lệ — ${n} keys
+       </span>`;
+    } catch(err) {
+        if (text.trim().length > 2) {
+            badge.innerHTML =
+                `<span class="badge bg-danger" style="font-size:0.68rem;">
+           JSON không hợp lệ: ${err.message.substring(0, 60)}
+         </span>`;
+        } else {
+            badge.innerHTML = '';
+        }
+    }
+});
+
+document.getElementById('proofPasteJsonEditable').addEventListener('paste', function(e) {
+    e.preventDefault();
+    const text = (e.clipboardData || e.originalEvent && e.originalEvent.clipboardData)
+                     && (e.clipboardData || e.originalEvent.clipboardData).getData('text/plain') || '';
+    if (text) {
+        document.execCommand('insertText', false, text);
+        document.getElementById('proofPasteJsonTextarea').value =
+            this.innerText || this.textContent;
+        this.dispatchEvent(new Event('input'));
+    }
+});
+
+document.getElementById('proofFormatJsonBtn').addEventListener('click', function() {
+    const el = document.getElementById('proofPasteJsonEditable');
+    const text = el.innerText || el.textContent;
+    try {
+        el.innerText = JSON.stringify(JSON.parse(text.trim()), null, 2);
+        el.dispatchEvent(new Event('input'));
+    } catch(e) { /* ignore if invalid JSON */ }
+});
+
+document.getElementById('proofAddPastedJsonBtn').addEventListener('click', function() {
+    const text = document.getElementById('proofPasteJsonEditable').innerText || '';
+    try {
+        const parsed = JSON.parse(text.trim());
+        Object.assign(proofPastedJsonAccumulated, parsed);
+        renderProofPastedJsonList();
+        document.getElementById('proofPasteJsonEditable').innerText = '';
+        document.getElementById('proofPasteJsonTextarea').value = '';
+        document.getElementById('proofPasteJsonBadge').innerHTML = '';
+        document.getElementById('proofMapBtn').disabled = false;
+    } catch(e) {
+        document.getElementById('proofMapAlert').innerHTML =
+            `<div class="alert alert-danger mt-2">JSON không hợp lệ: ${e.message}</div>`;
+    }
+});
+
+function renderProofPastedJsonList() {
+    const list  = document.getElementById('proofPastedJsonList');
+    const items = document.getElementById('proofPastedJsonItems');
+    const n     = Object.keys(proofPastedJsonAccumulated).length;
+    list.style.display = n > 0 ? 'block' : 'none';
+    items.innerHTML = n > 0
+        ? `<div class="small text-success">
+         <i class="fas fa-check-circle"></i>
+         Đã tích lũy <strong>${n}</strong> cặp key-value
+       </div>` : '';
+}
+
+document.getElementById('proofClearPastedJsonBtn').addEventListener('click', function() {
+    proofPastedJsonAccumulated = {};
+    renderProofPastedJsonList();
+    document.getElementById('proofMapBtn').disabled = true;
+});
+
+// 5. Color preset quick-select
+function applyProofColorPreset(hex) {
+    if (hex) document.getElementById('proofCorrectionColor').value = hex;
+    document.getElementById('proofColorPresets').value = '';
+}
+
+// 6. Initialize proof-read prompt templates
+(function initProofTemplates() {
+    const sel = document.getElementById('proofTemplateSelect');
+    const defaultTemplate = {
+        id: 'proof-default',
+        name: 'Kiểm tra ngữ pháp (mặc định)',
+        content: document.getElementById('proofAiPrompt').textContent
+    };
+    window.proofTemplates = [defaultTemplate];
+    sel.innerHTML = `<option value="proof-default">Kiểm tra ngữ pháp (mặc định)</option>`;
+})();
+
+// 7. Submit #proofMapForm → POST to /proof-map → download result
+document.getElementById('proofMapForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+
+  const color   = document.getElementById('proofCorrectionColor').value;
+  const alertEl = document.getElementById('proofMapAlert');
+  const loading = document.getElementById('proofMapLoading');
+  const loadTxt = document.getElementById('proofMapLoadingText');
+  const btn     = document.getElementById('proofMapBtn');
+
+  // Collect pasted JSON
+  const accumulated = proofPastedJsonAccumulated;
+  if (!Object.keys(accumulated).length) {
+    alertEl.innerHTML =
+      '<div class="alert alert-warning mt-2">Chưa có JSON nào được thêm.</div>';
+    return;
+  }
+
+  alertEl.innerHTML = '';
+  loading.style.display = 'block';
+  loadTxt.textContent   = 'Đang ghi kết quả kiểm tra vào file...';
+  btn.disabled = true;
+
+  try {
+    const fd = new FormData();
+
+    // Re-attach source file from proofExcelFile (if still selected)
+    // OR rely on session (same as Tab 1 inject behavior)
+    const inp = document.getElementById('proofExcelFile');
+    if (inp.files && inp.files.length) {
+      fd.append('excel_file', inp.files[0]);
+    }
+
+    fd.append('pasted_json_data', JSON.stringify(accumulated));
+    fd.append('correction_color', color);
+
+    const resp = await fetch('/proof-map', { method: 'POST', body: fd });
+    const data = await resp.json();
+
+    if (!resp.ok || data.error) {
+      alertEl.innerHTML =
+        `<div class="alert alert-danger mt-2">${data.error}</div>`;
+      return;
+    }
+
+    // Trigger download
+    loadTxt.textContent = 'Đang chuẩn bị tải file...';
+    const dlLink = document.createElement('a');
+    dlLink.href = `/download-proof/${data.download_token}`;
+    dlLink.download = data.display_name;
+    document.body.appendChild(dlLink);
+    dlLink.click();
+    document.body.removeChild(dlLink);
+
+    alertEl.innerHTML =
+      `<div class="alert alert-success mt-2">
+         <i class="fas fa-check-circle"></i>
+         Đã tạo file <strong>${data.display_name}</strong>.
+         Đang tải về...
+       </div>`;
+
+    // Mark step 3 done
+    document.getElementById('proofBadge3').innerHTML =
+      '<i class="fas fa-check" style="font-size:0.8rem"></i>';
+    document.getElementById('proofBadge3').style.background =
+      'linear-gradient(135deg,#28a745,#20c997)';
+
+    // Reset accumulated JSON for next run
+    proofPastedJsonAccumulated = {};
+    renderProofPastedJsonList();
+    document.getElementById('proofMapBtn').disabled = true;
+
+  } catch(err) {
+    alertEl.innerHTML =
+      `<div class="alert alert-danger mt-2">Lỗi kết nối: ${err.message}</div>`;
+  } finally {
+    loading.style.display = 'none';
+    btn.disabled = false;
+  }
+});
+
+function openProofTemplateModal() {
+    alert('Chỉnh sửa prompt trong ô "Xem Prompt AI" bên trên.');
+}
 </script>
 
 <!-- Modal: Quản lý Từ điển Chuyên ngành -->

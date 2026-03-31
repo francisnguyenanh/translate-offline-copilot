@@ -252,7 +252,7 @@ def expand_dedup_data(json_data, session_folder):
         return json_data
 
 
-def stream_extract(filepath, original_filename, glossary_ids, session_folder, color_filter=None):
+def stream_extract(filepath, original_filename, glossary_ids, session_folder, color_filter=None, proofread_mode=False):
     """
     Generator cho SSE progress events khi trích xuất file.
     Yields chuỗi SSE format: data: {json}\n\n
@@ -289,6 +289,9 @@ def stream_extract(filepath, original_filename, glossary_ids, session_folder, co
         else:
             yield _evt('error', 0, error=f'Không hỗ trợ định dạng .{original_ext}')
             return
+
+        if proofread_mode:
+            extracted_data = _filter_proofread_extract_data(extracted_data)
 
         yield _evt('chunking', 40, message='Đang áp dụng glossary...')
 
@@ -436,6 +439,45 @@ def _normalize_color_filter(color_list: list) -> set:
         if len(c) == 6:
             result.add(c)
     return result
+
+
+_PROOF_URL_RE = re.compile(r'^(?:https?://|ftp://|www\.)\S+$', re.IGNORECASE)
+_PROOF_EMAIL_RE = re.compile(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
+_PROOF_DATE_RE = re.compile(r'^\d{1,4}[\-/]\d{1,2}[\-/]\d{1,4}$')
+_PROOF_TIME_RE = re.compile(r'^\d{1,2}:\d{2}(?::\d{2})?$')
+_PROOF_NUMERIC_RE = re.compile(r'^[\d\s.,:+\-/%$€¥₫()]+$')
+_PROOF_TECH_TOKEN_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.:/\\#?=&%+~\-]*$')
+
+
+def _is_proofread_excluded_text(value: str) -> bool:
+    """True khi value không phải nội dung cần AI check ngữ pháp."""
+    s = str(value).strip()
+    if not s:
+        return True
+    if _PROOF_URL_RE.match(s) or _PROOF_EMAIL_RE.match(s):
+        return True
+    if _PROOF_DATE_RE.match(s) or _PROOF_TIME_RE.match(s):
+        return True
+    if _PROOF_NUMERIC_RE.match(s):
+        return True
+    if not any(ch.isalpha() for ch in s):
+        return True
+    if ' ' not in s and _PROOF_TECH_TOKEN_RE.match(s):
+        has_digit = any(ch.isdigit() for ch in s)
+        has_tech_sep = any(ch in '._-:/\\#?=&%+' for ch in s)
+        if has_digit or has_tech_sep:
+            return True
+    return False
+
+
+def _filter_proofread_extract_data(extracted_data: dict) -> dict:
+    """Lọc bỏ URL/chuỗi kỹ thuật/số-ngày-ký hiệu khỏi dữ liệu trích xuất cho Tab 5."""
+    filtered = {}
+    for key, value in extracted_data.items():
+        if isinstance(value, str) and _is_proofread_excluded_text(value):
+            continue
+        filtered[key] = value
+    return filtered
 
 
 def _pptx_shape_matches_color_filter(shape, color_filter: set) -> bool:
@@ -2160,6 +2202,7 @@ def extract():
     color_filter = _normalize_color_filter(color_list) if color_list else None
     glossary_ids_raw = request.form.get('glossary_ids', '')
     glossary_ids = [g.strip() for g in glossary_ids_raw.split(',') if g.strip()]
+    proofread_mode = request.form.get('proofread_mode', '').strip().lower() in ('1', 'true', 'yes', 'on')
 
     # Tạo session key để inject có thể tìm lại file nguồn (phải set TRƯỚC khi stream)
     session_key = f'sse_extract_{datetime.now().strftime("%Y%m%d_%H%M%S_%f")}'
@@ -2168,7 +2211,9 @@ def extract():
     session['tab1_from_smart_update'] = {'filepath': filepath, 'display_name': original_filename}
 
     resp = Response(
-        stream_with_context(stream_extract(filepath, original_filename, glossary_ids, session_folder, color_filter)),
+        stream_with_context(stream_extract(
+            filepath, original_filename, glossary_ids, session_folder, color_filter, proofread_mode=proofread_mode
+        )),
         mimetype='text/event-stream',
     )
     resp.headers['Cache-Control'] = 'no-cache'
@@ -2180,7 +2225,7 @@ def extract():
 
 # ==================== HELPER: raw extract (no chunking/zip) ====================
 
-def _extract_raw(filepath, original_filename, glossary_ids, session_folder, color_filter=None, selected_sheets=None):
+def _extract_raw(filepath, original_filename, glossary_ids, session_folder, color_filter=None, selected_sheets=None, proofread_mode=False):
     """
     Trích xuất raw text từ file, trả về dict {key: value}.
     Không tạo ZIP hay chunk - chỉ trích xuất data thô và áp glossary.
@@ -2210,6 +2255,9 @@ def _extract_raw(filepath, original_filename, glossary_ids, session_folder, colo
     else:
         raise ValueError(f'Không hỗ trợ định dạng .{original_ext}')
 
+    if proofread_mode:
+        extracted_data = _filter_proofread_extract_data(extracted_data)
+
     if glossary_ids:
         extracted_data = apply_glossary(extracted_data, glossary_ids)
 
@@ -2218,7 +2266,7 @@ def _extract_raw(filepath, original_filename, glossary_ids, session_folder, colo
 
 # ==================== HELPER: core extract logic ====================
 
-def _run_extract(filepath, original_filename, glossary_ids, session_folder, color_filter=None, selected_sheets=None):
+def _run_extract(filepath, original_filename, glossary_ids, session_folder, color_filter=None, selected_sheets=None, proofread_mode=False):
     """
     Chạy toàn bộ logic extract từ cột filepath.
     Trả về dict cho jsonify (cùng format như route /extract).
@@ -2252,6 +2300,9 @@ def _run_extract(filepath, original_filename, glossary_ids, session_folder, colo
         extracted_data = extract_text_from_docx(filepath, color_filter)
     else:
         raise ValueError(f'Không hỗ trợ định dạng .{original_ext}')
+
+    if proofread_mode:
+        extracted_data = _filter_proofread_extract_data(extracted_data)
 
     if glossary_ids:
         extracted_data = apply_glossary(extracted_data, glossary_ids)
@@ -2734,6 +2785,412 @@ def inject():
     except Exception as e:
         # Xử lý lỗi
         return jsonify({'error': f'Lỗi khi xử lý file: {str(e)}'}), 500
+
+
+# ==================== PROOF-MAP HELPERS ====================
+
+def _proof_single_line_text(value):
+    """Convert text to single-line form for proof-map compare/write."""
+    s = '' if value is None else str(value)
+    s = re.sub(r'[\r\n]+', ' ', s)
+    s = re.sub(r'\s+', ' ', s)
+    return s.strip()
+
+def proof_map_xlsx(source_path, output_path, json_data, hex_color):
+    """Write proof-read output for xlsx: original text + corrected text in hex_color."""
+    from openpyxl.styles import Alignment as _Alignment
+    from openpyxl.cell.rich_text import CellRichText as _CellRichText, TextBlock as _TextBlock
+    from openpyxl.cell.text import InlineFont as _InlineFont
+    wb = load_workbook(source_path)
+    corr_argb = 'FF' + hex_color.lstrip('#').upper()
+
+    for key, corrected_val in json_data.items():
+        try:
+            if '!' not in key:
+                continue
+            sheet_name, coord = key.split('!', 1)
+            if sheet_name not in wb.sheetnames:
+                continue
+            ws = wb[sheet_name]
+            cell = ws[coord]
+            orig_val = cell.value
+            if orig_val is None:
+                orig_val = ''
+            corrected_one_line = _proof_single_line_text(corrected_val)
+            orig_one_line = _proof_single_line_text(orig_val)
+            if orig_one_line == corrected_one_line:
+                continue
+
+            # Preserve original font color (ARGB format)
+            try:
+                fc = cell.font.color if cell.font else None
+                orig_argb = (fc.rgb if fc and fc.type == 'rgb' and fc.rgb else 'FF000000')
+            except Exception:
+                orig_argb = 'FF000000'
+
+            # Use openpyxl rich text API so Excel renders text runs correctly.
+            try:
+                rich_text = _CellRichText()
+                rich_text.append(_TextBlock(_InlineFont(color=orig_argb), str(orig_val)))
+                rich_text.append(_TextBlock(_InlineFont(color=corr_argb), ' ' + corrected_one_line))
+                cell.value = rich_text
+            except Exception:
+                # Safe fallback: keep content even if rich-text object is not supported.
+                cell.value = f"{orig_val} {corrected_one_line}"
+
+            cell.alignment = _Alignment(wrap_text=True)
+        except Exception:
+            continue
+
+    wb.save(output_path)
+
+
+def _proof_navigate_pptx_shape(shape, shape_indices):
+    """Navigate nested grouped shapes; returns final shape or None."""
+    if not shape_indices:
+        return shape
+    if hasattr(shape, 'shapes'):
+        idx = shape_indices[0]
+        if idx <= len(shape.shapes):
+            return _proof_navigate_pptx_shape(shape.shapes[idx - 1], shape_indices[1:])
+    return None
+
+
+def proof_map_pptx(source_path, output_path, json_data, hex_color):
+    """Write proof-read output for pptx: appends colored correction paragraph."""
+    from pptx.dml.color import RGBColor as _PptxRGB
+
+    def _pick_ref_run(text_frame):
+        """Pick a reference run to inherit font properties (name/size)."""
+        fallback_run = None
+        for para in text_frame.paragraphs:
+            for run in para.runs:
+                if fallback_run is None:
+                    fallback_run = run
+                if run.font and (run.font.name or run.font.size):
+                    return run
+        return fallback_run
+
+    r_c = int(hex_color[1:3], 16)
+    g_c = int(hex_color[3:5], 16)
+    b_c = int(hex_color[5:7], 16)
+    corr_rgb = _PptxRGB(r_c, g_c, b_c)
+    prs = Presentation(source_path)
+
+    for key, corrected_text in json_data.items():
+        try:
+            if '!' not in key:
+                continue
+            parts = key.split('!')
+            if len(parts) < 2:
+                continue
+            slide_part = parts[0]
+            if not slide_part.startswith('Slide'):
+                continue
+            slide_idx = int(slide_part.replace('Slide', '')) - 1
+            if slide_idx >= len(prs.slides):
+                continue
+            slide = prs.slides[slide_idx]
+
+            shape_part = parts[1]
+            if not shape_part.startswith('Shape'):
+                continue
+            shape_str = shape_part.replace('Shape', '')
+            shape_indices = [int(i) for i in shape_str.split('_')]
+            first_idx = shape_indices[0] - 1
+            if first_idx >= len(slide.shapes):
+                continue
+            shape = slide.shapes[first_idx]
+            shape = _proof_navigate_pptx_shape(shape, shape_indices[1:])
+            if shape is None:
+                continue
+
+            is_table_cell = len(parts) == 3 and parts[2].startswith('Table_R')
+            if is_table_cell:
+                table_part = parts[2].replace('Table_R', '').split('C')
+                row_idx = int(table_part[0]) - 1
+                col_idx = int(table_part[1]) - 1
+                if not (hasattr(shape, 'has_table') and shape.has_table):
+                    continue
+                table = shape.table
+                if row_idx >= len(table.rows) or col_idx >= len(table.rows[row_idx].cells):
+                    continue
+                text_frame = table.rows[row_idx].cells[col_idx].text_frame
+            else:
+                if not hasattr(shape, 'text_frame') or not shape.text_frame:
+                    continue
+                text_frame = shape.text_frame
+
+            corrected_one_line = _proof_single_line_text(corrected_text)
+            orig_one_line = _proof_single_line_text(text_frame.text)
+            if orig_one_line == corrected_one_line:
+                continue
+
+            # Append correction run to last paragraph (same line, no new paragraph)
+            last_para = text_frame.paragraphs[-1]
+            new_run = last_para.add_run()
+            new_run.text = ' ' + corrected_one_line
+            new_run.font.color.rgb = corr_rgb
+
+            # Keep font family and size consistent with original text.
+            try:
+                ref_run = _pick_ref_run(text_frame)
+                if ref_run and ref_run.font:
+                    if ref_run.font.name:
+                        new_run.font.name = ref_run.font.name
+                    if ref_run.font.size:
+                        new_run.font.size = ref_run.font.size
+            except Exception:
+                pass
+        except Exception:
+            continue
+
+    prs.save(output_path)
+
+
+def proof_map_docx(source_path, output_path, json_data, hex_color):
+    """Write proof-read output for docx: inserts colored correction paragraph after original."""
+    from docx.shared import RGBColor as _DocxRGB
+    r_c = int(hex_color[1:3], 16)
+    g_c = int(hex_color[3:5], 16)
+    b_c = int(hex_color[5:7], 16)
+    corr_rgb = _DocxRGB(r_c, g_c, b_c)
+    doc = Document(source_path)
+
+    def _insert_correction(paragraph, corrected_text):
+        # Append correction as a new run in the same paragraph and inherit font size/name.
+        corrected_one_line = _proof_single_line_text(corrected_text)
+        new_run = paragraph.add_run(' ' + corrected_one_line)
+        new_run.font.color.rgb = corr_rgb
+
+        ref_run = None
+        for run in paragraph.runs:
+            if run is new_run:
+                continue
+            if ref_run is None:
+                ref_run = run
+            if run.font and (run.font.name or run.font.size):
+                ref_run = run
+                break
+
+        if ref_run and ref_run.font:
+            if ref_run.font.name:
+                new_run.font.name = ref_run.font.name
+            if ref_run.font.size:
+                new_run.font.size = ref_run.font.size
+
+    for key, corrected_text in json_data.items():
+        try:
+            # 1. Plain paragraph: "ParagraphX"
+            if key.startswith('Paragraph') and '!' not in key:
+                para_num = int(key.replace('Paragraph', ''))
+                para_idx = 0
+                for para in doc.paragraphs:
+                    if para.text.strip():
+                        para_idx += 1
+                        if para_idx == para_num:
+                            if _proof_single_line_text(para.text) != _proof_single_line_text(corrected_text):
+                                _insert_correction(para, corrected_text)
+                            break
+
+            # 2. Table cell: "TableX!RyCz"
+            elif key.startswith('Table') and '!' in key and not key.startswith('Header_') and not key.startswith('Footer_'):
+                parts = key.split('!')
+                if len(parts) != 2:
+                    continue
+                table_idx = int(parts[0].replace('Table', '')) - 1
+                if table_idx >= len(doc.tables):
+                    continue
+                table = doc.tables[table_idx]
+                cell_str = parts[1]
+                if not cell_str.startswith('R'):
+                    continue
+                rc = cell_str.replace('R', '').split('C')
+                row_idx = int(rc[0]) - 1
+                col_idx = int(rc[1]) - 1
+                if row_idx < len(table.rows) and col_idx < len(table.rows[row_idx].cells):
+                    cell = table.rows[row_idx].cells[col_idx]
+                    if cell.paragraphs:
+                        para = cell.paragraphs[0]
+                        if _proof_single_line_text(para.text) != _proof_single_line_text(corrected_text):
+                            _insert_correction(para, corrected_text)
+
+            # 3. Header: "Header_SectionX!ParagraphY" or "Header_SectionX!TableY!RzCw"
+            elif key.startswith('Header_Section'):
+                parts = key.split('!')
+                if len(parts) < 2:
+                    continue
+                sec_idx = int(parts[0].replace('Header_Section', '')) - 1
+                if sec_idx >= len(doc.sections):
+                    continue
+                header = doc.sections[sec_idx].header
+                if parts[1].startswith('Paragraph'):
+                    pn = int(parts[1].replace('Paragraph', ''))
+                    pi = 0
+                    for para in header.paragraphs:
+                        if para.text.strip():
+                            pi += 1
+                            if pi == pn:
+                                if _proof_single_line_text(para.text) != _proof_single_line_text(corrected_text):
+                                    _insert_correction(para, corrected_text)
+                                break
+                elif parts[1].startswith('Table') and len(parts) == 3:
+                    ti = int(parts[1].replace('Table', '')) - 1
+                    if ti >= len(header.tables):
+                        continue
+                    rc = parts[2].replace('R', '').split('C')
+                    ri, ci = int(rc[0]) - 1, int(rc[1]) - 1
+                    if ri < len(header.tables[ti].rows) and ci < len(header.tables[ti].rows[ri].cells):
+                        para = header.tables[ti].rows[ri].cells[ci].paragraphs[0]
+                        if _proof_single_line_text(para.text) != _proof_single_line_text(corrected_text):
+                            _insert_correction(para, corrected_text)
+
+            # 4. Footer: "Footer_SectionX!ParagraphY" or "Footer_SectionX!TableY!RzCw"
+            elif key.startswith('Footer_Section'):
+                parts = key.split('!')
+                if len(parts) < 2:
+                    continue
+                sec_idx = int(parts[0].replace('Footer_Section', '')) - 1
+                if sec_idx >= len(doc.sections):
+                    continue
+                footer = doc.sections[sec_idx].footer
+                if parts[1].startswith('Paragraph'):
+                    pn = int(parts[1].replace('Paragraph', ''))
+                    pi = 0
+                    for para in footer.paragraphs:
+                        if para.text.strip():
+                            pi += 1
+                            if pi == pn:
+                                if _proof_single_line_text(para.text) != _proof_single_line_text(corrected_text):
+                                    _insert_correction(para, corrected_text)
+                                break
+                elif parts[1].startswith('Table') and len(parts) == 3:
+                    ti = int(parts[1].replace('Table', '')) - 1
+                    if ti >= len(footer.tables):
+                        continue
+                    rc = parts[2].replace('R', '').split('C')
+                    ri, ci = int(rc[0]) - 1, int(rc[1]) - 1
+                    if ri < len(footer.tables[ti].rows) and ci < len(footer.tables[ti].rows[ri].cells):
+                        para = footer.tables[ti].rows[ri].cells[ci].paragraphs[0]
+                        if _proof_single_line_text(para.text) != _proof_single_line_text(corrected_text):
+                            _insert_correction(para, corrected_text)
+        except Exception:
+            continue
+
+    doc.save(output_path)
+
+
+# ==================== PROOF-MAP ROUTES ====================
+
+@app.route('/proof-map', methods=['POST'])
+@login_required
+def proof_map():
+    """
+    Map kết quả kiểm tra ngữ pháp vào file gốc.
+    Keys không thay đổi → giữ nguyên.
+    Keys có sửa → thêm dòng mới với màu correction_color bên dưới.
+    """
+    # 1. Get source file (same as /inject: check session then upload)
+    su_info = session.get('tab1_from_smart_update')
+    if 'excel_file' in request.files and request.files['excel_file'].filename:
+        excel_file = request.files['excel_file']
+        use_session = False
+        if not allowed_file(excel_file.filename):
+            return jsonify({'error': 'Chỉ chấp nhận .xlsx, .pptx, .docx'}), 400
+    elif su_info and os.path.exists(su_info.get('filepath', '')):
+        use_session = True
+        excel_file = None
+    else:
+        return jsonify({'error': 'Cần upload file gốc'}), 400
+
+    # 2. Get correction color
+    hex_color = request.form.get('correction_color', '#FF0000').strip()
+    if not re.match(r'^#[0-9A-Fa-f]{6}$', hex_color):
+        hex_color = '#FF0000'
+
+    # 3. Get pasted JSON
+    pasted_json_data = request.form.get('pasted_json_data', '').strip()
+    if not pasted_json_data:
+        return jsonify({'error': 'Cần paste JSON kết quả từ AI'}), 400
+    try:
+        json_data = json.loads(pasted_json_data)
+    except json.JSONDecodeError as e:
+        return jsonify({'error': f'JSON không hợp lệ: {e}'}), 400
+
+    # 4. Expand dedup keys if present
+    session_folder = get_session_folder()
+    if any(k.startswith('dedup_') for k in json_data):
+        json_data = expand_dedup_data(json_data, session_folder)
+
+    # 5. Save source file to temp if uploaded
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    try:
+        if not use_session:
+            original_filename = excel_file.filename
+            ext = original_filename.rsplit('.', 1)[1].lower()
+            src_path = os.path.join(session_folder, f'proof_src_{timestamp}.{ext}')
+            excel_file.save(src_path)
+        else:
+            original_filename = su_info['display_name']
+            ext = original_filename.rsplit('.', 1)[1].lower()
+            src_path = su_info['filepath']
+
+        # 6. Output path
+        base_name = os.path.splitext(original_filename)[0]
+        out_display = f'{base_name}_proofread.{ext}'
+        out_safe    = f'proof_out_{timestamp}.{ext}'
+        out_path    = os.path.join(session_folder, out_safe)
+
+        # 7. Dispatch to helper
+        if ext == 'xlsx':
+            proof_map_xlsx(src_path, out_path, json_data, hex_color)
+            mimetype = ('application/vnd.openxmlformats-officedocument'
+                        '.spreadsheetml.sheet')
+        elif ext == 'pptx':
+            proof_map_pptx(src_path, out_path, json_data, hex_color)
+            mimetype = ('application/vnd.openxmlformats-officedocument'
+                        '.presentationml.presentation')
+        elif ext == 'docx':
+            proof_map_docx(src_path, out_path, json_data, hex_color)
+            mimetype = ('application/vnd.openxmlformats-officedocument'
+                        '.wordprocessingml.document')
+        else:
+            return jsonify({'error': 'Định dạng không hỗ trợ'}), 400
+
+        # 8. Store in session for download
+        token = uuid.uuid4().hex[:12]
+        session[f'proof_dl_{token}'] = {
+            'path': out_path,
+            'display_name': out_display,
+            'mimetype': mimetype,
+        }
+        return jsonify({
+            'success': True,
+            'download_token': token,
+            'display_name': out_display,
+        })
+
+    except Exception as e:
+        app.logger.error(f'proof_map error: {e}', exc_info=True)
+        return jsonify({'error': f'Lỗi xử lý: {str(e)}'}), 500
+
+
+@app.route('/download-proof/<token>', methods=['GET'])
+@login_required
+def download_proof(token):
+    """Serve file kết quả kiểm tra ngữ pháp."""
+    key = f'proof_dl_{token}'
+    if key not in session:
+        return jsonify({'error': 'Token không hợp lệ hoặc đã hết hạn'}), 404
+    info = session.pop(key)
+    path = info['path']
+    if not os.path.exists(path):
+        return jsonify({'error': 'File không còn tồn tại'}), 404
+    response = send_file(path, mimetype=info['mimetype'])
+    response = set_download_headers(
+        response, info['display_name'], 'proofread_output.' + path.rsplit('.', 1)[-1])
+    return response
+
 
 @app.route('/download-inject-backup', methods=['GET'])
 @login_required
