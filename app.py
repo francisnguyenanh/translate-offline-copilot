@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """
 Ứng dụng Flask quản lý trích xuất và nạp bản dịch cho file Excel, PowerPoint và Word
 """
@@ -2210,12 +2210,13 @@ def extract():
 
 # ==================== HELPER: core extract logic ====================
 
-def _run_extract(filepath, original_filename, glossary_ids, session_folder, color_filter=None):
+def _run_extract(filepath, original_filename, glossary_ids, session_folder, color_filter=None, selected_sheets=None):
     """
     Chạy toàn bộ logic extract từ cột filepath.
     Trả về dict cho jsonify (cùng format như route /extract).
     Ném Exception nếu có lỗi.
     color_filter: set HEX strings hoặc None (không lọc)
+    selected_sheets: list tên sheet muốn extract, hoặc None (tất cả)
     """
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     original_ext = original_filename.rsplit('.', 1)[-1].lower() if '.' in original_filename else 'xlsx'
@@ -2224,6 +2225,8 @@ def _run_extract(filepath, original_filename, glossary_ids, session_folder, colo
         workbook = load_workbook(filepath)
         extracted_data = {}
         for sheet_name in workbook.sheetnames:
+            if selected_sheets and sheet_name not in selected_sheets:
+                continue
             sheet = workbook[sheet_name]
             for row in sheet.iter_rows():
                 for cell in row:
@@ -2367,11 +2370,12 @@ def load_google_sheet():
 def extract_from_sheet():
     """
     Extract nội dung từ Google Sheet đã tải về (lưu trong session).
-    Nhận: { session_key, sheet_name, glossary_ids }
+    Nhận: { session_key, selected_sheets, glossary_ids }
     """
-    data         = request.get_json() or {}
-    session_key  = data.get('session_key')
-    glossary_ids = data.get('glossary_ids', [])
+    data            = request.get_json() or {}
+    session_key     = data.get('session_key')
+    glossary_ids    = data.get('glossary_ids', [])
+    selected_sheets = data.get('selected_sheets') or None  # None = tất cả
 
     if not session_key or session_key not in session:
         return jsonify({'error': 'Phiên làm việc hết hạn. Vui lòng tải lại Google Sheet.'}), 400
@@ -2383,7 +2387,7 @@ def extract_from_sheet():
 
     try:
         session_folder = get_session_folder()
-        result = _run_extract(filepath, info['display_name'], glossary_ids, session_folder)
+        result = _run_extract(filepath, info['display_name'], glossary_ids, session_folder, selected_sheets=selected_sheets)
         return jsonify(result)
     except Exception as e:
         return jsonify({'error': f'Lỗi khi xử lý sheet: {str(e)}'}), 500
@@ -3696,5 +3700,5 @@ def api_terminology_import_json():
 
 if __name__ == '__main__':
     # Chạy ứng dụng Flask ở chế độ debug
-    app.run(host='0.0.0.0', port=5000)
-    #app.run(debug=True,host='0.0.0.0', port=5001)
+    #app.run(host='0.0.0.0', port=5000)
+    app.run(debug=True,host='0.0.0.0', port=5017)

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
@@ -621,14 +621,24 @@
                             </div>
                         </div>
 
-                        <div class="mb-2">
-                            <label class="form-label small mb-1">
-                                <i class="fas fa-table-columns"></i>
-                                <strong>Chọn Sheet (tùy chọn):</strong>
-                            </label>
-                            <select class="form-select form-select-sm" id="googleSheetTabSelect">
-                                <option value="">-- Tải sheet sau khi nhập link --</option>
-                            </select>
+                        <div class="mb-2" id="sheetSelectSection">
+                            <div class="d-flex align-items-center justify-content-between mb-1">
+                                <label class="form-label small mb-0">
+                                    <i class="fas fa-table-columns"></i>
+                                    <strong>Chọn Sheet cần dịch:</strong>
+                                </label>
+                                <div id="sheetSelectAllControls" style="display:none;">
+                                    <button type="button" class="btn btn-link btn-sm py-0 px-1" style="font-size:0.72rem;" onclick="toggleAllSheets(true)">Tất cả</button>
+                                    <span style="color:#ccc;">|</span>
+                                    <button type="button" class="btn btn-link btn-sm py-0 px-1" style="font-size:0.72rem;" onclick="toggleAllSheets(false)">Bỏ chọn</button>
+                                </div>
+                            </div>
+                            <div id="sheetCheckboxContainer" class="border rounded p-2" style="background:#172840; max-height:120px; overflow-y:auto; display:none;">
+                                <!-- rendered by JS -->
+                            </div>
+                            <div id="sheetSelectPlaceholder" class="text-muted" style="font-size:0.75rem;">
+                                -- Tải sheet sau khi nhập link --
+                            </div>
                         </div>
 
                         <div class="text-center">
@@ -1859,13 +1869,23 @@ Output yêu cầu:
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || 'Lỗi không xác định');
 
-                const tabSelect = document.getElementById('googleSheetTabSelect');
-                tabSelect.innerHTML = '';
+                const container = document.getElementById('sheetCheckboxContainer');
+                const placeholder = document.getElementById('sheetSelectPlaceholder');
+                const allControls = document.getElementById('sheetSelectAllControls');
+                container.innerHTML = '';
                 (data.sheets || ['Sheet1']).forEach(function(name) {
-                    const opt = document.createElement('option');
-                    opt.value = name; opt.textContent = name;
-                    tabSelect.appendChild(opt);
+                    const label = document.createElement('label');
+                    label.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:0.8rem;cursor:pointer;padding:2px 0;';
+                    const cb = document.createElement('input');
+                    cb.type = 'checkbox'; cb.value = name; cb.checked = true;
+                    cb.className = 'sheet-select-cb';
+                    label.appendChild(cb);
+                    label.appendChild(document.createTextNode(name));
+                    container.appendChild(label);
                 });
+                container.style.display = '';
+                placeholder.style.display = 'none';
+                allControls.style.display = '';
 
                 window.sheetSessionKey = data.session_key;
                 document.getElementById('sheetFileName').textContent = data.display_name;
@@ -1890,7 +1910,11 @@ Output yêu cầu:
             window.sheetSessionKey = null;
             document.getElementById('googleSheetUrl').value = '';
             document.getElementById('sheetPreview').style.display = 'none';
-            document.getElementById('googleSheetTabSelect').innerHTML = '<option value="">-- Tải sheet sau khi nhập link --</option>';
+            const container = document.getElementById('sheetCheckboxContainer');
+            container.innerHTML = '';
+            container.style.display = 'none';
+            document.getElementById('sheetSelectPlaceholder').style.display = '';
+            document.getElementById('sheetSelectAllControls').style.display = 'none';
             document.getElementById('sheetLoadAlert').innerHTML = '';
             
             // FIX: Also reset uploadedExcelFilename and update button states when clearing sheet
@@ -1899,6 +1923,16 @@ Output yêu cầu:
             if (extractBtn) extractBtn.disabled = true;
             // FIX: Update inject button state when source is removed
             updateInjectButtonState();
+        }
+
+        function toggleAllSheets(checked) {
+            document.querySelectorAll('.sheet-select-cb').forEach(function(cb) { cb.checked = checked; });
+        }
+
+        function getSelectedSheets() {
+            const checked = [];
+            document.querySelectorAll('.sheet-select-cb:checked').forEach(function(cb) { checked.push(cb.value); });
+            return checked;
         }
 
         // ==================== GIỮ NGUYÊN NGÔN NGỮ ====================
@@ -2154,7 +2188,7 @@ Output yêu cầu:
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({
                             session_key: window.sheetSessionKey,
-                            sheet_name: document.getElementById('googleSheetTabSelect').value,
+                            selected_sheets: getSelectedSheets(),
                             glossary_ids: glossaryIds
                         })
                     });
