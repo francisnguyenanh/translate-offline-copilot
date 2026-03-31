@@ -5671,6 +5671,325 @@ Output yêu cầu:
     });
 
 })();
+
+// ── TAB 5: PROOF-READ (Grammar Check) ──
+
+// 1. File upload
+document.getElementById('proofExcelFile').addEventListener('change', function() {
+    const files = Array.from(this.files).filter(f => /\.(xlsx|pptx|docx)$/i.test(f.name));
+    const info = document.getElementById('proofFileInfo');
+    const icon = document.getElementById('proofFileIcon');
+    const name = document.getElementById('proofFileName');
+    const list = document.getElementById('proofFileList');
+    const btn  = document.getElementById('proofExtractBtn');
+
+    if (!files.length) { info.style.display = 'none'; btn.disabled = true; return; }
+
+    const extIcons = { xlsx: 'fa-file-excel', pptx: 'fa-file-powerpoint', docx: 'fa-file-word' };
+    if (files.length === 1) {
+        const ext = files[0].name.split('.').pop().toLowerCase();
+        icon.className = `fas ${extIcons[ext] || 'fa-file'} text-secondary flex-shrink-0`;
+        name.textContent = files[0].name;
+        list.style.display = 'none';
+        document.getElementById('proofFileInfoContent').style.display = 'flex';
+    } else {
+        document.getElementById('proofFileInfoContent').style.display = 'none';
+        list.style.display = 'block';
+        list.innerHTML = files.map(f => {
+            const ext = f.name.split('.').pop().toLowerCase();
+            return `<div class="d-flex align-items-center gap-1 mb-1">
+        <i class="fas ${extIcons[ext] || 'fa-file'} text-secondary" style="font-size:0.8rem;"></i>
+        <span class="small text-truncate">${f.name}</span>
+      </div>`;
+        }).join('');
+    }
+    info.style.display = 'flex';
+    btn.disabled = false;
+});
+
+document.getElementById('proofFileRemove').addEventListener('click', function() {
+    document.getElementById('proofExcelFile').value = '';
+    document.getElementById('proofFileInfo').style.display = 'none';
+    document.getElementById('proofExtractBtn').disabled = true;
+    document.getElementById('proofExtractResult').style.display = 'none';
+    document.getElementById('proofMapBtn').disabled = true;
+});
+
+// Drag-and-drop support for #proofUploadArea
+(function() {
+    const area = document.getElementById('proofUploadArea');
+    area.addEventListener('dragover', e => {
+        e.preventDefault(); area.classList.add('drag-over');
+    });
+    area.addEventListener('dragleave', () => area.classList.remove('drag-over'));
+    area.addEventListener('drop', e => {
+        e.preventDefault(); area.classList.remove('drag-over');
+        const inp = document.getElementById('proofExcelFile');
+        inp.files = e.dataTransfer.files;
+        inp.dispatchEvent(new Event('change'));
+    });
+    area.addEventListener('click', () => document.getElementById('proofExcelFile').click());
+})();
+
+// 2. Extract form submit
+document.getElementById('proofExtractForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const inp   = document.getElementById('proofExcelFile');
+    const files = Array.from(inp.files);
+    if (!files.length) return;
+
+    const loading = document.getElementById('proofExtractLoading');
+    const alertEl = document.getElementById('proofExtractAlert');
+    const btn     = document.getElementById('proofExtractBtn');
+
+    loading.style.display = 'block';
+    alertEl.innerHTML = '';
+    btn.disabled = true;
+
+    try {
+        const fd = new FormData();
+        files.forEach(f => fd.append('files', f));
+        const resp = await fetch('/extract', { method: 'POST', body: fd });
+        const data = await resp.json();
+
+        if (!resp.ok || data.error) {
+            alertEl.innerHTML =
+                `<div class="alert alert-danger mt-2">${data.error || 'Lỗi trích xuất'}</div>`;
+            return;
+        }
+
+        window.proofExtractedFiles = data.files || [];
+        window.proofDedupChunks   = data.dedup_chunks || [];
+        window.proofDedupData     = data.dedup_chunks || [];
+
+        document.getElementById('proofExtractResult').style.display = 'block';
+        document.getElementById('proofMapBtn').disabled = false;
+
+        if (data.dedup_stats && data.dedup_chunks && data.dedup_chunks.length) {
+            renderProofDedupPanel(data.dedup_chunks, data.dedup_stats);
+        }
+        renderProofJsonFileRows(data.files || []);
+
+        const summary = document.getElementById('proofExtractSummary');
+        if (data.total_items !== undefined) {
+            summary.textContent = `${data.total_items} nội dung cần kiểm tra`;
+        }
+
+        if (data.zip_display_name) {
+            const zipBtn = document.getElementById('proofDownloadZipBtn');
+            zipBtn.href = '/download-zip';
+            zipBtn.style.display = 'inline-block';
+        }
+
+        document.getElementById('proofBadge2').innerHTML =
+            '<i class="fas fa-check" style="font-size:0.8rem"></i>';
+        document.getElementById('proofBadge2').style.background =
+            'linear-gradient(135deg,#28a745,#20c997)';
+
+    } catch(err) {
+        alertEl.innerHTML =
+            `<div class="alert alert-danger mt-2">Lỗi kết nối: ${err.message}</div>`;
+    } finally {
+        loading.style.display = 'none';
+        btn.disabled = false;
+    }
+});
+
+// 3. Render JSON file rows for proof tab
+function renderProofJsonFileRows(files) {
+    const container = document.getElementById('proofJsonFileList');
+    container.innerHTML = '';
+    files.forEach(function(file, idx) {
+        const row = document.createElement('div');
+        row.className = 'json-file-row';
+        row.innerHTML = `
+      <span class="file-name" title="${file.name}">
+        <i class="fas fa-file-code text-primary"></i> ${file.name}
+      </span>
+      <button type="button"
+        class="btn btn-outline-primary btn-sm btn-proof-copy"
+        data-idx="${idx}"
+        title="Copy prompt kiểm tra ngữ pháp + JSON này">
+        <i class="fas fa-copy"></i> Copy
+      </button>`;
+        row.querySelector('.btn-proof-copy').addEventListener('click', function() {
+            const btnEl = this;
+            const promptText = document.getElementById('proofAiPrompt').textContent;
+            const textToCopy = promptText + '\n\n' + file.content;
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                btnEl.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                btnEl.classList.add('copied');
+                setTimeout(() => {
+                    btnEl.innerHTML = '<i class="fas fa-copy"></i> Copy';
+                    btnEl.classList.remove('copied');
+                }, 2500);
+            }).catch(() => {
+                const ta = document.createElement('textarea');
+                ta.value = textToCopy;
+                ta.style.cssText = 'position:fixed;opacity:0';
+                document.body.appendChild(ta);
+                ta.select();
+                try {
+                    document.execCommand('copy');
+                    btnEl.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                    btnEl.classList.add('copied');
+                } catch(e) { alert('Không thể copy. Vui lòng copy thủ công.'); }
+                document.body.removeChild(ta);
+            });
+        });
+        container.appendChild(row);
+    });
+}
+
+function renderProofDedupPanel(dedupChunks, stats) {
+    const panel = document.getElementById('proofDedupPanel');
+    if (!panel) return;
+    const savedPct = stats.saved > 0
+        ? `<span class="badge bg-success ms-1">-${stats.percent_saved}%</span>` : '';
+    let rowsHtml = dedupChunks.map((file, idx) => `
+    <div class="json-file-row d-flex align-items-center gap-2" style="margin-top:4px">
+      <span class="file-name text-truncate" style="flex:1;font-size:0.78rem"
+            title="${file.name}">
+        <i class="fas fa-compress-alt text-success"></i> ${file.name}
+      </span>
+      <button type="button"
+        class="btn btn-outline-success btn-sm btn-proof-copy-dedup"
+        data-dedup-idx="${idx}"
+        title="Copy prompt + dedup JSON">
+        <i class="fas fa-copy"></i> Copy Dedup
+      </button>
+    </div>`).join('');
+    panel.innerHTML = `
+    <div class="dedup-banner alert py-2 px-3 mb-2">
+      <strong><i class="fas fa-compress-arrows-alt text-success me-1"></i>Dedup Mode</strong>
+      — Tổng <strong>${stats.total}</strong> →
+      chỉ kiểm tra <strong>${stats.unique}</strong> unique values
+      ${savedPct}
+      <div class="mt-1" id="proofDedupFileRows">${rowsHtml}</div>
+    </div>`;
+    panel.style.display = 'block';
+
+    panel.querySelectorAll('.btn-proof-copy-dedup').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const btnEl = this;
+            const idx   = parseInt(this.dataset.dedupIdx);
+            const file  = window.proofDedupData[idx];
+            const prompt = document.getElementById('proofAiPrompt').textContent;
+            const text  = prompt + '\n\n' + file.content;
+            navigator.clipboard.writeText(text).then(() => {
+                btnEl.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                btnEl.classList.add('copied');
+                setTimeout(() => {
+                    btnEl.innerHTML = '<i class="fas fa-copy"></i> Copy Dedup';
+                    btnEl.classList.remove('copied');
+                }, 2500);
+            });
+        });
+    });
+}
+
+// 4. Paste JSON editor
+let proofPastedJsonAccumulated = {};
+
+document.getElementById('proofPasteJsonEditable').addEventListener('input', function() {
+    const text = this.innerText || this.textContent;
+    document.getElementById('proofPasteJsonTextarea').value = text;
+    const badge = document.getElementById('proofPasteJsonBadge');
+    try {
+        const parsed = JSON.parse(text.trim());
+        const n = Object.keys(parsed).length;
+        badge.innerHTML =
+            `<span class="badge bg-success" style="font-size:0.68rem;">
+         JSON hợp lệ — ${n} keys
+       </span>`;
+    } catch(err) {
+        if (text.trim().length > 2) {
+            badge.innerHTML =
+                `<span class="badge bg-danger" style="font-size:0.68rem;">
+           JSON không hợp lệ: ${err.message.substring(0, 60)}
+         </span>`;
+        } else {
+            badge.innerHTML = '';
+        }
+    }
+});
+
+document.getElementById('proofPasteJsonEditable').addEventListener('paste', function(e) {
+    e.preventDefault();
+    const text = (e.clipboardData || e.originalEvent && e.originalEvent.clipboardData)
+                     && (e.clipboardData || e.originalEvent.clipboardData).getData('text/plain') || '';
+    if (text) {
+        document.execCommand('insertText', false, text);
+        document.getElementById('proofPasteJsonTextarea').value =
+            this.innerText || this.textContent;
+        this.dispatchEvent(new Event('input'));
+    }
+});
+
+document.getElementById('proofFormatJsonBtn').addEventListener('click', function() {
+    const el = document.getElementById('proofPasteJsonEditable');
+    const text = el.innerText || el.textContent;
+    try {
+        el.innerText = JSON.stringify(JSON.parse(text.trim()), null, 2);
+        el.dispatchEvent(new Event('input'));
+    } catch(e) { /* ignore if invalid JSON */ }
+});
+
+document.getElementById('proofAddPastedJsonBtn').addEventListener('click', function() {
+    const text = document.getElementById('proofPasteJsonEditable').innerText || '';
+    try {
+        const parsed = JSON.parse(text.trim());
+        Object.assign(proofPastedJsonAccumulated, parsed);
+        renderProofPastedJsonList();
+        document.getElementById('proofPasteJsonEditable').innerText = '';
+        document.getElementById('proofPasteJsonTextarea').value = '';
+        document.getElementById('proofPasteJsonBadge').innerHTML = '';
+        document.getElementById('proofMapBtn').disabled = false;
+    } catch(e) {
+        document.getElementById('proofMapAlert').innerHTML =
+            `<div class="alert alert-danger mt-2">JSON không hợp lệ: ${e.message}</div>`;
+    }
+});
+
+function renderProofPastedJsonList() {
+    const list  = document.getElementById('proofPastedJsonList');
+    const items = document.getElementById('proofPastedJsonItems');
+    const n     = Object.keys(proofPastedJsonAccumulated).length;
+    list.style.display = n > 0 ? 'block' : 'none';
+    items.innerHTML = n > 0
+        ? `<div class="small text-success">
+         <i class="fas fa-check-circle"></i>
+         Đã tích lũy <strong>${n}</strong> cặp key-value
+       </div>` : '';
+}
+
+document.getElementById('proofClearPastedJsonBtn').addEventListener('click', function() {
+    proofPastedJsonAccumulated = {};
+    renderProofPastedJsonList();
+    document.getElementById('proofMapBtn').disabled = true;
+});
+
+// 5. Color preset quick-select
+function applyProofColorPreset(hex) {
+    if (hex) document.getElementById('proofCorrectionColor').value = hex;
+    document.getElementById('proofColorPresets').value = '';
+}
+
+// 6. Initialize proof-read prompt templates
+(function initProofTemplates() {
+    const sel = document.getElementById('proofTemplateSelect');
+    const defaultTemplate = {
+        id: 'proof-default',
+        name: 'Kiểm tra ngữ pháp (mặc định)',
+        content: document.getElementById('proofAiPrompt').textContent
+    };
+    window.proofTemplates = [defaultTemplate];
+    sel.innerHTML = `<option value="proof-default">Kiểm tra ngữ pháp (mặc định)</option>`;
+})();
+
+function openProofTemplateModal() {
+    alert('Chỉnh sửa prompt trong ô "Xem Prompt AI" bên trên.');
+}
 </script>
 
 <!-- Modal: Quản lý Từ điển Chuyên ngành -->
