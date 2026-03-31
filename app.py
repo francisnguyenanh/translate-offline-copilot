@@ -2789,6 +2789,13 @@ def inject():
 
 # ==================== PROOF-MAP HELPERS ====================
 
+def _proof_single_line_text(value):
+    """Convert text to single-line form for proof-map compare/write."""
+    s = '' if value is None else str(value)
+    s = re.sub(r'[\r\n]+', ' ', s)
+    s = re.sub(r'\s+', ' ', s)
+    return s.strip()
+
 def proof_map_xlsx(source_path, output_path, json_data, hex_color):
     """Write proof-read output for xlsx: original text + corrected text in hex_color."""
     from openpyxl.styles import Alignment as _Alignment
@@ -2809,7 +2816,9 @@ def proof_map_xlsx(source_path, output_path, json_data, hex_color):
             orig_val = cell.value
             if orig_val is None:
                 orig_val = ''
-            if str(orig_val).strip() == str(corrected_val).strip():
+            corrected_one_line = _proof_single_line_text(corrected_val)
+            orig_one_line = _proof_single_line_text(orig_val)
+            if orig_one_line == corrected_one_line:
                 continue
 
             # Preserve original font color (ARGB format)
@@ -2823,11 +2832,11 @@ def proof_map_xlsx(source_path, output_path, json_data, hex_color):
             try:
                 rich_text = _CellRichText()
                 rich_text.append(_TextBlock(_InlineFont(color=orig_argb), str(orig_val)))
-                rich_text.append(_TextBlock(_InlineFont(color=corr_argb), ' ' + str(corrected_val)))
+                rich_text.append(_TextBlock(_InlineFont(color=corr_argb), ' ' + corrected_one_line))
                 cell.value = rich_text
             except Exception:
                 # Safe fallback: keep content even if rich-text object is not supported.
-                cell.value = f"{orig_val} {corrected_val}"
+                cell.value = f"{orig_val} {corrected_one_line}"
 
             cell.alignment = _Alignment(wrap_text=True)
         except Exception:
@@ -2912,14 +2921,15 @@ def proof_map_pptx(source_path, output_path, json_data, hex_color):
                     continue
                 text_frame = shape.text_frame
 
-            orig_text = text_frame.text
-            if orig_text.strip() == corrected_text.strip():
+            corrected_one_line = _proof_single_line_text(corrected_text)
+            orig_one_line = _proof_single_line_text(text_frame.text)
+            if orig_one_line == corrected_one_line:
                 continue
 
             # Append correction run to last paragraph (same line, no new paragraph)
             last_para = text_frame.paragraphs[-1]
             new_run = last_para.add_run()
-            new_run.text = ' ' + corrected_text
+            new_run.text = ' ' + corrected_one_line
             new_run.font.color.rgb = corr_rgb
 
             # Keep font family and size consistent with original text.
@@ -2949,7 +2959,8 @@ def proof_map_docx(source_path, output_path, json_data, hex_color):
 
     def _insert_correction(paragraph, corrected_text):
         # Append correction as a new run in the same paragraph and inherit font size/name.
-        new_run = paragraph.add_run(' ' + corrected_text)
+        corrected_one_line = _proof_single_line_text(corrected_text)
+        new_run = paragraph.add_run(' ' + corrected_one_line)
         new_run.font.color.rgb = corr_rgb
 
         ref_run = None
@@ -2978,7 +2989,7 @@ def proof_map_docx(source_path, output_path, json_data, hex_color):
                     if para.text.strip():
                         para_idx += 1
                         if para_idx == para_num:
-                            if para.text.strip() != corrected_text.strip():
+                            if _proof_single_line_text(para.text) != _proof_single_line_text(corrected_text):
                                 _insert_correction(para, corrected_text)
                             break
 
@@ -3001,7 +3012,7 @@ def proof_map_docx(source_path, output_path, json_data, hex_color):
                     cell = table.rows[row_idx].cells[col_idx]
                     if cell.paragraphs:
                         para = cell.paragraphs[0]
-                        if para.text.strip() != corrected_text.strip():
+                        if _proof_single_line_text(para.text) != _proof_single_line_text(corrected_text):
                             _insert_correction(para, corrected_text)
 
             # 3. Header: "Header_SectionX!ParagraphY" or "Header_SectionX!TableY!RzCw"
@@ -3020,7 +3031,7 @@ def proof_map_docx(source_path, output_path, json_data, hex_color):
                         if para.text.strip():
                             pi += 1
                             if pi == pn:
-                                if para.text.strip() != corrected_text.strip():
+                                if _proof_single_line_text(para.text) != _proof_single_line_text(corrected_text):
                                     _insert_correction(para, corrected_text)
                                 break
                 elif parts[1].startswith('Table') and len(parts) == 3:
@@ -3031,7 +3042,7 @@ def proof_map_docx(source_path, output_path, json_data, hex_color):
                     ri, ci = int(rc[0]) - 1, int(rc[1]) - 1
                     if ri < len(header.tables[ti].rows) and ci < len(header.tables[ti].rows[ri].cells):
                         para = header.tables[ti].rows[ri].cells[ci].paragraphs[0]
-                        if para.text.strip() != corrected_text.strip():
+                        if _proof_single_line_text(para.text) != _proof_single_line_text(corrected_text):
                             _insert_correction(para, corrected_text)
 
             # 4. Footer: "Footer_SectionX!ParagraphY" or "Footer_SectionX!TableY!RzCw"
@@ -3050,7 +3061,7 @@ def proof_map_docx(source_path, output_path, json_data, hex_color):
                         if para.text.strip():
                             pi += 1
                             if pi == pn:
-                                if para.text.strip() != corrected_text.strip():
+                                if _proof_single_line_text(para.text) != _proof_single_line_text(corrected_text):
                                     _insert_correction(para, corrected_text)
                                 break
                 elif parts[1].startswith('Table') and len(parts) == 3:
@@ -3061,7 +3072,7 @@ def proof_map_docx(source_path, output_path, json_data, hex_color):
                     ri, ci = int(rc[0]) - 1, int(rc[1]) - 1
                     if ri < len(footer.tables[ti].rows) and ci < len(footer.tables[ti].rows[ri].cells):
                         para = footer.tables[ti].rows[ri].cells[ci].paragraphs[0]
-                        if para.text.strip() != corrected_text.strip():
+                        if _proof_single_line_text(para.text) != _proof_single_line_text(corrected_text):
                             _insert_correction(para, corrected_text)
         except Exception:
             continue
