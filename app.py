@@ -2796,7 +2796,7 @@ def _proof_single_line_text(value):
     s = re.sub(r'\s+', ' ', s)
     return s.strip()
 
-def proof_map_xlsx(source_path, output_path, json_data, hex_color):
+def proof_map_xlsx(source_path, output_path, json_data, hex_color, map_mode='append', apply_color=True):
     """Write proof-read output for xlsx: original text + corrected text in hex_color."""
     from openpyxl.styles import Alignment as _Alignment
     from openpyxl.cell.rich_text import CellRichText as _CellRichText, TextBlock as _TextBlock
@@ -2821,6 +2821,19 @@ def proof_map_xlsx(source_path, output_path, json_data, hex_color):
             if orig_one_line == corrected_one_line:
                 continue
 
+            if map_mode == 'overwrite':
+                cell.value = corrected_one_line
+                cell.alignment = _Alignment(wrap_text=False)
+                if apply_color:
+                    try:
+                        if cell.font:
+                            nf = copy(cell.font)
+                            nf.color = corr_argb
+                            cell.font = nf
+                    except Exception:
+                        pass
+                continue
+
             # Preserve original font color (ARGB format)
             try:
                 fc = cell.font.color if cell.font else None
@@ -2831,14 +2844,15 @@ def proof_map_xlsx(source_path, output_path, json_data, hex_color):
             # Use openpyxl rich text API so Excel renders text runs correctly.
             try:
                 rich_text = _CellRichText()
-                rich_text.append(_TextBlock(_InlineFont(color=orig_argb), str(orig_val)))
-                rich_text.append(_TextBlock(_InlineFont(color=corr_argb), ' ' + corrected_one_line))
+                rich_text.append(_TextBlock(_InlineFont(color=orig_argb), orig_one_line))
+                corr_run_argb = corr_argb if apply_color else orig_argb
+                rich_text.append(_TextBlock(_InlineFont(color=corr_run_argb), ' ' + corrected_one_line))
                 cell.value = rich_text
             except Exception:
                 # Safe fallback: keep content even if rich-text object is not supported.
-                cell.value = f"{orig_val} {corrected_one_line}"
+                cell.value = f"{orig_one_line} {corrected_one_line}"
 
-            cell.alignment = _Alignment(wrap_text=True)
+            cell.alignment = _Alignment(wrap_text=False)
         except Exception:
             continue
 
@@ -2856,7 +2870,7 @@ def _proof_navigate_pptx_shape(shape, shape_indices):
     return None
 
 
-def proof_map_pptx(source_path, output_path, json_data, hex_color):
+def proof_map_pptx(source_path, output_path, json_data, hex_color, map_mode='append', apply_color=True):
     """Write proof-read output for pptx: appends colored correction paragraph."""
     from pptx.dml.color import RGBColor as _PptxRGB
 
@@ -2926,11 +2940,23 @@ def proof_map_pptx(source_path, output_path, json_data, hex_color):
             if orig_one_line == corrected_one_line:
                 continue
 
+            if map_mode == 'overwrite':
+                replace_text_keep_format(text_frame, corrected_one_line)
+                if apply_color:
+                    try:
+                        for para in text_frame.paragraphs:
+                            for run in para.runs:
+                                run.font.color.rgb = corr_rgb
+                    except Exception:
+                        pass
+                continue
+
             # Append correction run to last paragraph (same line, no new paragraph)
             last_para = text_frame.paragraphs[-1]
             new_run = last_para.add_run()
             new_run.text = ' ' + corrected_one_line
-            new_run.font.color.rgb = corr_rgb
+            if apply_color:
+                new_run.font.color.rgb = corr_rgb
 
             # Keep font family and size consistent with original text.
             try:
@@ -2948,7 +2974,7 @@ def proof_map_pptx(source_path, output_path, json_data, hex_color):
     prs.save(output_path)
 
 
-def proof_map_docx(source_path, output_path, json_data, hex_color):
+def proof_map_docx(source_path, output_path, json_data, hex_color, map_mode='append', apply_color=True):
     """Write proof-read output for docx: inserts colored correction paragraph after original."""
     from docx.shared import RGBColor as _DocxRGB
     r_c = int(hex_color[1:3], 16)
@@ -2961,7 +2987,8 @@ def proof_map_docx(source_path, output_path, json_data, hex_color):
         # Append correction as a new run in the same paragraph and inherit font size/name.
         corrected_one_line = _proof_single_line_text(corrected_text)
         new_run = paragraph.add_run(' ' + corrected_one_line)
-        new_run.font.color.rgb = corr_rgb
+        if apply_color:
+            new_run.font.color.rgb = corr_rgb
 
         ref_run = None
         for run in paragraph.runs:
@@ -2979,6 +3006,15 @@ def proof_map_docx(source_path, output_path, json_data, hex_color):
             if ref_run.font.size:
                 new_run.font.size = ref_run.font.size
 
+    def _overwrite_correction(paragraph, corrected_text):
+        replace_text_keep_format_docx(paragraph, _proof_single_line_text(corrected_text))
+        if apply_color:
+            try:
+                for run in paragraph.runs:
+                    run.font.color.rgb = corr_rgb
+            except Exception:
+                pass
+
     for key, corrected_text in json_data.items():
         try:
             # 1. Plain paragraph: "ParagraphX"
@@ -2990,7 +3026,10 @@ def proof_map_docx(source_path, output_path, json_data, hex_color):
                         para_idx += 1
                         if para_idx == para_num:
                             if _proof_single_line_text(para.text) != _proof_single_line_text(corrected_text):
-                                _insert_correction(para, corrected_text)
+                                if map_mode == 'overwrite':
+                                    _overwrite_correction(para, corrected_text)
+                                else:
+                                    _insert_correction(para, corrected_text)
                             break
 
             # 2. Table cell: "TableX!RyCz"
@@ -3013,7 +3052,10 @@ def proof_map_docx(source_path, output_path, json_data, hex_color):
                     if cell.paragraphs:
                         para = cell.paragraphs[0]
                         if _proof_single_line_text(para.text) != _proof_single_line_text(corrected_text):
-                            _insert_correction(para, corrected_text)
+                            if map_mode == 'overwrite':
+                                _overwrite_correction(para, corrected_text)
+                            else:
+                                _insert_correction(para, corrected_text)
 
             # 3. Header: "Header_SectionX!ParagraphY" or "Header_SectionX!TableY!RzCw"
             elif key.startswith('Header_Section'):
@@ -3032,7 +3074,10 @@ def proof_map_docx(source_path, output_path, json_data, hex_color):
                             pi += 1
                             if pi == pn:
                                 if _proof_single_line_text(para.text) != _proof_single_line_text(corrected_text):
-                                    _insert_correction(para, corrected_text)
+                                    if map_mode == 'overwrite':
+                                        _overwrite_correction(para, corrected_text)
+                                    else:
+                                        _insert_correction(para, corrected_text)
                                 break
                 elif parts[1].startswith('Table') and len(parts) == 3:
                     ti = int(parts[1].replace('Table', '')) - 1
@@ -3043,7 +3088,10 @@ def proof_map_docx(source_path, output_path, json_data, hex_color):
                     if ri < len(header.tables[ti].rows) and ci < len(header.tables[ti].rows[ri].cells):
                         para = header.tables[ti].rows[ri].cells[ci].paragraphs[0]
                         if _proof_single_line_text(para.text) != _proof_single_line_text(corrected_text):
-                            _insert_correction(para, corrected_text)
+                            if map_mode == 'overwrite':
+                                _overwrite_correction(para, corrected_text)
+                            else:
+                                _insert_correction(para, corrected_text)
 
             # 4. Footer: "Footer_SectionX!ParagraphY" or "Footer_SectionX!TableY!RzCw"
             elif key.startswith('Footer_Section'):
@@ -3062,7 +3110,10 @@ def proof_map_docx(source_path, output_path, json_data, hex_color):
                             pi += 1
                             if pi == pn:
                                 if _proof_single_line_text(para.text) != _proof_single_line_text(corrected_text):
-                                    _insert_correction(para, corrected_text)
+                                    if map_mode == 'overwrite':
+                                        _overwrite_correction(para, corrected_text)
+                                    else:
+                                        _insert_correction(para, corrected_text)
                                 break
                 elif parts[1].startswith('Table') and len(parts) == 3:
                     ti = int(parts[1].replace('Table', '')) - 1
@@ -3073,7 +3124,10 @@ def proof_map_docx(source_path, output_path, json_data, hex_color):
                     if ri < len(footer.tables[ti].rows) and ci < len(footer.tables[ti].rows[ri].cells):
                         para = footer.tables[ti].rows[ri].cells[ci].paragraphs[0]
                         if _proof_single_line_text(para.text) != _proof_single_line_text(corrected_text):
-                            _insert_correction(para, corrected_text)
+                            if map_mode == 'overwrite':
+                                _overwrite_correction(para, corrected_text)
+                            else:
+                                _insert_correction(para, corrected_text)
         except Exception:
             continue
 
@@ -3107,6 +3161,11 @@ def proof_map():
     hex_color = request.form.get('correction_color', '#FF0000').strip()
     if not re.match(r'^#[0-9A-Fa-f]{6}$', hex_color):
         hex_color = '#FF0000'
+    map_mode = request.form.get('map_mode', 'append').strip().lower()
+    if map_mode not in ('append', 'overwrite'):
+        map_mode = 'append'
+    keep_original_color = request.form.get('keep_original_color', '').strip().lower() in ('1', 'true', 'yes', 'on')
+    apply_color = not keep_original_color
 
     # 3. Get pasted JSON
     pasted_json_data = request.form.get('pasted_json_data', '').strip()
@@ -3143,15 +3202,15 @@ def proof_map():
 
         # 7. Dispatch to helper
         if ext == 'xlsx':
-            proof_map_xlsx(src_path, out_path, json_data, hex_color)
+            proof_map_xlsx(src_path, out_path, json_data, hex_color, map_mode=map_mode, apply_color=apply_color)
             mimetype = ('application/vnd.openxmlformats-officedocument'
                         '.spreadsheetml.sheet')
         elif ext == 'pptx':
-            proof_map_pptx(src_path, out_path, json_data, hex_color)
+            proof_map_pptx(src_path, out_path, json_data, hex_color, map_mode=map_mode, apply_color=apply_color)
             mimetype = ('application/vnd.openxmlformats-officedocument'
                         '.presentationml.presentation')
         elif ext == 'docx':
-            proof_map_docx(src_path, out_path, json_data, hex_color)
+            proof_map_docx(src_path, out_path, json_data, hex_color, map_mode=map_mode, apply_color=apply_color)
             mimetype = ('application/vnd.openxmlformats-officedocument'
                         '.wordprocessingml.document')
         else:

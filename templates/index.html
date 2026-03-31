@@ -1430,40 +1430,9 @@ Output yêu cầu:
                   <p class="text-muted small mt-2">Paste JSON AI &#8594; ghi v&#224;o file g&#7889;c</p>
                 </div>
 
-                <!-- Color picker cho ph&#7847;n s&#7917;a -->
-                <div class="mb-3">
-                  <label class="form-label small mb-1">
-                    <i class="fas fa-palette" style="color:#667eea;"></i>
-                    <strong>M&#224;u ch&#7919; cho n&#7897;i dung &#273;&#227; s&#7917;a:</strong>
-                  </label>
-                  <div class="d-flex align-items-center gap-2">
-                    <input type="color" id="proofCorrectionColor" value="#FF0000"
-                           class="form-control form-control-color"
-                           style="width:44px;height:34px;padding:2px;cursor:pointer;"
-                           title="Ch&#7885;n m&#224;u cho d&#242;ng &#273;&#227; s&#7917;a">
-                    <div class="flex-grow-1">
-                      <select class="form-select form-select-sm" id="proofColorPresets"
-                              onchange="applyProofColorPreset(this.value)"
-                              style="font-size:0.78rem;">
-                        <option value="">&#8212; M&#224;u nhanh &#8212;</option>
-                        <option value="#FF0000">&#272;&#7887; (Red)</option>
-                        <option value="#FF6600">Cam (Orange)</option>
-                        <option value="#0070C0">Xanh d&#432;&#417;ng (Blue)</option>
-                        <option value="#00B050">Xanh l&#225; (Green)</option>
-                        <option value="#7030A0">T&#237;m (Purple)</option>
-                        <option value="#FF00FF">H&#7891;ng (Magenta)</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div class="mt-1" style="font-size:0.72rem;color:#888;">
-                    <i class="fas fa-info-circle"></i>
-                    D&#242;ng g&#7889;c gi&#7919; nguy&#234;n m&#224;u g&#7889;c. D&#242;ng s&#7917;a th&#234;m v&#224;o b&#7857;ng m&#224;u n&#224;y.
-                    N&#7871;u value kh&#244;ng thay &#273;&#7893;i &#8594; kh&#244;ng th&#234;m d&#242;ng n&#224;o.
-                  </div>
-                </div>
-
                 <!-- Paste JSON -->
                 <form id="proofMapForm" enctype="multipart/form-data">
+
                   <div class="mb-2">
                     <label class="form-label small mb-1">
                       <strong>D&#225;n JSON k&#7871;t qu&#7843; t&#7915; AI:</strong>
@@ -1503,6 +1472,48 @@ Output yêu cầu:
                       </button>
                     </div>
                   </div>
+
+                                    <div class="mb-2 mt-2">
+                                        <label class="form-label small mb-1">
+                                            <strong>Ch&#7871; &#273;&#7897; map (ch&#7885;n sau khi &#273;&#227; d&#225;n &#273;&#7911; JSON):</strong>
+                                        </label>
+                                        <select id="proofMapMode" class="form-select form-select-sm">
+                                            <option value="append" selected>Mode hi&#7875;n th&#7883; text g&#7889;c (n&#7889;i th&#234;m text s&#7917;a)</option>
+                                            <option value="overwrite">Mode s&#7917;a tr&#7921;c ti&#7871;p (ghi &#273;&#232; text s&#7917;a)</option>
+                                        </select>
+                                    </div>
+
+                                    <!-- Color picker cho ph&#7847;n s&#7917;a (di chuy&#7875;n xu&#7889;ng d&#432;&#7899;i mode map) -->
+                                    <div class="mb-3">
+                                        <label class="form-label small mb-1">
+                                            <i class="fas fa-palette" style="color:#667eea;"></i>
+                                            <strong>M&#224;u ch&#7919; cho n&#7897;i dung &#273;&#227; s&#7917;a:</strong>
+                                        </label>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <input type="color" id="proofCorrectionColor" value="#FF0000"
+                                                         class="form-control form-control-color"
+                                                         style="width:44px;height:34px;padding:2px;cursor:pointer;"
+                                                         title="Ch&#7885;n m&#224;u cho text &#273;&#227; s&#7917;a">
+                                            <div class="flex-grow-1">
+                                                <select class="form-select form-select-sm" id="proofColorPresets"
+                                                                onchange="applyProofColorPreset(this.value)"
+                                                                style="font-size:0.78rem;">
+                                                    <option value="">&#8212; M&#224;u nhanh &#8212;</option>
+                                                    <option value="__keep__">Gi&#7919; nguy&#234;n m&#224;u g&#7889;c</option>
+                                                    <option value="#FF0000">&#272;&#7887; (Red)</option>
+                                                    <option value="#FF6600">Cam (Orange)</option>
+                                                    <option value="#0070C0">Xanh d&#432;&#417;ng (Blue)</option>
+                                                    <option value="#00B050">Xanh l&#225; (Green)</option>
+                                                    <option value="#7030A0">T&#237;m (Purple)</option>
+                                                    <option value="#FF00FF">H&#7891;ng (Magenta)</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="mt-1" style="font-size:0.72rem;color:#888;">
+                                            <i class="fas fa-info-circle"></i>
+                                            N&#7871;u ch&#7885;n "Gi&#7919; nguy&#234;n m&#224;u g&#7889;c" th&#236; text s&#7917;a kh&#244;ng t&#244; m&#224;u m&#7899;i.
+                                        </div>
+                                    </div>
 
                   <div class="text-center mt-2">
                     <button type="submit" class="btn btn-custom btn-sm"
@@ -5942,6 +5953,24 @@ function renderProofDedupPanel(dedupChunks, stats) {
 
 // 4. Paste JSON editor
 let proofPastedJsonAccumulated = {};
+let proofKeepOriginalColor = false;
+
+function proofNormalizeSingleLine(value) {
+    return String(value == null ? '' : value)
+        .replace(/[\r\n]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+document.getElementById('proofMapMode').addEventListener('change', function() {
+    const mode = this.value;
+    const btn = document.getElementById('proofMapBtn');
+    if (mode === 'overwrite') {
+        btn.innerHTML = '<i class="fas fa-pen"></i> Ghi đè &amp; Tải về';
+    } else {
+        btn.innerHTML = '<i class="fas fa-magic"></i> Map &amp; Tải về';
+    }
+});
 
 document.getElementById('proofPasteJsonEditable').addEventListener('input', function() {
     const text = this.innerText || this.textContent;
@@ -6023,9 +6052,26 @@ document.getElementById('proofClearPastedJsonBtn').addEventListener('click', fun
 
 // 5. Color preset quick-select
 function applyProofColorPreset(hex) {
-    if (hex) document.getElementById('proofCorrectionColor').value = hex;
-    document.getElementById('proofColorPresets').value = '';
+    const colorInput = document.getElementById('proofCorrectionColor');
+    if (hex === '__keep__') {
+        proofKeepOriginalColor = true;
+        colorInput.disabled = true;
+        colorInput.style.opacity = '0.6';
+        return;
+    }
+    proofKeepOriginalColor = false;
+    colorInput.disabled = false;
+    colorInput.style.opacity = '1';
+    if (hex) colorInput.value = hex;
 }
+
+document.getElementById('proofCorrectionColor').addEventListener('input', function() {
+    proofKeepOriginalColor = false;
+    this.disabled = false;
+    this.style.opacity = '1';
+    const sel = document.getElementById('proofColorPresets');
+    if (sel.value === '__keep__') sel.value = '';
+});
 
 // 6. Initialize proof-read prompt templates
 (function initProofTemplates() {
@@ -6050,7 +6096,8 @@ document.getElementById('proofMapForm').addEventListener('submit', async functio
   const btn     = document.getElementById('proofMapBtn');
 
   // Collect pasted JSON
-  const accumulated = proofPastedJsonAccumulated;
+    const mode = document.getElementById('proofMapMode').value;
+    const accumulated = { ...proofPastedJsonAccumulated };
   if (!Object.keys(accumulated).length) {
     alertEl.innerHTML =
       '<div class="alert alert-warning mt-2">Chưa có JSON nào được thêm.</div>';
@@ -6074,6 +6121,8 @@ document.getElementById('proofMapForm').addEventListener('submit', async functio
 
     fd.append('pasted_json_data', JSON.stringify(accumulated));
     fd.append('correction_color', color);
+    fd.append('map_mode', mode);
+    fd.append('keep_original_color', proofKeepOriginalColor ? '1' : '0');
 
     const resp = await fetch('/proof-map', { method: 'POST', body: fd });
     const data = await resp.json();
@@ -6106,10 +6155,8 @@ document.getElementById('proofMapForm').addEventListener('submit', async functio
     document.getElementById('proofBadge3').style.background =
       'linear-gradient(135deg,#28a745,#20c997)';
 
-    // Reset accumulated JSON for next run
-    proofPastedJsonAccumulated = {};
+    // Keep accumulated JSON so user can switch mode and re-map without pasting again.
     renderProofPastedJsonList();
-    document.getElementById('proofMapBtn').disabled = true;
 
   } catch(err) {
     alertEl.innerHTML =
