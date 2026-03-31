@@ -10,6 +10,9 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- html2canvas: capture overlay as image -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- Highlight.js: JSON syntax highlighting -->
+    <link id="hljsStylesheet" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <style>
         body {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -164,7 +167,93 @@
             width: 2rem;
             height: 2rem;
         }
-        
+
+        /* ===== EXTRACT PROGRESS BAR ===== */
+        #extractProgressWrap {
+            margin-top: 10px;
+        }
+        #extractProgressBar {
+            transition: width 0.4s ease;
+        }
+
+        /* ===== STEP BADGE COMPLETION ===== */
+        .step-number {
+            transition: background 0.4s ease, transform 0.2s ease;
+        }
+        .step-number.step-done {
+            background: #28a745 !important;
+        }
+        .step-number.step-pop {
+            transform: scale(1.3);
+        }
+
+        /* ===== TOAST NOTIFICATIONS ===== */
+        #toastContainer .toast-item {
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.18);
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            min-width: 240px;
+            max-width: 360px;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: opacity 0.25s ease, transform 0.25s ease;
+            pointer-events: auto;
+            position: relative;
+        }
+        #toastContainer .toast-item.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        #toastContainer .toast-item.hiding {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        #toastContainer .toast-close {
+            margin-left: auto;
+            cursor: pointer;
+            font-size: 1rem;
+            line-height: 1;
+            opacity: 0.6;
+            flex-shrink: 0;
+        }
+        #toastContainer .toast-close:hover { opacity: 1; }
+
+        /* ===== JSON EDITOR (highlight.js contenteditable) ===== */
+        .json-editor-outer {
+            position: relative;
+        }
+        .json-editor-editable {
+            min-height: 100px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.85rem;
+            white-space: pre;
+            overflow-wrap: normal;
+            padding: 6px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            outline: none;
+            background: #fff;
+            color: #333;
+            text-align: left;
+        }
+        .json-editor-editable:empty::before {
+            content: attr(data-placeholder);
+            color: #aaa;
+            pointer-events: none;
+        }
+        body.dark-mode .json-editor-editable {
+            background: #172840;
+            color: #e0e0e0;
+            border-color: #3a6090;
+        }
+        .json-badge-wrap { min-height: 1.4em; font-size: 0.75rem; margin-top: 3px; }
+
         .json-file-row {
             display: flex;
             align-items: center;
@@ -575,7 +664,7 @@
             <div class="col-lg-4">
                 <div class="function-card">
                     <div class="text-center">
-                        <span class="step-number">1</span>
+                        <span class="step-number" id="stepBadge1">1</span>
                         <h3 class="d-inline">Upload File</h3>
                         <p class="text-muted small mt-2">File gốc (.xlsx/.pptx/.docx)</p>
                     </div>
@@ -726,7 +815,7 @@
             <div class="col-lg-4">
                 <div class="function-card">
                     <div class="text-center">
-                        <span class="step-number">2</span>
+                        <span class="step-number" id="stepBadge2">2</span>
                         <h3 class="d-inline">Trích xuất</h3>
                         <p class="text-muted small mt-2">Extract nội dung cần dịch</p>
                     </div>
@@ -792,6 +881,15 @@
                                 <span class="visually-hidden">Đang xử lý...</span>
                             </div>
                             <p class="mt-2 small">Đang trích xuất dữ liệu...</p>
+                        </div>
+
+                        <!-- SSE Progress Bar -->
+                        <div id="extractProgressWrap" style="display:none;" class="mt-2">
+                            <div class="progress" style="height:6px; border-radius:4px;">
+                                <div id="extractProgressBar" class="progress-bar progress-bar-striped progress-bar-animated"
+                                     role="progressbar" style="width:0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                            <div id="extractProgressMsg" class="text-muted text-center mt-1" style="font-size:0.72rem;"></div>
                         </div>
                         
                         <div id="extractAlert"></div>
@@ -891,7 +989,7 @@ Output yêu cầu:
             <div class="col-lg-4">
                 <div class="function-card">
                     <div class="text-center">
-                        <span class="step-number">3</span>
+                        <span class="step-number" id="stepBadge3">3</span>
                         <h3 class="d-inline">Nạp bản dịch</h3>
                         <p class="text-muted small mt-2">Inject JSON đã dịch vào file</p>
                     </div>
@@ -900,11 +998,20 @@ Output yêu cầu:
                         <!-- Paste JSON -->
                         <div class="mb-2">
                             <label class="form-label small mb-1"><strong>Dán nội dung JSON đã dịch:</strong></label>
-                            <textarea class="form-control" id="pasteJsonTextarea" rows="5" placeholder='Paste nội dung JSON vào đây:
-{
-  "dedup_1": "Translated text 1",
-  "dedup_2": "Translated text 2"
-}' style="font-family: monospace; font-size: 0.85rem;"></textarea>
+                            <div class="json-editor-outer">
+                                <div id="pasteJsonEditable"
+                                     class="json-editor-editable"
+                                     contenteditable="true"
+                                     spellcheck="false"
+                                     data-placeholder='Paste JSON vào đây...'></div>
+                                <textarea id="pasteJsonTextarea" style="display:none;"></textarea>
+                            </div>
+                            <div class="json-badge-wrap" id="pasteJsonBadge"></div>
+                            <div class="d-flex justify-content-end mt-1">
+                                <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size:0.72rem;" id="formatJsonBtn">
+                                    <i class="fas fa-indent"></i> Format JSON
+                                </button>
+                            </div>
                         </div>
                         <div class="text-center mb-2">
                             <button type="button" class="btn btn-outline-primary btn-sm" id="addPastedJsonBtn">
@@ -945,6 +1052,12 @@ Output yêu cầu:
                         </div>
                         
                         <div id="injectAlert"></div>
+                        <!-- Backup download link: hiện sau khi inject thành công -->
+                        <div id="injectBackupLink" style="display:none;" class="text-center mt-1">
+                            <a href="/download-inject-backup" class="text-muted small" target="_blank">
+                                <i class="fas fa-undo"></i> Tải về bản gốc (trước khi dịch)
+                            </a>
+                        </div>
                     </form>
 
                     <div class="mt-3">
@@ -1213,6 +1326,9 @@ Output yêu cầu:
                             </button>
                             <button type="button" id="saveImageBtn" class="btn btn-outline-success btn-sm" onclick="saveOverlayAsImage()">
                                 <i class="fas fa-download"></i> Lưu ảnh
+                            </button>
+                            <button type="button" id="downloadImgBtn" class="btn btn-success btn-sm" style="display:none;">
+                                <i class="fas fa-download"></i> Tải ảnh kết quả
                             </button>
                         </div>
                     </div>
@@ -1624,10 +1740,21 @@ Output yêu cầu:
                         <div class="tab-pane fade show active" id="termPasteJsonPanel" role="tabpanel">
                             <div class="mb-2">
                                 <label class="form-label small mb-1"><strong>Paste JSON từ AI:</strong></label>
-                                <textarea class="form-control" id="termCsvTextarea" rows="5"
-                                    placeholder='Ví dụ:&#10;{"Purchase Order": "注文書", "Delivery Note": "納品書"}'
-                                    oninput="previewTermInput()"
-                                    style="font-family:monospace; font-size:0.8rem; resize:vertical;"></textarea>
+                                <div class="json-editor-outer">
+                                    <div id="termCsvEditable"
+                                         class="json-editor-editable"
+                                         contenteditable="true"
+                                         spellcheck="false"
+                                         data-placeholder='Ví dụ: {"Purchase Order": "注文書", "Delivery Note": "納品書"}'></div>
+                                    <textarea class="form-control" id="termCsvTextarea" style="display:none;"
+                                        oninput="previewTermInput()"></textarea>
+                                </div>
+                                <div class="json-badge-wrap" id="termCsvBadge"></div>
+                                <div class="d-flex justify-content-end mt-1">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size:0.72rem;" id="formatTermJsonBtn">
+                                        <i class="fas fa-indent"></i> Format JSON
+                                    </button>
+                                </div>
                             </div>
 
                             <!-- Preview bảng (realtime) -->
@@ -2368,7 +2495,9 @@ Output yêu cầu:
             mainFileInfo.style.display = 'block';
             extractBtn.disabled = false;
             window.batchId = null; // reset khi chọn file mới
+            window.sheetSessionKey = null;
             updateInjectButtonState();
+            markStepDone(1);
         });
         
         // Xử lý xóa file
@@ -2485,6 +2614,9 @@ Output yêu cầu:
                                 : `${data.total_items} keys`;
                             detectDuplicatesInFiles(data.files);
                             extractResult.style.display = 'block';
+                            updateInjectButtonState();
+                            markStepDone(2);
+                            showToast('<i class="fas fa-check-circle"></i> Hoàn tất! ' + data.total_files + ' file · ' + data.total_items + ' keys.', 'success');
                         } else {
                             showAlert(extractAlert, 'danger', data.error || 'Có lỗi xảy ra!');
                         }
@@ -2499,7 +2631,7 @@ Output yêu cầu:
                 return;
             }
 
-            // ---- Upload mode — gửi tất cả file qua /batch-extract ----
+            // ---- Upload mode ----
             if (mainExcelFile.files.length === 0) {
                 showAlert(extractAlert, 'warning', 'Vui lòng upload file (Excel hoặc PowerPoint) ở Bước 1 trước!');
                 return;
@@ -2512,21 +2644,108 @@ Output yêu cầu:
             const dedupPanel = document.getElementById('dedupPanel');
             if (dedupPanel) { dedupPanel.style.display = 'none'; dedupPanel.innerHTML = ''; }
 
-            extractLoading.style.display = 'block';
             extractAlert.innerHTML = '';
+            const extractProgressWrap = document.getElementById('extractProgressWrap');
+            const extractProgressBar  = document.getElementById('extractProgressBar');
+            const extractProgressMsg  = document.getElementById('extractProgressMsg');
+
+            // Thêm tham số chung
+            const glossaryIds_ext = [];
+            if (document.getElementById('glossaryToggle').checked) {
+                glossaryIds_ext.push(...getSelectedGlossaryIds());
+            }
+            const selectedColors_ext = [...document.querySelectorAll('.color-filter-cb:checked')]
+                .map(cb => cb.value).join(',');
+
+            function _resetExtractProgress() {
+                extractLoading.style.display = 'none';
+                extractProgressWrap.style.display = 'none';
+                extractProgressBar.style.width = '0%';
+                extractProgressMsg.textContent = '';
+            }
+            function _updateExtractProgress(pct, msg) {
+                extractProgressBar.style.width = pct + '%';
+                extractProgressBar.setAttribute('aria-valuenow', pct);
+                if (msg) extractProgressMsg.textContent = msg;
+            }
+
+            if (mainExcelFile.files.length === 1) {
+                // ---- Single file → SSE /extract ----
+                extractLoading.style.display = 'none';
+                extractProgressWrap.style.display = 'block';
+                _updateExtractProgress(5, 'Đang tải file...');
+
+                const formData = new FormData();
+                formData.append('file', mainExcelFile.files[0]);
+                if (glossaryIds_ext.length) formData.append('glossary_ids', glossaryIds_ext.join(','));
+                if (selectedColors_ext) formData.append('color_filter', selectedColors_ext);
+
+                try {
+                    const response = await fetch('/extract', { method: 'POST', body: formData });
+                    if (!response.ok) {
+                        const errData = await response.json().catch(() => ({}));
+                        throw new Error(errData.error || 'Lỗi không xác định');
+                    }
+                    // Capture session key for inject (set in SSE response header)
+                    const sseKey = response.headers.get('X-Session-Key');
+                    if (sseKey) {
+                        window.sheetSessionKey = sseKey;
+                        window.batchId = null;
+                    }
+
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        buffer += decoder.decode(value, { stream: true });
+                        const parts = buffer.split('\n\n');
+                        buffer = parts.pop();
+                        for (const part of parts) {
+                            if (!part.startsWith('data: ')) continue;
+                            let evt;
+                            try { evt = JSON.parse(part.slice(6)); } catch { continue; }
+                            if (evt.step === 'error') throw new Error(evt.error);
+                            _updateExtractProgress(evt.pct, evt.message || evt.step);
+                            if (evt.step === 'done') {
+                                const result = evt.result;
+                                extractedFilesData = result.files;
+                                extractedDedupData = result.dedup_files || null;
+                                renderJsonFileRows(result.files);
+                                if (extractedDedupData && result.dedup_stats) renderDedupPanel(extractedDedupData, result.dedup_stats);
+                                const ds = result.dedup_stats;
+                                extractSummary.textContent = (ds && ds.saved > 0)
+                                    ? `${result.total_items} keys (${ds.unique} unique)`
+                                    : `${result.total_items} keys`;
+                                detectDuplicatesInFiles(result.files);
+                                extractResult.style.display = 'block';
+                                updateInjectButtonState();
+                                markStepDone(2);
+                                showToast('<i class="fas fa-check-circle"></i> Hoàn tất! ' + result.total_files + ' file · ' + result.total_items + ' keys.', 'success');
+                            }
+                        }
+                    }
+                    _resetExtractProgress();
+                } catch (error) {
+                    _resetExtractProgress();
+                    const msg = error.message || 'Lỗi không xác định';
+                    if (msg.includes('login') || msg.includes('html') || msg.includes('DOCTYPE')) {
+                        showAlert(extractAlert, 'danger', 'Phiên đăng nhập đã hết hạn. Vui lòng <a href="/login">đăng nhập lại</a>.');
+                    } else {
+                        showAlert(extractAlert, 'danger', 'Lỗi: ' + msg);
+                    }
+                }
+                return;
+            }
+
+            // ---- Multi-file → /batch-extract ----
+            extractLoading.style.display = 'block';
 
             const formData = new FormData();
             Array.from(mainExcelFile.files).forEach(function(f) { formData.append('files', f); });
-
-            // Thêm glossary_ids nếu bật
-            if (document.getElementById('glossaryToggle').checked) {
-                const ids = getSelectedGlossaryIds();
-                if (ids.length) formData.append('glossary_ids', ids.join(','));
-            }
-            // Thêm color_filter (chỉ hiệu lực khi 1 file)
-            const selectedColors = [...document.querySelectorAll('.color-filter-cb:checked')]
-                .map(cb => cb.value).join(',');
-            if (selectedColors) formData.append('color_filter', selectedColors);
+            if (glossaryIds_ext.length) formData.append('glossary_ids', glossaryIds_ext.join(','));
+            if (selectedColors_ext) formData.append('color_filter', selectedColors_ext);
 
             try {
                 const response = await fetch('/batch-extract', { method: 'POST', body: formData });
@@ -2537,6 +2756,7 @@ Output yêu cầu:
                 }
 
                 window.batchId = data.batch_id;
+                window.sheetSessionKey = null;
 
                 // Render cross-file dedup chunks với Copy buttons
                 const jfl = document.getElementById('jsonFileList');
@@ -2553,12 +2773,9 @@ Output yêu cầu:
                     extractSummary.textContent = data.total_items + ' keys';
                 }
                 extractResult.style.display = 'block';
-
-                // Cập nhật inject button
                 updateInjectButtonState();
-
-                showAlert(extractAlert, 'success',
-                    '<i class="fas fa-check-circle"></i> Hoàn tất! ' + data.total_files + ' file · ' + data.total_items + ' keys.');
+                markStepDone(2);
+                showToast('<i class="fas fa-check-circle"></i> Hoàn tất! ' + data.total_files + ' file · ' + data.total_items + ' keys.', 'success');
             } catch (error) {
                 extractLoading.style.display = 'none';
                 const msg = error.message || 'Lỗi không xác định';
@@ -2768,7 +2985,41 @@ Output yêu cầu:
         const pastedJsonList = document.getElementById('pastedJsonList');
         const pastedJsonItems = document.getElementById('pastedJsonItems');
         const clearPastedJsonBtn = document.getElementById('clearPastedJsonBtn');
-        
+
+        // JSON editor: contenteditable ↔ hidden textarea sync
+        (function() {
+            const editable = document.getElementById('pasteJsonEditable');
+            const badge    = document.getElementById('pasteJsonBadge');
+            if (!editable) return;
+            let _debounce = null;
+            function validateBadge(text) {
+                if (!badge) return;
+                const t = text.trim();
+                if (!t) { badge.innerHTML = ''; return; }
+                try {
+                    const p = JSON.parse(t);
+                    const n = (p && typeof p === 'object' && !Array.isArray(p)) ? Object.keys(p).length : '?';
+                    badge.innerHTML = '<span class="badge bg-success"><i class="fas fa-check"></i> JSON hợp lệ (' + n + ' keys)</span>';
+                } catch(e) {
+                    badge.innerHTML = '<span class="badge bg-danger"><i class="fas fa-times"></i> ' + escapeHtml(e.message) + '</span>';
+                }
+            }
+            editable.addEventListener('input', function() {
+                pasteJsonTextarea.value = this.innerText;
+                clearTimeout(_debounce);
+                _debounce = setTimeout(function() { validateBadge(editable.innerText); }, 500);
+            });
+            const fmtBtn = document.getElementById('formatJsonBtn');
+            if (fmtBtn) fmtBtn.addEventListener('click', function() {
+                try {
+                    const fmt = JSON.stringify(JSON.parse(editable.innerText), null, 2);
+                    editable.innerText = fmt;
+                    pasteJsonTextarea.value = fmt;
+                    validateBadge(fmt);
+                } catch(e) { validateBadge(editable.innerText); }
+            });
+        })();
+
         // Lưu danh sách JSON đã paste
         let pastedJsonData = [];
         
@@ -2903,13 +3154,12 @@ Output yêu cầu:
                     if (loadingText) loadingText.textContent = 'Đang nạp bản dịch...';
 
                     if (data.errors && data.errors.length > 0) {
-                        showAlert(injectAlert, 'warning',
-                            '<i class="fas fa-check-circle"></i> Hoàn tất ' + files.length + ' file. ' +
-                            'Cảnh báo: ' + data.errors.join('; '));
+                        showToast('<i class="fas fa-check-circle"></i> Hoàn tất ' + files.length + ' file. Cảnh báo: ' + data.errors.join('; '), 'warning', 6000);
                     } else {
-                        showAlert(injectAlert, 'success',
-                            '<i class="fas fa-check-circle"></i> Nạp thành công! ' + files.length + ' file đã được tải về.');
+                        showToast('<i class="fas fa-check-circle"></i> Nạp thành công! ' + files.length + ' file đã được tải về.', 'success');
+                        markStepDone(3);
                     }
+                    document.getElementById('injectBackupLink').style.display = 'block';
 
                 } else if (window.sheetSessionKey) {
                     // --- Google Sheet path ---
@@ -2937,13 +3187,18 @@ Output yêu cầu:
                     a.href = url; a.download = fname;
                     document.body.appendChild(a); a.click(); document.body.removeChild(a);
                     URL.revokeObjectURL(url);
-                    showAlert(injectAlert, 'success', '<i class="fas fa-check-circle"></i> Nạp bản dịch thành công! File đang được tải về.');
+                    showToast('<i class="fas fa-check-circle"></i> Nạp bản dịch thành công! File đang được tải về.', 'success');
+                    markStepDone(3);
+                    document.getElementById('injectBackupLink').style.display = 'block';
                 }
 
                 // Reset pasted JSON sau khi inject xong
                 pastedJsonData = [];
                 updatePastedJsonList();
                 pasteJsonTextarea.value = '';
+                const _pje = document.getElementById('pasteJsonEditable');
+                if (_pje) _pje.innerText = '';
+                document.getElementById('pasteJsonBadge').innerHTML = '';
                 updateInjectButtonState();
 
                 // Xóa file tạm
@@ -3024,9 +3279,12 @@ Output yêu cầu:
                     mainFileInfo.style.display = 'none';
                     uploadedExcelFilename = null;
                     window.batchId = null;
+                    window.sheetSessionKey = null;
                     extractBtn.disabled = true;
                     injectBtn.disabled = true;
                     mainAlert.innerHTML = '';
+                    resetStepBadges();
+                    document.getElementById('injectBackupLink').style.display = 'none';
                 } else {
                     if (!skipConfirm) {
                         alert('❌ Lỗi: ' + (result.error || result.message));
@@ -3253,6 +3511,13 @@ Output yêu cầu:
             localStorage.setItem('darkMode', isDark ? '1' : '0');
             document.getElementById('darkModeIcon').className   = isDark ? 'fas fa-sun'  : 'fas fa-moon';
             document.getElementById('darkModeLabel').textContent = isDark ? 'Light Mode' : 'Dark Mode';
+            // Swap highlight.js stylesheet for dark/light mode
+            const hlLink = document.getElementById('hljsStylesheet');
+            if (hlLink) {
+                hlLink.href = isDark
+                    ? 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css'
+                    : 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css';
+            }
         }
         (function() {
             // Mặc định là Dark Mode (đã set class dark-mode trong <body>)
@@ -3272,6 +3537,46 @@ Output yêu cầu:
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
             `;
+        }
+
+        // ==================== TOAST NOTIFICATIONS ====================
+        function showToast(message, type = 'success', duration = 4000) {
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+            const colorsMap = {
+                success: { bg: '#d1fae5', border: '#34d399', color: '#065f46', icon: 'fa-check-circle' },
+                danger:  { bg: '#fee2e2', border: '#f87171', color: '#7f1d1d', icon: 'fa-times-circle' },
+                warning: { bg: '#fef3c7', border: '#fbbf24', color: '#78350f', icon: 'fa-exclamation-triangle' },
+                info:    { bg: '#dbeafe', border: '#60a5fa', color: '#1e3a8a', icon: 'fa-info-circle' },
+            };
+            const c = colorsMap[type] || colorsMap.info;
+            const toast = document.createElement('div');
+            toast.className = 'toast-item';
+            toast.style.cssText = `background:${c.bg};border:1px solid ${c.border};color:${c.color};`;
+            toast.innerHTML = `<i class="fas ${c.icon}" style="flex-shrink:0;margin-top:2px;"></i><span>${message}</span><span class="toast-close" onclick="this.closest('.toast-item').remove()">×</span>`;
+            container.appendChild(toast);
+            requestAnimationFrame(() => { requestAnimationFrame(() => { toast.classList.add('visible'); }); });
+            if (duration > 0) {
+                setTimeout(() => {
+                    toast.classList.add('hiding');
+                    setTimeout(() => toast.remove(), 300);
+                }, duration);
+            }
+        }
+
+        // ==================== STEP BADGE HELPERS ====================
+        function markStepDone(num) {
+            const badge = document.getElementById('stepBadge' + num);
+            if (!badge) return;
+            badge.innerHTML = '<i class="fas fa-check" style="font-size:0.8rem"></i>';
+            badge.classList.add('step-done', 'step-pop');
+            setTimeout(function() { badge.classList.remove('step-pop'); }, 300);
+        }
+        function resetStepBadges() {
+            [1, 2, 3].forEach(function(n) {
+                const b = document.getElementById('stepBadge' + n);
+                if (b) { b.textContent = n; b.classList.remove('step-done', 'step-pop'); }
+            });
         }
 
         // ==================== DỊCH ẢNH (IMAGE OVERLAY) ====================
@@ -3425,6 +3730,8 @@ Output yêu cầu:
                 fitBtn3.classList.replace('btn-info', 'btn-outline-info');
                 fitBtn3.innerHTML = '<i class="fas fa-compress-alt"></i> Fit';
             }
+            const dlImgBtn = document.getElementById('downloadImgBtn');
+            if (dlImgBtn) dlImgBtn.style.display = 'none';
         });
 
         async function handleImgFile(file) {
@@ -3813,6 +4120,8 @@ Output yêu cầu:
                     createOverlayBlock(block, idx, container, imgEl);
                     appendBlockListRow(block, idx, blockList);
                 });
+                const dlImgBtn = document.getElementById('downloadImgBtn');
+                if (dlImgBtn) dlImgBtn.style.display = '';
             }
             if (imgEl.complete && imgEl.naturalWidth > 0) doRender();
             else imgEl.onload = doRender;
@@ -4379,6 +4688,38 @@ Output yêu cầu:
                 btn.innerHTML = '<i class="fas fa-download"></i> Lưu ảnh';
             }
         };
+
+        // ---- Download Result button (captures overlay at 2× scale) ----
+        document.getElementById('downloadImgBtn').addEventListener('click', async function() {
+            const container = document.getElementById('imgOverlayContainer');
+            if (!container) return;
+            const btn = this;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            const captureStyle = document.createElement('style');
+            captureStyle.id = '__captureStyleDL';
+            captureStyle.textContent = '.resize-handle{display:none!important}.overlay-block{outline:none!important}';
+            document.head.appendChild(captureStyle);
+            try {
+                const canvas = await html2canvas(container, {
+                    useCORS: true, allowTaint: true,
+                    scale: 2,
+                    backgroundColor: null,
+                });
+                const link = document.createElement('a');
+                const baseName = (imgCurrentFilename || 'overlay').replace(/\.[^.]+$/, '');
+                link.download = baseName + '_result.png';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            } catch(e) {
+                console.error(e);
+                alert('Lỗi khi tải ảnh: ' + e.message);
+            } finally {
+                document.getElementById('__captureStyleDL')?.remove();
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-download"></i>';
+            }
+        });
     </script>
 
     <!-- ==================== GLOSSARY JS ==================== -->
@@ -5344,6 +5685,54 @@ Output yêu cầu:
         });
     })();
 
+    // --- termCsvEditable contenteditable ↔ hidden textarea sync ---
+    (function() {
+        const editable = document.getElementById('termCsvEditable');
+        const hidden   = document.getElementById('termCsvTextarea');
+        const badge    = document.getElementById('termCsvBadge');
+        if (!editable || !hidden) return;
+        let _debounce = null;
+        function validateTermBadge(text) {
+            if (!badge) return;
+            const t = text.trim();
+            if (!t) { badge.innerHTML = ''; return; }
+            try {
+                const p = JSON.parse(t);
+                if (typeof p === 'object' && !Array.isArray(p)) {
+                    const n = Object.keys(p).length;
+                    badge.innerHTML = '<span class="badge bg-success"><i class="fas fa-check"></i> JSON hợp lệ (' + n + ' terms)</span>';
+                } else {
+                    badge.innerHTML = '<span class="badge bg-warning text-dark">JSON hợp lệ nhưng không phải object</span>';
+                }
+            } catch(e) {
+                // Could be CSV − no error badge for CSV
+                if (t.includes(':') || t.includes('=') || t.includes(',')) {
+                    badge.innerHTML = '<span class="badge bg-secondary">CSV / text</span>';
+                } else {
+                    badge.innerHTML = '<span class="badge bg-danger"><i class="fas fa-times"></i> ' + escapeHtml(e.message) + '</span>';
+                }
+            }
+        }
+        editable.addEventListener('input', function() {
+            hidden.value = this.innerText;
+            clearTimeout(_debounce);
+            _debounce = setTimeout(function() {
+                validateTermBadge(editable.innerText);
+                if (window.previewTermInput) window.previewTermInput();
+            }, 500);
+        });
+        const fmtBtn = document.getElementById('formatTermJsonBtn');
+        if (fmtBtn) fmtBtn.addEventListener('click', function() {
+            try {
+                const fmt = JSON.stringify(JSON.parse(editable.innerText), null, 2);
+                editable.innerText = fmt;
+                hidden.value = fmt;
+                validateTermBadge(fmt);
+                if (window.previewTermInput) window.previewTermInput();
+            } catch(e) { validateTermBadge(editable.innerText); }
+        });
+    })();
+
     // --- Step 3: JSON/CSV preview ---
     window.previewTermInput = function () {
         const raw = document.getElementById('termCsvTextarea').value.trim();
@@ -5664,6 +6053,8 @@ Output yêu cầu:
         </div>
     </div>
 </div>
+<!-- Toast Notification Container -->
+<div id="toastContainer" style="position:fixed;bottom:24px;right:24px;z-index:9999;display:flex;flex-direction:column;gap:8px;max-width:360px;pointer-events:none;"></div>
 
 </body>
 </html>
