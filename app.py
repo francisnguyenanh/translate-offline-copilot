@@ -2208,6 +2208,44 @@ def extract():
         return jsonify({'error': f'Lỗi khi xử lý file: {str(e)}'}), 500
 
 
+# ==================== HELPER: raw extract (no chunking/zip) ====================
+
+def _extract_raw(filepath, original_filename, glossary_ids, session_folder, color_filter=None, selected_sheets=None):
+    """
+    Trích xuất raw text từ file, trả về dict {key: value}.
+    Không tạo ZIP hay chunk - chỉ trích xuất data thô và áp glossary.
+    """
+    original_ext = original_filename.rsplit('.', 1)[-1].lower() if '.' in original_filename else 'xlsx'
+
+    if original_ext == 'xlsx':
+        workbook = load_workbook(filepath)
+        extracted_data = {}
+        for sheet_name in workbook.sheetnames:
+            if selected_sheets and sheet_name not in selected_sheets:
+                continue
+            sheet = workbook[sheet_name]
+            for row in sheet.iter_rows():
+                for cell in row:
+                    if cell.value is None:
+                        continue
+                    if isinstance(cell.value, str) and not cell.value.startswith('='):
+                        if color_filter is None or (_get_font_rgb_xlsx(cell) or '000000') in color_filter:
+                            extracted_data[f"{sheet_name}!{cell.coordinate}"] = cell.value
+        extracted_data.update(extract_xlsx_shapes(filepath))
+        workbook.close()
+    elif original_ext == 'pptx':
+        extracted_data = extract_text_from_pptx(filepath, color_filter)
+    elif original_ext == 'docx':
+        extracted_data = extract_text_from_docx(filepath, color_filter)
+    else:
+        raise ValueError(f'Không hỗ trợ định dạng .{original_ext}')
+
+    if glossary_ids:
+        extracted_data = apply_glossary(extracted_data, glossary_ids)
+
+    return extracted_data
+
+
 # ==================== HELPER: core extract logic ====================
 
 def _run_extract(filepath, original_filename, glossary_ids, session_folder, color_filter=None, selected_sheets=None):
@@ -3704,9 +3742,10 @@ def api_terminology_import_json():
 @login_required
 def batch_extract():
     """
-    Trích xuất nhiều file cùng lúc (Batch mode).
+    Trích xuất nhiều file cùng lúc với cross-file dedup.
+    Gộp tất cả values unique từ mọi file → 1 JSON duy nhất để dịch.
     Input (form-data): files[] + glossary_ids (comma-sep)
-    Output JSON: { batch_id, files:[{name,items,chunks}], total_items, zip_display_name, dedup_stats }
+    Output JSON: { batch_id, files:[{name,items}], total_items, dedup_stats, dedup_chunks, zip_display_name }
     """
     uploaded_files = request.files.getlist('files')
     valid_files = [f for f in uploaded_files if f.filename]
@@ -3719,11 +3758,14 @@ def batch_extract():
     glossary_ids_raw = request.form.get('glossary_ids', '')
     glossary_ids = [g.strip() for g in glossary_ids_raw.split(',') if g.strip()]
 
+    color_filter_raw = request.form.get('color_filter', '')
+    color_filter_list = [c.strip() for c in color_filter_raw.split(',') if c.strip()] if color_filter_raw else None
+
     session_folder = get_session_folder()
     batch_id = uuid.uuid4().hex[:10]
 
     batch_session_files = []
-    file_extract_results = []
+    file_extracted_list = []  # [{original_filename, extracted_data}]
 
     for idx, f in enumerate(valid_files):
         original_filename = f.filename
@@ -3733,14 +3775,10 @@ def batch_extract():
         f.save(filepath)
 
         try:
-            result = _run_extract(filepath, original_filename, glossary_ids, session_folder)
+            cf = color_filter_list if len(valid_files) == 1 else None
+            extracted = _extract_raw(filepath, original_filename, glossary_ids, session_folder, color_filter=cf)
         except Exception as e:
             return jsonify({'error': f'Lỗi khi xử lý "{original_filename}": {str(e)}'}), 500
-
-        # Gộp lại extracted_data từ các chunks để tính dedup toàn batch
-        extracted_data_file = {}
-        for chunk in result['files']:
-            extracted_data_file.update(json.loads(chunk['content']))
 
         batch_session_files.append({
             'idx': idx,
@@ -3749,44 +3787,34 @@ def batch_extract():
             'filepath': filepath,
             'ext': ext,
         })
-        file_extract_results.append({
-            'filename': original_filename,
-            'extracted_data': extracted_data_file,
-            'result': result,
+        file_extracted_list.append({
+            'original_filename': original_filename,
+            'extracted_data': extracted,
         })
 
-    # Build ZIP: mỗi file gốc → sub-folder, kèm _manifest.json
-    zip_display_name = f'batch_{batch_id}_json.zip'
-    zip_path = os.path.join(session_folder, f'batch_{batch_id}_extract.zip')
-    manifest = {'batch_id': batch_id, 'files': []}
+    # ── Cross-file dedup ──────────────────────────────────────────────
+    # value_to_refs: {value: {filename: [keys]}}
+    value_to_refs: dict = {}
+    for fe in file_extracted_list:
+        fname = fe['original_filename']
+        for key, value in fe['extracted_data'].items():
+            if value not in value_to_refs:
+                value_to_refs[value] = {}
+            if fname not in value_to_refs[value]:
+                value_to_refs[value][fname] = []
+            value_to_refs[value][fname].append(key)
 
-    total_items = 0
-    files_summary = []
+    # dedup_data: dedup_N → value (for translation)
+    # cross_map:  dedup_N → {filename: [orig_keys]} (for injection)
+    dedup_data: dict = {}
+    cross_map: dict = {}
+    for idx_d, (value, refs) in enumerate(value_to_refs.items(), 1):
+        dk = f'dedup_{idx_d}'
+        dedup_data[dk] = value
+        cross_map[dk] = refs
 
-    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_STORED) as zf:
-        for fr in file_extract_results:
-            base = os.path.splitext(fr['filename'])[0]
-            folder = f'{base}_json'
-            entry = {'source': fr['filename'], 'folder': folder, 'jsons': []}
-            for chunk in fr['result']['files']:
-                arcname = f'{folder}/{chunk["name"]}'
-                zf.writestr(arcname, chunk['content'])
-                entry['jsons'].append(arcname)
-            manifest['files'].append(entry)
-            total_items += fr['result']['total_items']
-            files_summary.append({
-                'name': fr['filename'],
-                'items': fr['result']['total_items'],
-                'chunks': fr['result']['total_files'],
-            })
-        zf.writestr('_manifest.json', json.dumps(manifest, ensure_ascii=False, indent=2))
-
-    # Cross-file dedup stats (đếm unique values trên toàn batch)
-    all_values: dict = {}
-    for fr in file_extract_results:
-        for v in fr['extracted_data'].values():
-            all_values[v] = all_values.get(v, 0) + 1
-    unique_values = len(all_values)
+    total_items = sum(len(fe['extracted_data']) for fe in file_extracted_list)
+    unique_values = len(dedup_data)
     dedup_stats = {
         'total': total_items,
         'unique': unique_values,
@@ -3794,10 +3822,40 @@ def batch_extract():
         'percent_saved': round((total_items - unique_values) * 100 / total_items) if total_items > 0 else 0,
     }
 
+    # Chunk dedup_data into JSON parts
+    CHUNK_SIZE = 300
+    items_list = list(dedup_data.items())
+    num_chunks = max(1, (unique_values + CHUNK_SIZE - 1) // CHUNK_SIZE)
+    dedup_chunks = []
+    for i in range(num_chunks):
+        chunk = dict(items_list[i * CHUNK_SIZE:(i + 1) * CHUNK_SIZE])
+        dedup_chunks.append({
+            'name': f'batch_{batch_id}_dedup_part{i+1:02d}_of_{num_chunks:02d}.json',
+            'content': json.dumps(chunk, ensure_ascii=False, indent=2),
+        })
+
+    # Build ZIP of dedup chunks for download
+    zip_display_name = f'batch_{batch_id}_dedup.zip'
+    zip_path = os.path.join(session_folder, f'batch_{batch_id}_extract.zip')
+    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_STORED) as zf:
+        for c in dedup_chunks:
+            zf.writestr(c['name'], c['content'])
+
+    # Save cross_map to disk
+    crossmap_path = os.path.join(session_folder, f'batch_{batch_id}_crossmap.json')
+    with open(crossmap_path, 'w', encoding='utf-8') as f:
+        json.dump(cross_map, f, ensure_ascii=False, indent=2)
+
+    files_summary = [
+        {'name': fe['original_filename'], 'items': len(fe['extracted_data'])}
+        for fe in file_extracted_list
+    ]
+
     session[f'batch_{batch_id}'] = {
         'batch_id': batch_id,
         'zip_path': zip_path,
         'zip_display_name': zip_display_name,
+        'crossmap_path': crossmap_path,
         'files': batch_session_files,
     }
 
@@ -3809,6 +3867,7 @@ def batch_extract():
         'total_items': total_items,
         'zip_display_name': zip_display_name,
         'dedup_stats': dedup_stats,
+        'dedup_chunks': dedup_chunks,
     })
 
 
@@ -3832,117 +3891,273 @@ def download_batch_zip(batch_id):
 @login_required
 def batch_inject():
     """
-    Nạp bản dịch cho nhiều file cùng lúc.
-    Input (form-data): batch_id + zip_file (ZIP JSON đã dịch + _manifest.json)
-    Output: ZIP chứa tất cả file đã inject bản dịch
+    Nạp bản dịch cho tất cả file trong batch, sử dụng cross-file dedup mapping.
+    Input (form-data): batch_id + pasted_json_data (JSON string từ textarea)
+    Output JSON: { success, files: [{token, display_name}] }
     """
     batch_id = request.form.get('batch_id', '').strip()
     key = f'batch_{batch_id}'
     if not batch_id or key not in session:
-        return jsonify({'error': 'Batch session không tồn tại hoặc đã hết hạn. Vui lòng Extract Batch lại.'}), 400
+        return jsonify({'error': 'Batch session không tồn tại hoặc đã hết hạn. Vui lòng Extract lại.'}), 400
 
     batch_info = session[key]
+    crossmap_path = batch_info.get('crossmap_path', '')
+    if not crossmap_path or not os.path.exists(crossmap_path):
+        return jsonify({'error': 'Cross-map không tồn tại. Vui lòng Extract lại.'}), 400
 
-    if 'zip_file' not in request.files or not request.files['zip_file'].filename:
-        return jsonify({'error': 'Cần upload file ZIP chứa JSON đã dịch.'}), 400
+    # Nhận translated JSON từ paste
+    translated_data: dict = {}
+    pasted_raw = request.form.get('pasted_json_data', '')
+    if pasted_raw:
+        try:
+            pasted_items = json.loads(pasted_raw)
+            if isinstance(pasted_items, list):
+                for item in pasted_items:
+                    if isinstance(item, dict):
+                        translated_data.update(item)
+            elif isinstance(pasted_items, dict):
+                translated_data.update(pasted_items)
+        except json.JSONDecodeError as e:
+            return jsonify({'error': f'JSON không hợp lệ: {str(e)}'}), 400
+    # Also accept json_files[] for backward compat
+    for jf in request.files.getlist('json_files'):
+        if not jf.filename:
+            continue
+        raw = jf.stream.read()
+        try:
+            content = raw.decode('utf-8')
+        except UnicodeDecodeError:
+            content = raw.decode('utf-8-sig')
+        try:
+            translated_data.update(json.loads(content))
+        except json.JSONDecodeError as e:
+            return jsonify({'error': f'File "{jf.filename}" không phải JSON hợp lệ: {str(e)}'}), 400
 
-    zip_file = request.files['zip_file']
+    if not translated_data:
+        return jsonify({'error': 'Không có dữ liệu JSON đã dịch.'}), 400
+
+    # Load cross_map
+    try:
+        with open(crossmap_path, 'r', encoding='utf-8') as f:
+            cross_map: dict = json.load(f)
+    except Exception as e:
+        return jsonify({'error': f'Lỗi đọc cross-map: {str(e)}'}), 500
+
     session_folder = get_session_folder()
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
-    temp_zip = os.path.join(session_folder, f'batch_translated_{batch_id}_{timestamp}.zip')
-    zip_file.save(temp_zip)
+    # Build per-file data from cross_map + translated_data
+    per_file_data: dict = {info['original_filename']: {} for info in batch_info['files']}
+    for dk, refs in cross_map.items():
+        if dk not in translated_data:
+            continue
+        translated_value = translated_data[dk]
+        for fname, orig_keys in refs.items():
+            if fname in per_file_data:
+                for ok in orig_keys:
+                    per_file_data[fname][ok] = translated_value
 
-    try:
-        with zipfile.ZipFile(temp_zip, 'r') as zin:
-            namelist = zin.namelist()
-            if '_manifest.json' not in namelist:
-                return jsonify({'error': 'File ZIP thiếu _manifest.json. Hãy dùng đúng ZIP từ bước Extract Batch.'}), 400
-            manifest = json.loads(zin.read('_manifest.json').decode('utf-8'))
-            json_contents: dict = {}
-            for name in namelist:
-                if name.lower().endswith('.json') and name != '_manifest.json':
-                    json_contents[name] = json.loads(zin.read(name).decode('utf-8'))
-    except Exception as e:
-        return jsonify({'error': f'Lỗi đọc file ZIP: {str(e)}'}), 400
-
-    session_files = {info['original_filename']: info for info in batch_info['files']}
-
-    output_zip_name = f'batch_{batch_id}_translated.zip'
-    output_zip_path = os.path.join(session_folder, f'batch_out_{batch_id}_{timestamp}.zip')
-    temp_outputs: list = [temp_zip]
     error_details: list = []
+    result_files: list = []
 
-    with zipfile.ZipFile(output_zip_path, 'w', zipfile.ZIP_DEFLATED) as zout:
-        for file_entry in manifest.get('files', []):
-            source_name = file_entry['source']
-            json_arcnames = file_entry.get('jsons', [])
+    for source_info in batch_info['files']:
+        source_name = source_info['original_filename']
+        source_filepath = source_info['filepath']
+        ext = source_info['ext']
+        file_json_data = per_file_data.get(source_name, {})
 
-            # Gộp tất cả JSON đã dịch cho file này
-            combined_json: dict = {}
-            for arcname in json_arcnames:
-                if arcname in json_contents:
-                    combined_json.update(json_contents[arcname])
+        if not file_json_data:
+            error_details.append(f'"{source_name}": không có dữ liệu dịch')
+            continue
+        if not os.path.exists(source_filepath):
+            error_details.append(f'"{source_name}": file gốc đã hết hạn')
+            continue
 
-            if not combined_json:
-                error_details.append(f'"{source_name}": không có JSON đã dịch')
+        out_display = f'{os.path.splitext(source_name)[0]}_translated.{ext}'
+        out_path = os.path.join(session_folder, f'bout_{batch_id}_{timestamp}_{source_info["idx"]:02d}.{ext}')
+
+        try:
+            if ext == 'xlsx':
+                inject_xlsx_shapes(source_filepath, out_path, file_json_data)
+            elif ext == 'pptx':
+                prs = inject_text_to_pptx(source_filepath, file_json_data)
+                prs.save(out_path)
+                del prs
+            elif ext == 'docx':
+                doc = inject_text_to_docx(source_filepath, file_json_data)
+                doc.save(out_path)
+                del doc
+            else:
+                error_details.append(f'"{source_name}": định dạng .{ext} không hỗ trợ')
                 continue
-            if source_name not in session_files:
-                error_details.append(f'"{source_name}": file gốc không có trong session')
-                continue
 
-            source_info = session_files[source_name]
-            source_filepath = source_info['filepath']
-            if not os.path.exists(source_filepath):
-                error_details.append(f'"{source_name}": file gốc đã hết hạn')
-                continue
+            if os.path.exists(out_path):
+                token = uuid.uuid4().hex[:14]
+                session[f'injected_{token}'] = {
+                    'path': out_path,
+                    'display_name': out_display,
+                }
+                result_files.append({'token': token, 'display_name': out_display})
+            else:
+                error_details.append(f'"{source_name}": không tạo được file output')
+        except Exception as e:
+            error_details.append(f'"{source_name}": {str(e)}')
 
-            ext = source_info['ext']
-            combined_json = expand_dedup_data(combined_json, session_folder)
-
-            out_filename = f'{os.path.splitext(source_name)[0]}_translated.{ext}'
-            out_path = os.path.join(session_folder, f'bout_{batch_id}_{timestamp}_{source_info["idx"]:02d}.{ext}')
-            temp_outputs.append(out_path)
-
-            try:
-                if ext == 'xlsx':
-                    inject_xlsx_shapes(source_filepath, out_path, combined_json)
-                elif ext == 'pptx':
-                    prs = inject_text_to_pptx(source_filepath, combined_json)
-                    prs.save(out_path)
-                    del prs
-                elif ext == 'docx':
-                    doc = inject_text_to_docx(source_filepath, combined_json)
-                    doc.save(out_path)
-                    del doc
-                else:
-                    error_details.append(f'"{source_name}": định dạng .{ext} không hỗ trợ')
-                    continue
-
-                if os.path.exists(out_path):
-                    zout.write(out_path, out_filename)
-                else:
-                    error_details.append(f'"{source_name}": không tạo được file output')
-            except Exception as e:
-                error_details.append(f'"{source_name}": {str(e)}')
-
-    if not os.path.exists(output_zip_path) or os.path.getsize(output_zip_path) < 50:
+    if not result_files:
         return jsonify({'error': 'Không inject được file nào. ' + '; '.join(error_details)}), 500
 
-    response = send_file(output_zip_path, mimetype='application/zip')
-    response = set_download_headers(response, output_zip_name, 'batch_translated.zip')
+    return jsonify({
+        'success': True,
+        'files': result_files,
+        'errors': error_details,
+    })
+
+
+@app.route('/download-injected/<token>', methods=['GET'])
+@login_required
+def download_injected(token):
+    """Tải xuống file đã inject theo token."""
+    token_key = f'injected_{token}'
+    if token_key not in session:
+        return jsonify({'error': 'File không tồn tại hoặc đã hết hạn.'}), 404
+    info = session[token_key]
+    file_path = info.get('path', '')
+    display_name = info.get('display_name', 'translated_file')
+    if not file_path or not os.path.exists(file_path):
+        session.pop(token_key, None)
+        return jsonify({'error': 'File không còn tồn tại.'}), 404
+
+    ext = file_path.rsplit('.', 1)[-1].lower()
+    mime_map = {
+        'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    }
+    response = send_file(file_path, mimetype=mime_map.get(ext, 'application/octet-stream'))
+    response = set_download_headers(response, display_name, f'translated.{ext}')
+
+    session.pop(token_key, None)
 
     @response.call_on_close
     def _cleanup():
         import time as _t, gc
         gc.collect()
         _t.sleep(0.1)
-        for p in temp_outputs + [output_zip_path]:
-            try:
-                if os.path.exists(p):
-                    os.remove(p)
-            except Exception:
-                pass
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+        except Exception:
+            pass
+
+    return response
+
+
+@app.route('/batch-inject-one', methods=['POST'])
+@login_required
+def batch_inject_one():
+    """
+    Nạp bản dịch cho một file trong batch, sử dụng cross-file dedup mapping.
+    Input (form-data): batch_id + source_filename + json_files[]
+    Output: file đã inject bản dịch (trực tiếp)
+    """
+    batch_id = request.form.get('batch_id', '').strip()
+    source_filename = request.form.get('source_filename', '').strip()
+    key = f'batch_{batch_id}'
+
+    if not batch_id or key not in session:
+        return jsonify({'error': 'Batch session không tồn tại hoặc đã hết hạn.'}), 400
+    if not source_filename:
+        return jsonify({'error': 'Thiếu tên file gốc (source_filename).'}), 400
+
+    batch_info = session[key]
+    session_files = {info['original_filename']: info for info in batch_info['files']}
+
+    if source_filename not in session_files:
+        return jsonify({'error': f'File "{source_filename}" không có trong batch session.'}), 400
+
+    source_info = session_files[source_filename]
+    source_filepath = source_info['filepath']
+    if not os.path.exists(source_filepath):
+        return jsonify({'error': f'File gốc "{source_filename}" không còn tồn tại.'}), 400
+
+    json_files_upload = request.files.getlist('json_files')
+    if not any(f.filename for f in json_files_upload):
+        return jsonify({'error': 'Cần upload ít nhất 1 file JSON.'}), 400
+
+    translated_data: dict = {}
+    for jf in json_files_upload:
+        if not jf.filename:
+            continue
+        raw = jf.stream.read()
+        try:
+            content = raw.decode('utf-8')
+        except UnicodeDecodeError:
+            content = raw.decode('utf-8-sig')
+        try:
+            translated_data.update(json.loads(content))
+        except json.JSONDecodeError as e:
+            return jsonify({'error': f'File "{jf.filename}" không phải JSON hợp lệ: {str(e)}'}), 400
+
+    # Use cross_map to reconstruct per-file data for this source file
+    crossmap_path = batch_info.get('crossmap_path', '')
+    json_data: dict = {}
+    if crossmap_path and os.path.exists(crossmap_path):
+        try:
+            with open(crossmap_path, 'r', encoding='utf-8') as f:
+                cross_map = json.load(f)
+            for dk, refs in cross_map.items():
+                if source_filename in refs and dk in translated_data:
+                    for orig_key in refs[source_filename]:
+                        json_data[orig_key] = translated_data[dk]
+        except Exception:
+            json_data = translated_data  # fallback: use translated directly
+    else:
+        json_data = translated_data  # no cross_map → use translated directly
+
+    if not json_data:
+        return jsonify({'error': f'Không tìm thấy dữ liệu dịch cho file "{source_filename}".'}), 400
+
+    session_folder = get_session_folder()
+    ext = source_info['ext']
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    out_display = f'{os.path.splitext(source_filename)[0]}_translated.{ext}'
+    out_path = os.path.join(session_folder, f'batchone_{batch_id}_{timestamp}.{ext}')
+
+    mime_map = {
+        'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    }
+
+    try:
+        if ext == 'xlsx':
+            inject_xlsx_shapes(source_filepath, out_path, json_data)
+        elif ext == 'pptx':
+            prs = inject_text_to_pptx(source_filepath, json_data)
+            prs.save(out_path)
+            del prs
+        elif ext == 'docx':
+            doc = inject_text_to_docx(source_filepath, json_data)
+            doc.save(out_path)
+            del doc
+        else:
+            return jsonify({'error': f'Định dạng .{ext} không hỗ trợ.'}), 400
+    except Exception as e:
+        return jsonify({'error': f'Lỗi khi inject: {str(e)}'}), 500
+
+    response = send_file(out_path, mimetype=mime_map.get(ext, 'application/octet-stream'))
+    response = set_download_headers(response, out_display, f'download.{ext}')
+
+    @response.call_on_close
+    def _cleanup():
+        import time as _t, gc
+        gc.collect()
+        _t.sleep(0.1)
+        try:
+            if os.path.exists(out_path):
+                os.remove(out_path)
+        except Exception:
+            pass
 
     return response
 

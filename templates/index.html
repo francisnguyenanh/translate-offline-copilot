@@ -579,9 +579,6 @@
                         <button type="button" class="btn btn-sm flex-fill btn-mode" id="modeSheetBtn" onclick="setInputMode('sheet')">
                             <i class="fab fa-google"></i> Google Sheet
                         </button>
-                        <button type="button" class="btn btn-sm flex-fill btn-mode" id="modeBatchBtn" onclick="setInputMode('batch')">
-                            <i class="fas fa-layer-group"></i> Batch
-                        </button>
                     </div>
 
                     <!-- Panel A: Upload -->
@@ -590,16 +587,19 @@
                             <div class="upload-area compact" id="mainUploadArea">
                                 <i class="fas fa-cloud-upload-alt"></i>
                                 <p class="mb-2 small"><strong>Kéo thả file vào đây</strong></p>
-                                <input type="file" class="form-control" id="mainExcelFile" name="file" accept=".xlsx,.pptx,.docx" style="display: none;">
+                                <p class="text-muted mb-1" style="font-size:0.72rem;">1 hoặc nhiều file .xlsx / .pptx / .docx</p>
+                                <input type="file" class="form-control" id="mainExcelFile" name="files" accept=".xlsx,.pptx,.docx" multiple style="display: none;">
                                 <label for="mainExcelFile" class="btn btn-custom btn-sm">
                                     <i class="fas fa-folder-open"></i> Chọn file
                                 </label>
                             </div>
                             
                             <div id="mainFileInfo" class="file-info" style="display: none;">
-                                <i id="mainFileIcon" class="fas fa-file text-secondary"></i>
-                                <span id="mainFileName" class="small"></span>
-                                <button type="button" class="btn btn-sm btn-outline-danger float-end" id="mainFileRemove">
+                                <div id="mainFileInfoContent" class="d-flex align-items-center gap-2 flex-grow-1 text-truncate">
+                                    <i id="mainFileIcon" class="fas fa-file text-secondary flex-shrink-0"></i>
+                                    <span id="mainFileName" class="small text-truncate"></span>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-outline-danger flex-shrink-0" id="mainFileRemove">
                                     <i class="fas fa-times"></i>
                                 </button>
                             </div>
@@ -663,27 +663,7 @@
                         </div>
                     </div>
 
-                    <!-- Panel C: Batch -->
-                    <div id="panelBatch" style="display:none;">
-                        <div class="upload-area compact" id="batchUploadArea">
-                            <i class="fas fa-layer-group" style="font-size:1.5rem;color:#667eea;"></i>
-                            <p class="mb-2 small"><strong>Kéo thả nhiều file vào đây</strong></p>
-                            <input type="file" id="batchFilesInput" multiple accept=".xlsx,.pptx,.docx" style="display:none;">
-                            <label for="batchFilesInput" class="btn btn-custom btn-sm">
-                                <i class="fas fa-folder-open"></i> Chọn nhiều file
-                            </label>
-                            <p class="text-muted mb-0 mt-1" style="font-size:0.72rem;">.xlsx / .pptx / .docx</p>
-                        </div>
-                        <div id="batchFileList" style="display:none;" class="mt-2">
-                            <div class="d-flex justify-content-between align-items-center mb-1">
-                                <small><strong><span id="batchFileCount">0</span> file</strong></small>
-                                <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2" style="font-size:0.72rem;" onclick="clearBatchFiles()">
-                                    <i class="fas fa-trash"></i> Xóa tất cả
-                                </button>
-                            </div>
-                            <div id="batchFileItems" style="max-height:180px; overflow-y:auto; font-size:0.8rem;"></div>
-                        </div>
-                    </div>
+
 
                     <!-- Chọn ngôn ngữ đích -->
                     <div class="mt-3">
@@ -907,66 +887,29 @@ Output yêu cầu:
                     </div>
                     
                     <form id="injectForm" enctype="multipart/form-data">
-                        <!-- Tab chọn giữa Upload file và Paste JSON -->
-                        <ul class="nav nav-tabs nav-fill mb-2" id="injectTabs" role="tablist">
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="upload-tab" data-bs-toggle="tab" data-bs-target="#uploadTab" type="button" role="tab">
-                                    <i class="fas fa-folder-open"></i> Upload File
-                                </button>
-                            </li>
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link active" id="paste-tab" data-bs-toggle="tab" data-bs-target="#pasteTab" type="button" role="tab">
-                                    <i class="fas fa-paste"></i> Paste JSON
-                                </button>
-                            </li>
-                        </ul>
-                        
-                        <div class="tab-content" id="injectTabContent">
-                            <!-- Tab Upload File -->
-                            <div class="tab-pane fade" id="uploadTab" role="tabpanel">
-                                <div class="upload-area compact" id="injectJsonUploadArea">
-                                    <i class="fas fa-file-code"></i>
-                                    <p class="mb-2 small"><strong>Kéo thả JSON/ZIP</strong></p>
-                                    <input type="file" class="form-control" id="injectJsonFile" name="json_files" accept=".json,.zip" multiple style="display: none;">
-                                    <label for="injectJsonFile" class="btn btn-custom btn-sm">
-                                        <i class="fas fa-folder-open"></i> Chọn file
-                                    </label>
-                                </div>
-                                
-                                <div id="injectJsonFileInfo" class="file-info" style="display: none;">
-                                    <div id="injectJsonFileList"></div>
-                                    <button type="button" class="btn btn-sm btn-outline-danger float-end mt-2" id="injectJsonFileRemove">
-                                        <i class="fas fa-times"></i> Xóa tất cả
-                                    </button>
-                                </div>
-                            </div>
-                            
-                            <!-- Tab Paste JSON -->
-                            <div class="tab-pane fade show active" id="pasteTab" role="tabpanel">
-                                <div class="mb-2">
-                                    <label class="form-label small mb-1"><strong>Paste nội dung JSON:</strong></label>
-                                    <textarea class="form-control" id="pasteJsonTextarea" rows="5" placeholder='Paste nội dung JSON vào đây, ví dụ:
+                        <!-- Paste JSON -->
+                        <div class="mb-2">
+                            <label class="form-label small mb-1"><strong>Dán nội dung JSON đã dịch:</strong></label>
+                            <textarea class="form-control" id="pasteJsonTextarea" rows="5" placeholder='Paste nội dung JSON vào đây:
 {
-  "Sheet1!A1": "Translated text 1",
-  "Sheet1!A2": "Translated text 2"
+  "dedup_1": "Translated text 1",
+  "dedup_2": "Translated text 2"
 }' style="font-family: monospace; font-size: 0.85rem;"></textarea>
-                                </div>
-                                <div class="text-center mb-2">
-                                    <button type="button" class="btn btn-outline-primary btn-sm" id="addPastedJsonBtn">
-                                        <i class="fas fa-plus-circle"></i> Thêm JSON này
-                                    </button>
-                                </div>
-                                
-                                <!-- Danh sách JSON đã paste -->
-                                <div id="pastedJsonList" style="display: none;">
-                                    <div class="file-info">
-                                        <label class="form-label small mb-1"><strong>Đã thêm:</strong></label>
-                                        <div id="pastedJsonItems"></div>
-                                        <button type="button" class="btn btn-sm btn-outline-danger mt-2" id="clearPastedJsonBtn">
-                                            <i class="fas fa-trash"></i> Xóa tất cả
-                                        </button>
-                                    </div>
-                                </div>
+                        </div>
+                        <div class="text-center mb-2">
+                            <button type="button" class="btn btn-outline-primary btn-sm" id="addPastedJsonBtn">
+                                <i class="fas fa-plus-circle"></i> Thêm JSON này
+                            </button>
+                        </div>
+                        
+                        <!-- Danh sách JSON đã paste -->
+                        <div id="pastedJsonList" style="display: none;">
+                            <div class="file-info">
+                                <label class="form-label small mb-1"><strong>Đã thêm:</strong></label>
+                                <div id="pastedJsonItems"></div>
+                                <button type="button" class="btn btn-sm btn-outline-danger mt-2" id="clearPastedJsonBtn">
+                                    <i class="fas fa-trash"></i> Xóa tất cả
+                                </button>
                             </div>
                         </div>
                         
@@ -988,38 +931,12 @@ Output yêu cầu:
                             <div class="spinner-border text-primary" role="status">
                                 <span class="visually-hidden">Đang xử lý...</span>
                             </div>
-                            <p class="mt-2 small">Đang nạp bản dịch...</p>
+                            <p class="mt-2 small" id="injectLoadingText">Đang nạp bản dịch...</p>
                         </div>
                         
                         <div id="injectAlert"></div>
                     </form>
 
-                    <!-- ===== BATCH INJECT SECTION ===== -->
-                    <div id="batchInjectSection" style="display:none;" class="mt-3 p-2 rounded border" style="border-color:#667eea;">
-                        <div class="d-flex align-items-center gap-2 mb-2">
-                            <i class="fas fa-layer-group" style="color:#667eea;"></i>
-                            <strong class="small">Nạp dịch Batch</strong>
-                            <span class="badge ms-auto" id="batchInjectFilesCount" style="background:#667eea;">0 files</span>
-                        </div>
-                        <p class="text-muted mb-2" style="font-size:0.72rem;">
-                            <i class="fas fa-info-circle"></i>
-                            Upload ZIP chứa JSON đã dịch (ZIP từ bước Extract Batch). Hệ thống tự ghép từng JSON vào file gốc tương ứng.
-                        </p>
-                        <div class="upload-area compact mb-2" id="batchTranslatedZipArea" onclick="document.getElementById('batchTranslatedZipInput').click();" style="cursor:pointer;">
-                            <i class="fas fa-file-archive"></i>
-                            <p class="mb-1 small"><strong>Click để chọn ZIP đã dịch</strong></p>
-                            <input type="file" id="batchTranslatedZipInput" accept=".zip" style="display:none;">
-                            <div id="batchTranslatedZipName" class="text-muted" style="font-size:0.75rem;"></div>
-                        </div>
-                        <button type="button" class="btn btn-custom btn-sm w-100" id="batchInjectBtn" onclick="runBatchInject()" disabled>
-                            <i class="fas fa-bolt"></i> Nạp tất cả & Tải ZIP
-                        </button>
-                        <div class="loading text-center mt-2" id="batchInjectLoading" style="display:none;">
-                            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
-                            <span class="small ms-2">Đang inject tất cả file...</span>
-                        </div>
-                        <div id="batchInjectAlert" class="mt-2"></div>
-                    </div>
                     <div class="mt-3">
                         <div class="collapse-toggle p-2" style="background: #f8f9fa; border-radius: 5px;" data-bs-toggle="collapse" data-bs-target="#step3Guide">
                             <i class="fas fa-info-circle text-info"></i>
@@ -1890,25 +1807,21 @@ Output yêu cầu:
         let currentLangName        = 'tiếng Nhật';
         let currentTemplateContent = '';
         let editingTemplateIdx     = -1;
-        let currentInputMode       = 'upload'; // 'upload' | 'sheet' | 'batch'
+        let currentInputMode       = 'upload'; // 'upload' | 'sheet'
         window.sheetSessionKey     = null;
         window.batchId             = null;
-        let batchFiles             = [];   // Array of File objects (batch mode)
 
         // ==================== INPUT MODE TOGGLE ====================
         function setInputMode(mode) {
             currentInputMode = mode;
             document.getElementById('panelUpload').style.display = mode === 'upload' ? '' : 'none';
             document.getElementById('panelSheet').style.display  = mode === 'sheet'  ? '' : 'none';
-            document.getElementById('panelBatch').style.display  = mode === 'batch'  ? '' : 'none';
             document.getElementById('modeUploadBtn').classList.toggle('active', mode === 'upload');
             document.getElementById('modeSheetBtn').classList.toggle('active',  mode === 'sheet');
-            document.getElementById('modeBatchBtn').classList.toggle('active',  mode === 'batch');
             // Sync extract button
             const eb = document.getElementById('extractBtn');
             if (eb) {
-                if (mode === 'batch')  eb.disabled = batchFiles.length === 0;
-                else if (mode === 'upload') eb.disabled = !(uploadedExcelFilename || (document.getElementById('mainExcelFile') && document.getElementById('mainExcelFile').files.length > 0));
+                if (mode === 'upload') eb.disabled = !(uploadedExcelFilename || (document.getElementById('mainExcelFile') && document.getElementById('mainExcelFile').files.length > 0));
                 else eb.disabled = !window.sheetSessionKey;
             }
         }
@@ -1996,107 +1909,7 @@ Output yêu cầu:
             return checked;
         }
 
-        // ==================== BATCH MODE ====================
-        function getFileIcon(filename) {
-            const ext = filename.split('.').pop().toLowerCase();
-            if (ext === 'xlsx') return 'fa-file-excel text-success';
-            if (ext === 'pptx') return 'fa-file-powerpoint text-danger';
-            if (ext === 'docx') return 'fa-file-word text-primary';
-            return 'fa-file text-secondary';
-        }
-
-        function renderBatchFileList() {
-            const listDiv   = document.getElementById('batchFileList');
-            const container = document.getElementById('batchFileItems');
-            const countEl   = document.getElementById('batchFileCount');
-            const eb        = document.getElementById('extractBtn');
-
-            if (batchFiles.length === 0) {
-                listDiv.style.display = 'none';
-                if (eb && currentInputMode === 'batch') eb.disabled = true;
-                return;
-            }
-            listDiv.style.display = '';
-            countEl.textContent = batchFiles.length;
-            container.innerHTML = '';
-            batchFiles.forEach(function(f, idx) {
-                const size = f.size > 1048576
-                    ? (f.size / 1048576).toFixed(1) + ' MB'
-                    : Math.round(f.size / 1024) + ' KB';
-                const row = document.createElement('div');
-                row.className = 'd-flex align-items-center gap-2 py-1 border-bottom';
-                row.dataset.idx = idx;
-                row.innerHTML =
-                    '<i class="fas ' + getFileIcon(f.name) + '" style="width:14px;flex-shrink:0;"></i>' +
-                    '<span class="small text-truncate flex-grow-1" title="' + f.name + '">' + f.name + '</span>' +
-                    '<span class="text-muted" style="font-size:0.68rem;white-space:nowrap;">' + size + '</span>' +
-                    '<span class="badge bg-secondary batch-status" style="font-size:0.65rem;">Chờ</span>' +
-                    '<button type="button" class="btn btn-link btn-sm p-0 ms-1" onclick="removeBatchFile(' + idx + ')">' +
-                    '<i class="fas fa-times text-danger" style="font-size:0.75rem;"></i></button>';
-                container.appendChild(row);
-            });
-            if (eb && currentInputMode === 'batch') eb.disabled = false;
-        }
-
-        function addBatchFiles(fileList) {
-            const allowed = ['xlsx', 'pptx', 'docx'];
-            let added = 0;
-            for (let i = 0; i < fileList.length; i++) {
-                const f = fileList[i];
-                const ext = f.name.split('.').pop().toLowerCase();
-                if (allowed.includes(ext)) { batchFiles.push(f); added++; }
-            }
-            if (added > 0) renderBatchFileList();
-        }
-
-        function removeBatchFile(idx) {
-            batchFiles.splice(idx, 1);
-            renderBatchFileList();
-        }
-
-        function clearBatchFiles() {
-            batchFiles = [];
-            window.batchId = null;
-            renderBatchFileList();
-            document.getElementById('batchInjectSection').style.display = 'none';
-            document.getElementById('extractResult').style.display = 'none';
-        }
-
-        // Bind batch file input
-        (function() {
-            const inp = document.getElementById('batchFilesInput');
-            if (!inp) return;
-            inp.addEventListener('change', function() { addBatchFiles(this.files); });
-            // Drag-drop on upload area
-            const area = document.getElementById('batchUploadArea');
-            if (!area) return;
-            area.addEventListener('dragover', function(e) {
-                e.preventDefault();
-                area.style.borderColor = '#764ba2'; area.style.background = '#e9ecef';
-            });
-            area.addEventListener('dragleave', function() {
-                area.style.borderColor = '#667eea'; area.style.background = '#f8f9fa';
-            });
-            area.addEventListener('drop', function(e) {
-                e.preventDefault();
-                area.style.borderColor = '#667eea'; area.style.background = '#f8f9fa';
-                addBatchFiles(e.dataTransfer.files);
-            });
-        })();
-
-        // Bind batch translated zip input
-        (function() {
-            const inp = document.getElementById('batchTranslatedZipInput');
-            if (!inp) return;
-            inp.addEventListener('change', function() {
-                if (this.files.length > 0) {
-                    document.getElementById('batchTranslatedZipName').textContent = this.files[0].name;
-                    document.getElementById('batchInjectBtn').disabled = false;
-                }
-            });
-        })();
-
-        async function runBatchExtract() {
+        async function _unused_runBatchExtract_deleted() {
             if (batchFiles.length === 0) {
                 showAlert(document.getElementById('extractAlert'), 'warning', 'Vui lòng thêm file vào danh sách Batch!');
                 return;
@@ -2145,17 +1958,45 @@ Output yêu cầu:
 
                 // Summary
                 const ds = data.dedup_stats;
-                document.getElementById('extractSummary').textContent =
-                    data.total_files + ' file · ' + data.total_items + ' keys' +
-                    (ds && ds.saved > 0 ? ' (' + ds.unique + ' unique, -' + ds.percent_saved + '%)' : '');
+                const dedupInfo = ds && ds.saved > 0
+                    ? ds.unique + ' unique keys (-' + ds.percent_saved + '% vs ' + ds.total + ' total từ ' + data.total_files + ' file)'
+                    : ds.total + ' keys · ' + data.total_files + ' file';
+                document.getElementById('extractSummary').textContent = dedupInfo;
 
                 // Đặt link tải ZIP
                 document.getElementById('downloadZipBtn').href = '/download-batch-zip/' + data.batch_id;
                 extractResult.style.display = 'block';
 
+                // Render cross-file dedup chunks với Copy buttons
+                const jfl = document.getElementById('jsonFileList');
+                jfl.innerHTML = '';
+                if (data.dedup_chunks && data.dedup_chunks.length > 0) {
+                    const ds2 = data.dedup_stats;
+                    const hdr = document.createElement('div');
+                    hdr.className = 'd-flex align-items-center gap-2 mb-1 px-1';
+                    hdr.style.cssText = 'background:#e8f5e9;border-radius:4px;padding:4px 6px;';
+                    hdr.innerHTML =
+                        '<i class="fas fa-compress-alt text-success"></i>' +
+                        '<span class="small fw-bold flex-grow-1">Cross-file Dedup — ' + data.total_files + ' file gộp lại</span>' +
+                        '<span class="badge bg-success" style="font-size:0.65rem;">' + ds2.unique + ' unique' +
+                        (ds2.saved > 0 ? ' / ' + ds2.total + ' total' : '') + '</span>';
+                    jfl.appendChild(hdr);
+                    const perFileList = document.createElement('div');
+                    perFileList.style.cssText = 'font-size:0.72rem;color:#555;padding:2px 4px 4px 4px;';
+                    data.files.forEach(function(f) {
+                        const s = document.createElement('span');
+                        s.className = 'me-2';
+                        s.textContent = f.name + ' (' + f.items + ' keys)';
+                        perFileList.appendChild(s);
+                    });
+                    jfl.appendChild(perFileList);
+                    renderJsonFileRowsTo(data.dedup_chunks, jfl);
+                }
+
                 // Hiện Batch Inject section
                 document.getElementById('batchInjectFilesCount').textContent = data.total_files + ' files';
                 document.getElementById('batchInjectSection').style.display = '';
+                renderBatchInjectOneList(data.files.map(function(f) { return f.name; }));
 
                 showAlert(document.getElementById('extractAlert'), 'success',
                     '<i class="fas fa-check-circle"></i> Hoàn tất! ' + data.total_files + ' file · ' + data.total_items + ' keys được trích xuất.');
@@ -2170,15 +2011,29 @@ Output yêu cầu:
             }
         }
 
+        function updateBatchInjectZipLabel(inputEl) {
+            const label = document.getElementById('batchTranslatedZipName');
+            if (!label) return;
+            const files = inputEl.files;
+            if (!files || files.length === 0) {
+                label.textContent = '';
+            } else if (files.length === 1) {
+                label.textContent = files[0].name;
+            } else {
+                label.textContent = files.length + ' file JSON đã chọn';
+            }
+            document.getElementById('batchInjectBtn').disabled = files.length === 0;
+        }
+
         async function runBatchInject() {
             if (!window.batchId) {
                 showAlert(document.getElementById('batchInjectAlert'), 'warning',
                     'Không có batch session. Vui lòng Extract Batch trước.');
                 return;
             }
-            const zipInput = document.getElementById('batchTranslatedZipInput');
-            if (!zipInput || !zipInput.files.length) {
-                showAlert(document.getElementById('batchInjectAlert'), 'warning', 'Vui lòng chọn file ZIP đã dịch.');
+            const jsonInput = document.getElementById('batchTranslatedZipInput');
+            if (!jsonInput || !jsonInput.files.length) {
+                showAlert(document.getElementById('batchInjectAlert'), 'warning', 'Vui lòng chọn ít nhất 1 file JSON đã dịch.');
                 return;
             }
             const loading = document.getElementById('batchInjectLoading');
@@ -2189,7 +2044,7 @@ Output yêu cầu:
 
             const formData = new FormData();
             formData.append('batch_id', window.batchId);
-            formData.append('zip_file', zipInput.files[0]);
+            Array.from(jsonInput.files).forEach(function(f) { formData.append('json_files', f); });
 
             try {
                 const res = await fetch('/batch-inject', { method: 'POST', body: formData });
@@ -2215,6 +2070,112 @@ Output yêu cầu:
                 btn.disabled = false;
                 showAlert(document.getElementById('batchInjectAlert'), 'danger',
                     '<i class="fas fa-exclamation-circle"></i> ' + e.message);
+            }
+        }
+
+        // ==================== BATCH INJECT ONE ====================
+        function renderBatchInjectOneList(sourceFiles) {
+            const container = document.getElementById('batchInjectOneList');
+            if (!container) return;
+            container.innerHTML = '';
+            if (!sourceFiles || sourceFiles.length === 0) {
+                container.innerHTML = '<p class="text-muted small text-center py-2">Không có file nào.</p>';
+                return;
+            }
+            sourceFiles.forEach(function(srcName) {
+                const ext = srcName.split('.').pop().toLowerCase();
+                const iconClass = ext === 'xlsx' ? 'fa-file-excel text-success' :
+                                  ext === 'pptx' ? 'fa-file-powerpoint text-danger' :
+                                  ext === 'docx' ? 'fa-file-word text-primary' : 'fa-file';
+                const safeId = 'batchone_' + srcName.replace(/[^a-zA-Z0-9]/g, '_') + '_' + Math.random().toString(36).slice(2, 7);
+                const row = document.createElement('div');
+                row.id = safeId;
+                row.className = 'border rounded p-2 mb-2';
+                row.style.fontSize = '0.8rem';
+                row.innerHTML =
+                    '<div class="d-flex align-items-center gap-2 mb-1">' +
+                        '<i class="fas ' + iconClass + '"></i>' +
+                        '<span class="small fw-bold text-truncate flex-grow-1" title="' + srcName + '">' + srcName + '</span>' +
+                    '</div>' +
+                    '<div class="d-flex gap-2 flex-wrap align-items-center">' +
+                        '<label class="btn btn-outline-secondary btn-sm py-0 px-2 mb-0" style="font-size:0.72rem;cursor:pointer;">' +
+                            '<i class="fas fa-folder-open"></i> Chọn JSON' +
+                            '<input type="file" accept=".json" multiple style="display:none;" class="batch-one-json-input" onchange="updateBatchOneFileLabel(this)">' +
+                        '</label>' +
+                        '<span class="small text-muted batch-one-file-label flex-grow-1">Chưa chọn file</span>' +
+                        '<button type="button" class="btn btn-custom btn-sm py-0 px-2 batch-one-inject-btn" ' +
+                            'onclick="runBatchInjectOne(\'' + srcName.replace(/'/g, "\\'") + '\', document.getElementById(\'' + safeId + '\'))" ' +
+                            'style="font-size:0.72rem;">' +
+                            '<i class="fas fa-download"></i> Nạp & Tải' +
+                        '</button>' +
+                        '<div class="spinner-border spinner-border-sm text-primary batch-one-spinner" role="status" style="display:none;width:1rem;height:1rem;"></div>' +
+                    '</div>' +
+                    '<div class="batch-one-alert mt-1"></div>';
+                container.appendChild(row);
+            });
+        }
+
+        function updateBatchOneFileLabel(inputEl) {
+            const label = inputEl.closest('.border').querySelector('.batch-one-file-label');
+            if (!label) return;
+            const files = inputEl.files;
+            if (!files || files.length === 0) {
+                label.textContent = 'Chưa chọn file';
+            } else if (files.length === 1) {
+                label.textContent = files[0].name;
+            } else {
+                label.textContent = files.length + ' file đã chọn';
+            }
+        }
+
+        async function runBatchInjectOne(sourceFilename, rowEl) {
+            if (!window.batchId) {
+                showAlert(rowEl.querySelector('.batch-one-alert'), 'warning',
+                    'Không có batch session. Vui lòng Extract Batch trước.');
+                return;
+            }
+            const jsonInput = rowEl.querySelector('.batch-one-json-input');
+            if (!jsonInput || !jsonInput.files || jsonInput.files.length === 0) {
+                showAlert(rowEl.querySelector('.batch-one-alert'), 'warning', 'Vui lòng chọn ít nhất 1 file JSON.');
+                return;
+            }
+
+            const alertEl  = rowEl.querySelector('.batch-one-alert');
+            const btnEl    = rowEl.querySelector('.batch-one-inject-btn');
+            const spinner  = rowEl.querySelector('.batch-one-spinner');
+
+            alertEl.innerHTML = '';
+            btnEl.disabled = true;
+            spinner.style.display = 'inline-block';
+
+            const formData = new FormData();
+            formData.append('batch_id', window.batchId);
+            formData.append('source_filename', sourceFilename);
+            Array.from(jsonInput.files).forEach(function(f) { formData.append('json_files', f); });
+
+            try {
+                const res = await fetch('/batch-inject-one', { method: 'POST', body: formData });
+                spinner.style.display = 'none';
+                btnEl.disabled = false;
+                if (!res.ok) {
+                    const err = await res.json().catch(function() { return {}; });
+                    throw new Error(err.error || 'Lỗi không xác định');
+                }
+                const blob = await res.blob();
+                const cd   = res.headers.get('Content-Disposition') || '';
+                const m    = cd.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                const ext  = sourceFilename.split('.').pop();
+                let filename = sourceFilename.replace(/\.[^.]+$/, '') + '_translated.' + ext;
+                if (m && m[1]) filename = decodeURIComponent(m[1].replace(/['"]/g, ''));
+                const url = URL.createObjectURL(blob);
+                const a   = document.createElement('a');
+                a.href = url; a.download = filename; a.click();
+                URL.revokeObjectURL(url);
+                showAlert(alertEl, 'success', '<i class="fas fa-check-circle"></i> Đã tải về!');
+            } catch (e) {
+                spinner.style.display = 'none';
+                btnEl.disabled = false;
+                showAlert(alertEl, 'danger', '<i class="fas fa-exclamation-circle"></i> ' + e.message);
             }
         }
 
@@ -2330,14 +2291,11 @@ Output yêu cầu:
             }
         });
 
-        // FIX: Function to update inject button state based on both source file and JSON data presence
         function updateInjectButtonState() {
-            const hasSourceFile = !!(uploadedExcelFilename || window.sheetSessionKey || mainExcelFile.files.length > 0);
-            const hasJsonData = !!(pastedJsonData.length > 0 || injectJsonFile.files.length > 0);
+            const hasSource = !!(window.batchId || window.sheetSessionKey);
+            const hasJson   = pastedJsonData.length > 0;
             const injectBtn = document.getElementById('injectBtn');
-            if (injectBtn) {
-                injectBtn.disabled = !(hasSourceFile && hasJsonData);
-            }
+            if (injectBtn) injectBtn.disabled = !(hasSource && hasJson);
         }
         
         // ==================== UPLOAD EXCEL CHUNG ====================
@@ -2350,38 +2308,33 @@ Output yêu cầu:
         const extractBtn = document.getElementById('extractBtn');
         const injectBtn = document.getElementById('injectBtn');
         
-        // Xử lý khi chọn file Excel chung
+        // Xử lý khi chọn file Excel chung (1 hoặc nhiều file)
         mainExcelFile.addEventListener('change', function(e) {
-            if (e.target.files.length > 0) {
-                const file = e.target.files[0];
-                mainFileName.textContent = file.name;
-                mainFileInfo.style.display = 'block';
+            const files = e.target.files;
+            if (!files || files.length === 0) return;
+            const fileIcon = document.getElementById('mainFileIcon');
+            if (files.length === 1) {
+                const file = files[0];
                 uploadedExcelFilename = file.name;
-                
-                // Thay đổi icon phù hợp với loại file
-                const fileIcon = document.getElementById('mainFileIcon');
-                const fileName = file.name.toLowerCase();
-                
-                if (fileName.endsWith('.xlsx')) {
-                    fileIcon.className = 'fas fa-file-excel text-success';
-                } else if (fileName.endsWith('.pptx')) {
-                    fileIcon.className = 'fas fa-file-powerpoint text-danger';
-                } else if (fileName.endsWith('.docx')) {
-                    fileIcon.className = 'fas fa-file-word text-primary';
-                } else {
-                    fileIcon.className = 'fas fa-file text-secondary';
-                }
-                
-                // Kích hoạt cả 2 nút Extract và Inject
-                extractBtn.disabled = false;
-                injectBtn.disabled = false;
-                
-                // Hiển thị thông báo
-                showAlert(mainAlert, 'success', `File "${file.name}" đã được chọn. Bạn có thể tiến hành Extract hoặc Inject.`);
-
-                // Fetch màu chữ từ file để hiển thị bộ lọc màu
+                mainFileName.textContent = file.name;
+                const fn = file.name.toLowerCase();
+                if (fn.endsWith('.xlsx'))      fileIcon.className = 'fas fa-file-excel text-success';
+                else if (fn.endsWith('.pptx')) fileIcon.className = 'fas fa-file-powerpoint text-danger';
+                else if (fn.endsWith('.docx')) fileIcon.className = 'fas fa-file-word text-primary';
+                else                           fileIcon.className = 'fas fa-file text-secondary';
+                // Fetch màu chữ từ file
                 fetchExtractColors(file);
+            } else {
+                uploadedExcelFilename = files[0].name;
+                mainFileName.textContent = files.length + ' file đã chọn';
+                fileIcon.className = 'fas fa-layer-group text-primary';
+                // Ẩn bộ lọc màu khi nhiều file
+                resetColorFilter();
             }
+            mainFileInfo.style.display = 'block';
+            extractBtn.disabled = false;
+            window.batchId = null; // reset khi chọn file mới
+            updateInjectButtonState();
         });
         
         // Xử lý xóa file
@@ -2390,6 +2343,7 @@ Output yêu cầu:
             mainFileInfo.style.display = 'none';
             uploadedExcelFilename = null;
             window._fromSmartUpdate = false;
+            window.batchId = null;
             extractBtn.disabled = true;
             mainAlert.innerHTML = '';
             // FIX: Update inject button state when source file is removed
@@ -2420,18 +2374,19 @@ Output yêu cầu:
             e.preventDefault();
             mainUploadArea.style.borderColor = '#667eea';
             mainUploadArea.style.background = '#f8f9fa';
-            
             const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                mainExcelFile.files = files;
-                mainFileName.textContent = files[0].name;
-                mainFileInfo.style.display = 'block';
-                uploadedExcelFilename = files[0].name;
-                extractBtn.disabled = false;
-                injectBtn.disabled = false;
-                showAlert(mainAlert, 'success', `File "${files[0].name}" đã được chọn.`);
-                fetchExtractColors(files[0]);
+            if (!files || files.length === 0) return;
+            const dt = new DataTransfer();
+            const allowed = ['xlsx','pptx','docx'];
+            Array.from(files).forEach(function(f) {
+                if (allowed.includes(f.name.split('.').pop().toLowerCase())) dt.items.add(f);
+            });
+            if (dt.files.length === 0) {
+                showAlert(mainAlert, 'warning', 'Chỉ chấp nhận file .xlsx, .pptx, .docx!');
+                return;
             }
+            mainExcelFile.files = dt.files;
+            mainExcelFile.dispatchEvent(new Event('change'));
         });
         
         // ==================== CHỨC NĂNG EXTRACT ====================
@@ -2510,109 +2465,95 @@ Output yêu cầu:
                 return;
             }
 
-            // ---- Upload mode (giữ nguyên) ----
-            // Kiểm tra xem có file được upload chưa (hoặc đến từ Smart Update)
-            // Chặn chỉ khi CẢ HAI đều thiếu: không có filename và không có file thực
-            if (!uploadedExcelFilename && mainExcelFile.files.length === 0) {
+            // ---- Upload mode — gửi tất cả file qua /batch-extract ----
+            if (mainExcelFile.files.length === 0) {
                 showAlert(extractAlert, 'warning', 'Vui lòng upload file (Excel hoặc PowerPoint) ở Bước 1 trước!');
                 return;
             }
-            
+
             // Ẩn kết quả cũ
             extractResult.style.display = 'none';
             jsonFileList.innerHTML = '';
             extractedDedupData = null;
             const dedupPanel = document.getElementById('dedupPanel');
             if (dedupPanel) { dedupPanel.style.display = 'none'; dedupPanel.innerHTML = ''; }
-            
-            // Hiển thị loading
+
             extractLoading.style.display = 'block';
             extractAlert.innerHTML = '';
-            
-            // Tạo FormData với file Excel từ upload chung
+
             const formData = new FormData();
-            if (mainExcelFile.files.length > 0) {
-                formData.append('file', mainExcelFile.files[0]);
-            }
+            Array.from(mainExcelFile.files).forEach(function(f) { formData.append('files', f); });
+
             // Thêm glossary_ids nếu bật
             if (document.getElementById('glossaryToggle').checked) {
                 const ids = getSelectedGlossaryIds();
                 if (ids.length) formData.append('glossary_ids', ids.join(','));
             }
-            // Thêm color_filter nếu có chọn màu
+            // Thêm color_filter (chỉ hiệu lực khi 1 file)
             const selectedColors = [...document.querySelectorAll('.color-filter-cb:checked')]
-                .map(cb => cb.value)
-                .join(',');
+                .map(cb => cb.value).join(',');
             if (selectedColors) formData.append('color_filter', selectedColors);
-            
+
             try {
-                // Gửi request
-                const response = await fetch('/extract', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                // Ẩn loading
+                const response = await fetch('/batch-extract', { method: 'POST', body: formData });
                 extractLoading.style.display = 'none';
-                
-                // Kiểm tra content-type
-                const contentType = response.headers.get('content-type');
-                
-                if (response.ok && contentType && contentType.includes('application/json')) {
-                    const data = await response.json();
-                    
-                    if (data.success) {
-                        // Hiển thị tóm tắt
-                        // Lưu extracted data cho TM và validation
-                        extractedFilesData = data.files;
-                        extractedDedupData = data.dedup_files || null;
-
-                        // Render file rows
-                        renderJsonFileRows(data.files);
-
-                        // Render dedup panel
-                        if (extractedDedupData && data.dedup_stats) {
-                            renderDedupPanel(extractedDedupData, data.dedup_stats);
-                        }
-
-                        // Cập nhật summary
-                        const ds = data.dedup_stats;
-                        if (ds && ds.saved > 0) {
-                            extractSummary.textContent = `${data.total_files} file · ${data.total_items} keys (${ds.unique} unique)`;
-                        } else {
-                            extractSummary.textContent = `${data.total_files} file · ${data.total_items} keys`;
-                        }
-
-                        // Kiểm tra text trùng lặp
-                        detectDuplicatesInFiles(data.files);
-
-                        // Hiện khu vực kết quả
-                        extractResult.style.display = 'block';
-
-                        const ds2 = data.dedup_stats;
-                        const dedupNote = (ds2 && ds2.saved > 0)
-                            ? ` | 📈 <strong>Dedup:</strong> chỉ cần dịch <strong>${ds2.unique}</strong>/${ds2.total} (tiết kiệm ${ds2.saved}, ${ds2.percent_saved}%)`
-                            : '';
-                        //showAlert(extractAlert, 'success', `Trích xuất thành công! ${data.total_files} file JSON, ${data.total_items} cặp key-value.${dedupNote} Click <strong>Copy</strong> hoặc <strong>Copy Dedup</strong> để dùng với AI.`);
-                    } else {
-                        showAlert(extractAlert, 'danger', data.error || 'Có lỗi xảy ra!');
-                    }
-                } else if (!response.ok) {
-                    if (contentType && contentType.includes('application/json')) {
-                        const error = await response.json();
-                        showAlert(extractAlert, 'danger', error.error || 'Có lỗi xảy ra!');
-                    } else {
-                        const text = await response.text();
-                        if (text.includes('<html') || text.includes('<!DOCTYPE')) {
-                            showAlert(extractAlert, 'danger', 'Phiên đăng nhập đã hết hạn. Vui lòng <a href="/login">đăng nhập lại</a>.');
-                        } else {
-                            showAlert(extractAlert, 'danger', 'Lỗi: ' + (text || 'Không xác định'));
-                        }
-                    }
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error || 'Lỗi không xác định');
                 }
+
+                window.batchId = data.batch_id;
+
+                // Render cross-file dedup chunks với Copy buttons
+                const jfl = document.getElementById('jsonFileList');
+                jfl.innerHTML = '';
+                if (data.dedup_chunks && data.dedup_chunks.length > 0) {
+                    const ds2 = data.dedup_stats || {};
+                    const hdr = document.createElement('div');
+                    hdr.className = 'd-flex align-items-center gap-2 mb-1 px-1';
+                    hdr.style.cssText = 'background:#e8f5e9;border-radius:4px;padding:4px 6px;';
+                    hdr.innerHTML =
+                        '<i class="fas fa-compress-alt text-success"></i>' +
+                        '<span class="small fw-bold flex-grow-1">' + data.total_files + ' file — cross-file dedup</span>' +
+                        '<span class="badge bg-success" style="font-size:0.65rem;">' + (ds2.unique||0) + ' unique' +
+                        (ds2.saved > 0 ? ' / ' + ds2.total + ' total' : '') + '</span>';
+                    jfl.appendChild(hdr);
+                    if (data.files && data.files.length > 1) {
+                        const perFileList = document.createElement('div');
+                        perFileList.style.cssText = 'font-size:0.72rem;color:#555;padding:2px 4px 4px 4px;';
+                        data.files.forEach(function(f) {
+                            const s = document.createElement('span');
+                            s.className = 'me-2';
+                            s.textContent = f.name + ' (' + f.items + ' keys)';
+                            perFileList.appendChild(s);
+                        });
+                        jfl.appendChild(perFileList);
+                    }
+                    renderJsonFileRowsTo(data.dedup_chunks, jfl);
+                }
+
+                // Cập nhật summary
+                const ds = data.dedup_stats || {};
+                if (ds.saved > 0) {
+                    extractSummary.textContent = data.total_files + ' file · ' + data.total_items + ' keys (' + ds.unique + ' unique)';
+                } else {
+                    extractSummary.textContent = data.total_files + ' file · ' + data.total_items + ' keys';
+                }
+                extractResult.style.display = 'block';
+
+                // Cập nhật inject button
+                updateInjectButtonState();
+
+                showAlert(extractAlert, 'success',
+                    '<i class="fas fa-check-circle"></i> Hoàn tất! ' + data.total_files + ' file · ' + data.total_items + ' keys.');
             } catch (error) {
                 extractLoading.style.display = 'none';
-                showAlert(extractAlert, 'danger', 'Lỗi kết nối: ' + error.message);
+                const msg = error.message || 'Lỗi không xác định';
+                if (msg.includes('login') || msg.includes('html') || msg.includes('DOCTYPE')) {
+                    showAlert(extractAlert, 'danger', 'Phiên đăng nhập đã hết hạn. Vui lòng <a href="/login">đăng nhập lại</a>.');
+                } else {
+                    showAlert(extractAlert, 'danger', 'Lỗi: ' + msg);
+                }
             }
         });
 
@@ -2683,9 +2624,7 @@ Output yêu cầu:
         }
         
         // Render danh sách file JSON thành từng hàng
-        function renderJsonFileRows(files) {
-            jsonFileList.innerHTML = '';
-            
+        function renderJsonFileRowsTo(files, container) {
             files.forEach(function(file, idx) {
                 const row = document.createElement('div');
                 row.className = 'json-file-row';
@@ -2701,11 +2640,8 @@ Output yêu cầu:
                         <i class="fas fa-copy"></i> Copy
                     </button>
                 `;
-                
-                // Lưu nội dung vào data attribute (dùng dataset)
                 row.querySelector('.btn-copy-json').addEventListener('click', function() {
                     const btnEl = this;
-                    // Đọc prompt tại thời điểm click để luôn dùng ngôn ngữ hiện tại
                     let promptText = document.getElementById('aiPrompt').textContent;
                     let keepInstruction = '';
                     if (window.keepLangs && window.keepLangs.length > 0) {
@@ -2714,7 +2650,6 @@ Output yêu cầu:
                     }
                     promptText = promptText.replace('{KEEP_LANGS_INSTRUCTION}', keepInstruction);
                     const textToCopy = promptText + '\n\n' + file.content;
-                    
                     navigator.clipboard.writeText(textToCopy).then(function() {
                         btnEl.innerHTML = '<i class="fas fa-check"></i> Copied!';
                         btnEl.classList.add('copied');
@@ -2723,7 +2658,6 @@ Output yêu cầu:
                             btnEl.classList.remove('copied');
                         }, 2000);
                     }).catch(function() {
-                        // Fallback cho browser không hỗ trợ clipboard API
                         const textarea = document.createElement('textarea');
                         textarea.value = textToCopy;
                         textarea.style.position = 'fixed';
@@ -2744,9 +2678,13 @@ Output yêu cầu:
                         document.body.removeChild(textarea);
                     });
                 });
-                
-                jsonFileList.appendChild(row);
+                container.appendChild(row);
             });
+        }
+
+        function renderJsonFileRows(files) {
+            jsonFileList.innerHTML = '';
+            renderJsonFileRowsTo(files, jsonFileList);
         }
 
         // Render dedup panel – hiển thị thống kê và các file dedup
@@ -2820,10 +2758,6 @@ Output yêu cầu:
         }
         
         const injectForm = document.getElementById('injectForm');
-        const injectJsonFile = document.getElementById('injectJsonFile');
-        const injectJsonFileInfo = document.getElementById('injectJsonFileInfo');
-        const injectJsonFileName = document.getElementById('injectJsonFileName');
-        const injectJsonFileRemove = document.getElementById('injectJsonFileRemove');
         const injectAlert = document.getElementById('injectAlert');
         const injectLoading = document.getElementById('injectLoading');
         
@@ -2921,198 +2855,107 @@ Output yêu cầu:
             }
         });
         
-        // Xử lý khi chọn file JSON (nhiều file)
-        injectJsonFile.addEventListener('change', function(e) {
-            if (e.target.files.length > 0) {
-                const fileList = document.getElementById('injectJsonFileList');
-                fileList.innerHTML = '';
-                
-                // Hiển thị danh sách các file
-                Array.from(e.target.files).forEach((file, index) => {
-                    const fileItem = document.createElement('div');
-                    fileItem.className = 'mb-1';
-                    const icon = file.name.endsWith('.zip') ? 'fa-file-archive' : 'fa-file-code';
-                    const color = file.name.endsWith('.zip') ? 'text-warning' : 'text-primary';
-                    fileItem.innerHTML = `<i class="fas ${icon} ${color}"></i> <small>${file.name}</small>`;
-                    fileList.appendChild(fileItem);
-                });
-                
-                injectJsonFileInfo.style.display = 'block';
-                // FIX: Update inject button state when JSON files are uploaded
-                updateInjectButtonState();
-            }
-        });
-        
-        // Xử lý xóa file JSON
-        injectJsonFileRemove.addEventListener('click', function() {
-            injectJsonFile.value = '';
-            injectJsonFileInfo.style.display = 'none';
-            // FIX: Update inject button state when JSON files are removed
-            updateInjectButtonState();
-        });
-        
-        // Xử lý drag and drop cho JSON files
-        const injectJsonUploadArea = document.getElementById('injectJsonUploadArea');
-        
-        injectJsonUploadArea.addEventListener('dragover', function(e) {
-            e.preventDefault();
-            injectJsonUploadArea.style.borderColor = '#764ba2';
-            injectJsonUploadArea.style.background = '#e9ecef';
-        });
-        
-        injectJsonUploadArea.addEventListener('dragleave', function(e) {
-            e.preventDefault();
-            injectJsonUploadArea.style.borderColor = '#667eea';
-            injectJsonUploadArea.style.background = '#f8f9fa';
-        });
-        
-        injectJsonUploadArea.addEventListener('drop', function(e) {
-            e.preventDefault();
-            injectJsonUploadArea.style.borderColor = '#667eea';
-            injectJsonUploadArea.style.background = '#f8f9fa';
-            
-            const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                // Sử dụng DataTransfer để gán files vào input
-                const dataTransfer = new DataTransfer();
-                Array.from(files).forEach(file => {
-                    // Chỉ chấp nhận file .json hoặc .zip
-                    if (file.name.endsWith('.json') || file.name.endsWith('.zip')) {
-                        dataTransfer.items.add(file);
-                    }
-                });
-                
-                if (dataTransfer.files.length > 0) {
-                    injectJsonFile.files = dataTransfer.files;
-                    
-                    // Hiển thị danh sách files
-                    const fileList = document.getElementById('injectJsonFileList');
-                    fileList.innerHTML = '';
-                    
-                    Array.from(dataTransfer.files).forEach((file, index) => {
-                        const fileItem = document.createElement('div');
-                        fileItem.className = 'mb-1';
-                        const icon = file.name.endsWith('.zip') ? 'fa-file-archive' : 'fa-file-code';
-                        const color = file.name.endsWith('.zip') ? 'text-warning' : 'text-primary';
-                        fileItem.innerHTML = `<i class="fas ${icon} ${color}"></i> <small>${file.name}</small>`;
-                        fileList.appendChild(fileItem);
-                    });
-                    
-                    injectJsonFileInfo.style.display = 'block';
-                    // FIX: Update inject button state when JSON files are drag-dropped
-                    updateInjectButtonState();
-                } else {
-                    showAlert(injectAlert, 'warning', 'Chỉ chấp nhận file .json hoặc .zip!');
-                }
-            }
-        });
-        
         // Xử lý submit form Inject
         injectForm.addEventListener('submit', async function(e) {
             e.preventDefault();
-            
-            // Kiểm tra xem có file nguồn được upload chưa (hoặc từ Google Sheet hoặc Smart Update)
-            // Chặn chỉ khi CẢ HAI đều thiếu: không có filename và không có file thực
-            if (!uploadedExcelFilename && mainExcelFile.files.length === 0 && !window.sheetSessionKey) {
-                showAlert(injectAlert, 'warning', 'Vui lòng upload file (Excel hoặc PowerPoint) ở Bước 1 trước!');
+
+            if (pastedJsonData.length === 0) {
+                showAlert(injectAlert, 'warning', 'Vui lòng paste JSON đã dịch vào ô trên rồi bấm "Thêm JSON này"!');
                 return;
             }
-            
-            // Kiểm tra xem có file JSON HOẶC pasted JSON không
-            if (injectJsonFile.files.length === 0 && pastedJsonData.length === 0) {
-                showAlert(injectAlert, 'warning', 'Vui lòng chọn file JSON đã dịch hoặc paste JSON!');
+            if (!window.batchId && !window.sheetSessionKey) {
+                showAlert(injectAlert, 'warning', 'Vui lòng trích xuất file ở Bước 2 trước!');
                 return;
             }
-            
-            // Hiển thị loading
+
             injectLoading.style.display = 'block';
             injectAlert.innerHTML = '';
-            
-            // Tạo FormData với file Excel từ upload chung và tất cả file JSON
-            const formData = new FormData();
-            if (mainExcelFile.files.length > 0) {
-                formData.append('excel_file', mainExcelFile.files[0]);
-            }
-            // FIX: Gửi sheet_session_key nếu file từ Google Sheet
-            if (window.sheetSessionKey) {
-                formData.append('sheet_session_key', window.sheetSessionKey);
-            }
-            
-            // Thêm tất cả các file JSON/ZIP
-            Array.from(injectJsonFile.files).forEach(file => {
-                formData.append('json_files', file);
-            });
-            
-            // Thêm tất cả JSON đã paste (gửi dưới dạng JSON string)
-            if (pastedJsonData.length > 0) {
-                formData.append('pasted_json_data', JSON.stringify(pastedJsonData));
-            }
-            
-            try {
-                // Gửi request
-                const response = await fetch('/inject', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                // Ẩn loading
-                injectLoading.style.display = 'none';
-                
-                if (response.ok) {
-                    // Lấy tên file từ header Content-Disposition
-                    const disposition = response.headers.get('Content-Disposition');
-                    let filename = `output_translated_${Date.now()}.xlsx`;
-                    const parsedFilename = parseDownloadFilename(disposition);
-                    if (parsedFilename) {
-                        filename = parsedFilename;
-                    }
-                    
-                    // Tải file với tên đúng extension
-                    const blob = await response.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = filename;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    window.URL.revokeObjectURL(url);
-                    
-                    showAlert(injectAlert, 'success', 'Nạp bản dịch thành công! File đang được tải về. Tất cả file tạm đã được xóa.');
-                    
-                    // Xóa cờ Smart Update chỉ sau khi inject hoàn tất
-                    window._fromSmartUpdate = false;
+            const loadingText = document.getElementById('injectLoadingText');
 
-                    // Reset form JSON
-                    injectJsonFile.value = '';
-                    injectJsonFileInfo.style.display = 'none';
-                    
-                    // Reset pasted JSON
-                    pastedJsonData = [];
-                    updatePastedJsonList();
-                    pasteJsonTextarea.value = '';
-                    
-                    // Tự động xóa tất cả file trong thư mục uploads sau khi thành công
-                    await clearUploads(true);
-                } else {
-                    // Kiểm tra xem response có phải JSON không
-                    const contentType = response.headers.get('content-type');
-                    if (contentType && contentType.includes('application/json')) {
-                        const error = await response.json();
-                        showAlert(injectAlert, 'danger', error.error || 'Có lỗi xảy ra!');
+            const formData = new FormData();
+            formData.append('pasted_json_data', JSON.stringify(pastedJsonData));
+
+            try {
+                if (window.batchId) {
+                    // --- Batch / multi-file path ---
+                    formData.append('batch_id', window.batchId);
+                    const response = await fetch('/batch-inject', { method: 'POST', body: formData });
+                    injectLoading.style.display = 'none';
+                    const data = await response.json().catch(() => ({}));
+                    if (!response.ok || !data.success) throw new Error(data.error || 'Lỗi không xác định');
+
+                    // Download từng file theo token
+                    const files = data.files || [];
+                    for (let i = 0; i < files.length; i++) {
+                        const f = files[i];
+                        if (loadingText) loadingText.textContent = 'Đang tải file ' + (i + 1) + '/' + files.length + ': ' + f.display_name;
+                        injectLoading.style.display = 'block';
+                        const a = document.createElement('a');
+                        a.href = '/download-injected/' + f.token;
+                        a.download = f.display_name;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        if (i < files.length - 1) await new Promise(function(r) { setTimeout(r, 400); });
+                    }
+                    injectLoading.style.display = 'none';
+                    if (loadingText) loadingText.textContent = 'Đang nạp bản dịch...';
+
+                    if (data.errors && data.errors.length > 0) {
+                        showAlert(injectAlert, 'warning',
+                            '<i class="fas fa-check-circle"></i> Hoàn tất ' + files.length + ' file. ' +
+                            'Cảnh báo: ' + data.errors.join('; '));
                     } else {
-                        // Nếu không phải JSON (có thể là HTML từ trang login hoặc lỗi server)
-                        const text = await response.text();
-                        if (text.includes('<html') || text.includes('<!DOCTYPE')) {
-                            showAlert(injectAlert, 'danger', 'Phiên đăng nhập đã hết hạn. Vui lòng <a href="/login">đăng nhập lại</a>.');
+                        showAlert(injectAlert, 'success',
+                            '<i class="fas fa-check-circle"></i> Nạp thành công! ' + files.length + ' file đã được tải về.');
+                    }
+
+                } else if (window.sheetSessionKey) {
+                    // --- Google Sheet path ---
+                    formData.append('sheet_session_key', window.sheetSessionKey);
+                    const response = await fetch('/inject', { method: 'POST', body: formData });
+                    injectLoading.style.display = 'none';
+                    if (!response.ok) {
+                        const ct = response.headers.get('content-type') || '';
+                        if (ct.includes('application/json')) {
+                            const err = await response.json();
+                            throw new Error(err.error || 'Lỗi không xác định');
                         } else {
-                            showAlert(injectAlert, 'danger', 'Lỗi: ' + (text || 'Không xác định'));
+                            const txt = await response.text();
+                            if (txt.includes('<html') || txt.includes('DOCTYPE'))
+                                throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng <a href="/login">đăng nhập lại</a>.');
+                            throw new Error(txt || 'Lỗi không xác định');
                         }
                     }
+                    const cd  = response.headers.get('Content-Disposition') || '';
+                    const m   = cd.match(/filename[^;=\n]*=(['"]?)([^'"\n;]+)\1/);
+                    const fname = m ? decodeURIComponent(m[2]) : ('output_' + Date.now() + '.xlsx');
+                    const blob = await response.blob();
+                    const url  = URL.createObjectURL(blob);
+                    const a    = document.createElement('a');
+                    a.href = url; a.download = fname;
+                    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    showAlert(injectAlert, 'success', '<i class="fas fa-check-circle"></i> Nạp bản dịch thành công! File đang được tải về.');
                 }
+
+                // Reset pasted JSON sau khi inject xong
+                pastedJsonData = [];
+                updatePastedJsonList();
+                pasteJsonTextarea.value = '';
+                updateInjectButtonState();
+
+                // Xóa file tạm
+                await clearUploads(true);
+
             } catch (error) {
                 injectLoading.style.display = 'none';
-                showAlert(injectAlert, 'danger', 'Lỗi kết nối: ' + error.message);
+                const msg = error.message || '';
+                if (msg.includes('<a href')) {
+                    showAlert(injectAlert, 'danger', msg);
+                } else {
+                    showAlert(injectAlert, 'danger', '<i class="fas fa-exclamation-circle"></i> ' + msg);
+                }
             }
         });
         
@@ -3179,11 +3022,10 @@ Output yêu cầu:
                     mainExcelFile.value = '';
                     mainFileInfo.style.display = 'none';
                     uploadedExcelFilename = null;
+                    window.batchId = null;
                     extractBtn.disabled = true;
                     injectBtn.disabled = true;
                     mainAlert.innerHTML = '';
-                    injectJsonFile.value = '';
-                    injectJsonFileInfo.style.display = 'none';
                 } else {
                     if (!skipConfirm) {
                         alert('❌ Lỗi: ' + (result.error || result.message));
