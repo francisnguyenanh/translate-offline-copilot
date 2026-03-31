@@ -5987,6 +5987,87 @@ function applyProofColorPreset(hex) {
     sel.innerHTML = `<option value="proof-default">Kiểm tra ngữ pháp (mặc định)</option>`;
 })();
 
+// 7. Submit #proofMapForm → POST to /proof-map → download result
+document.getElementById('proofMapForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+
+  const color   = document.getElementById('proofCorrectionColor').value;
+  const alertEl = document.getElementById('proofMapAlert');
+  const loading = document.getElementById('proofMapLoading');
+  const loadTxt = document.getElementById('proofMapLoadingText');
+  const btn     = document.getElementById('proofMapBtn');
+
+  // Collect pasted JSON
+  const accumulated = proofPastedJsonAccumulated;
+  if (!Object.keys(accumulated).length) {
+    alertEl.innerHTML =
+      '<div class="alert alert-warning mt-2">Chưa có JSON nào được thêm.</div>';
+    return;
+  }
+
+  alertEl.innerHTML = '';
+  loading.style.display = 'block';
+  loadTxt.textContent   = 'Đang ghi kết quả kiểm tra vào file...';
+  btn.disabled = true;
+
+  try {
+    const fd = new FormData();
+
+    // Re-attach source file from proofExcelFile (if still selected)
+    // OR rely on session (same as Tab 1 inject behavior)
+    const inp = document.getElementById('proofExcelFile');
+    if (inp.files && inp.files.length) {
+      fd.append('excel_file', inp.files[0]);
+    }
+
+    fd.append('pasted_json_data', JSON.stringify(accumulated));
+    fd.append('correction_color', color);
+
+    const resp = await fetch('/proof-map', { method: 'POST', body: fd });
+    const data = await resp.json();
+
+    if (!resp.ok || data.error) {
+      alertEl.innerHTML =
+        `<div class="alert alert-danger mt-2">${data.error}</div>`;
+      return;
+    }
+
+    // Trigger download
+    loadTxt.textContent = 'Đang chuẩn bị tải file...';
+    const dlLink = document.createElement('a');
+    dlLink.href = `/download-proof/${data.download_token}`;
+    dlLink.download = data.display_name;
+    document.body.appendChild(dlLink);
+    dlLink.click();
+    document.body.removeChild(dlLink);
+
+    alertEl.innerHTML =
+      `<div class="alert alert-success mt-2">
+         <i class="fas fa-check-circle"></i>
+         Đã tạo file <strong>${data.display_name}</strong>.
+         Đang tải về...
+       </div>`;
+
+    // Mark step 3 done
+    document.getElementById('proofBadge3').innerHTML =
+      '<i class="fas fa-check" style="font-size:0.8rem"></i>';
+    document.getElementById('proofBadge3').style.background =
+      'linear-gradient(135deg,#28a745,#20c997)';
+
+    // Reset accumulated JSON for next run
+    proofPastedJsonAccumulated = {};
+    renderProofPastedJsonList();
+    document.getElementById('proofMapBtn').disabled = true;
+
+  } catch(err) {
+    alertEl.innerHTML =
+      `<div class="alert alert-danger mt-2">Lỗi kết nối: ${err.message}</div>`;
+  } finally {
+    loading.style.display = 'none';
+    btn.disabled = false;
+  }
+});
+
 function openProofTemplateModal() {
     alert('Chỉnh sửa prompt trong ô "Xem Prompt AI" bên trên.');
 }
