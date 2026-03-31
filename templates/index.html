@@ -58,6 +58,13 @@
                     <i class="fas fa-spell-check"></i> Thuật ngữ
                 </button>
             </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="main-tab5"
+                        data-bs-toggle="tab" data-bs-target="#mainTab5"
+                        type="button" role="tab" aria-selected="false">
+                    <i class="fas fa-spell-check"></i> Kiểm tra ngữ pháp
+                </button>
+            </li>
         </ul>
         <div class="tab-content" id="mainTabContent">
         <div class="tab-pane fade show active" id="mainTab1" role="tabpanel" aria-labelledby="main-tab1">
@@ -1236,6 +1243,34 @@ Output yêu cầu:
 
         </div><!-- /row -->
         </div><!-- /tab-pane tab4 Terminology -->
+
+        <div class="tab-pane fade" id="mainTab5" role="tabpanel"
+             aria-labelledby="main-tab5">
+          <div class="row g-3">
+
+            <!-- Bước 1: Upload file (reuses same logic as Tab 1) -->
+            <div class="col-lg-4">
+              <div class="function-card" id="proofStep1Card">
+                <!-- PROOF_STEP1_PLACEHOLDER -->
+              </div>
+            </div>
+
+            <!-- Bước 2: Trích xuất & Copy Prompt -->
+            <div class="col-lg-4">
+              <div class="function-card" id="proofStep2Card">
+                <!-- PROOF_STEP2_PLACEHOLDER -->
+              </div>
+            </div>
+
+            <!-- Bước 3: Paste kết quả AI & Map ngược -->
+            <div class="col-lg-4">
+              <div class="function-card" id="proofStep3Card">
+                <!-- PROOF_STEP3_PLACEHOLDER -->
+              </div>
+            </div>
+
+          </div>
+        </div><!-- /tab-pane tab5 Kiểm tra ngữ pháp -->
 
         </div><!-- /tab-content -->
     </div>
