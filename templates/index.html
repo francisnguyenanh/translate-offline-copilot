@@ -13,606 +13,9 @@
     <!-- Highlight.js: JSON syntax highlighting -->
     <link id="hljsStylesheet" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-    <style>
-        body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px 0;
-        }
-        
-        .main-container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-        
-        .header {
-            text-align: center;
-            color: white;
-            margin-bottom: 30px;
-        }
-        
-        .header h1 {
-            font-weight: bold;
-            margin-bottom: 10px;
-        }
-        
-        .header p {
-            font-size: 1.1rem;
-            opacity: 0.9;
-        }
-        
-        .function-card {
-            background: white;
-            border-radius: 15px;
-            padding: 20px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-            height: 100%;
-            transition: transform 0.3s;
-        }
-        
-        .function-card:hover {
-            transform: translateY(-5px);
-        }
-        
-        .function-card h3 {
-            color: #667eea;
-            margin-bottom: 15px;
-            font-weight: bold;
-            font-size: 1.3rem;
-        }
-        
-        .function-card .icon {
-            font-size: 2rem;
-            color: #667eea;
-            margin-bottom: 10px;
-        }
+    <!-- App styles -->
+    <link rel="stylesheet" href="/static/style.css">
 
-        /* Light mode (mặc định) */
-        .glossary-upload-box {
-            background: #f0f4ff;
-            border: 1px dashed #667eea;
-        }
-
-        
-        .step-number {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            width: 30px;
-            height: 30px;
-            border-radius: 50%;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            margin-right: 8px;
-        }
-        
-        .upload-area {
-            border: 2px dashed #667eea;
-            border-radius: 10px;
-            padding: 20px;
-            text-align: center;
-            background: #f8f9fa;
-            margin: 15px 0;
-            transition: all 0.3s;
-        }
-        
-        .upload-area.compact {
-            padding: 15px;
-            margin: 10px 0;
-        }
-        
-        .upload-area:hover {
-            background: #e9ecef;
-            border-color: #764ba2;
-        }
-
-        .upload-area.drag-over {
-            border-color: #667eea !important;
-            background: rgba(102, 126, 234, 0.08) !important;
-            transform: scale(1.01);
-            transition: all 0.15s ease;
-        }
-        
-        .upload-area i {
-            font-size: 1.5rem;
-            color: #667eea;
-            margin-bottom: 8px;
-        }
-        
-        .collapse-toggle {
-            cursor: pointer;
-            user-select: none;
-        }
-        
-        .collapse-toggle:hover {
-            opacity: 0.8;
-        }
-        
-        .btn-custom {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border: none;
-            color: white;
-            padding: 12px 30px;
-            border-radius: 25px;
-            font-weight: bold;
-            transition: all 0.3s;
-        }
-        
-        .btn-custom:hover {
-            transform: scale(1.05);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-            color: white;
-        }
-        
-        .alert-custom {
-            border-radius: 10px;
-            margin-top: 15px;
-        }
-        
-        .file-info {
-            background: #e9ecef;
-            padding: 10px;
-            border-radius: 5px;
-            margin-top: 10px;
-            font-size: 0.9rem;
-        }
-        
-        .loading {
-            display: none;
-            margin-top: 15px;
-        }
-        
-        .loading .spinner-border {
-            width: 2rem;
-            height: 2rem;
-        }
-
-        /* ===== EXTRACT PROGRESS BAR ===== */
-        #extractProgressWrap {
-            margin-top: 10px;
-        }
-        #extractProgressBar {
-            transition: width 0.4s ease;
-        }
-
-        /* ===== STEP BADGE COMPLETION ===== */
-        .step-number {
-            transition: background 0.4s ease, transform 0.2s ease;
-        }
-        .step-number.step-done {
-            background: #28a745 !important;
-        }
-        .step-number.step-pop {
-            transform: scale(1.3);
-        }
-
-        /* ===== TOAST NOTIFICATIONS ===== */
-        #toastContainer .toast-item {
-            padding: 10px 14px;
-            border-radius: 8px;
-            font-size: 0.85rem;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.18);
-            display: flex;
-            align-items: flex-start;
-            gap: 8px;
-            min-width: 240px;
-            max-width: 360px;
-            opacity: 0;
-            transform: translateY(10px);
-            transition: opacity 0.25s ease, transform 0.25s ease;
-            pointer-events: auto;
-            position: relative;
-        }
-        #toastContainer .toast-item.visible {
-            opacity: 1;
-            transform: translateY(0);
-        }
-        #toastContainer .toast-item.hiding {
-            opacity: 0;
-            transform: translateY(10px);
-        }
-        #toastContainer .toast-close {
-            margin-left: auto;
-            cursor: pointer;
-            font-size: 1rem;
-            line-height: 1;
-            opacity: 0.6;
-            flex-shrink: 0;
-        }
-        #toastContainer .toast-close:hover { opacity: 1; }
-
-        /* ===== JSON EDITOR (highlight.js contenteditable) ===== */
-        .json-editor-outer {
-            position: relative;
-        }
-        .json-editor-editable {
-            min-height: 100px;
-            max-height: 200px;
-            overflow-y: auto;
-            font-family: monospace;
-            font-size: 0.85rem;
-            white-space: pre;
-            overflow-wrap: normal;
-            padding: 6px 12px;
-            border: 1px solid #ced4da;
-            border-radius: 4px;
-            outline: none;
-            background: #fff;
-            color: #333;
-            text-align: left;
-        }
-        .json-editor-editable:empty::before {
-            content: attr(data-placeholder);
-            color: #aaa;
-            pointer-events: none;
-        }
-        body.dark-mode .json-editor-editable {
-            background: #172840;
-            color: #e0e0e0;
-            border-color: #3a6090;
-        }
-        .json-badge-wrap { min-height: 1.4em; font-size: 0.75rem; margin-top: 3px; }
-
-        .json-file-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 6px 10px;
-            background: #f0f7ff;
-            border: 1px solid #cce0ff;
-            border-radius: 6px;
-            margin-bottom: 6px;
-            gap: 8px;
-        }
-        
-        .json-file-row .file-name {
-            font-size: 0.78rem;
-            color: #333;
-            flex: 1;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-        
-        .json-file-row .btn-copy-json {
-            flex-shrink: 0;
-            font-size: 0.75rem;
-            padding: 3px 10px;
-            transition: all 0.3s ease;
-        }
-        
-        .btn-copy-json.copied {
-            background-color: #28a745 !important;
-            border-color: #28a745 !important;
-            color: white !important;
-            box-shadow: 0 0 8px rgba(40, 167, 69, 0.5) !important;
-            transform: scale(1.05);
-        }
-        
-        body.dark-mode .btn-copy-json.copied {
-            background-color: #20c997 !important;
-            border-color: #20c997 !important;
-            box-shadow: 0 0 8px rgba(32, 201, 151, 0.5) !important;
-        }
-
-        /* ===== INPUT MODE TOGGLE ===== */
-        .btn-mode {
-            border: 2px solid #667eea;
-            color: #667eea;
-            background: transparent;
-            border-radius: 8px;
-            font-weight: 600;
-            transition: all 0.2s;
-        }
-        .btn-mode.active {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border-color: transparent;
-        }
-        body.dark-mode .btn-mode { border-color: #7a9fd4; color: #7a9fd4; }
-        body.dark-mode .btn-mode.active { color: white; border-color: transparent; }
-
-        /* ===== DARK MODE ===== */
-        body.dark-mode {
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-        }
-        body.dark-mode .function-card {
-            background: #1e2a3a;
-            color: #e0e0e0;
-        }
-        body.dark-mode .function-card h3 { color: #90b4f7; }
-        body.dark-mode .upload-area {
-            background: #253244;
-            border-color: #4a6fa5;
-        }
-        body.dark-mode .upload-area:hover { background: #2c3e54; }
-        body.dark-mode .file-info { background: #253244; color: #ccc; }
-        body.dark-mode .json-file-row {
-            background: #1e3049;
-            border-color: #2d5080;
-            color: #ccc;
-        }
-        body.dark-mode .collapse-toggle {
-            background: #253244 !important;
-            color: #ccc;
-        }
-        body.dark-mode .collapse-toggle .text-info { color: #7ec8e3 !important; }
-        body.dark-mode .collapse > div {
-            background: #253244 !important;
-            color: #ccc;
-        }
-        body.dark-mode .form-control,
-        body.dark-mode .form-select {
-            background: #253244;
-            color: #e0e0e0;
-            border-color: #4a6fa5;
-        }
-        body.dark-mode .nav-tabs .nav-link { color: #90b4f7; }
-        body.dark-mode .nav-tabs .nav-link.active {
-            background: #1e3049;
-            color: #fff;
-            border-color: #4a6fa5;
-        }
-        body.dark-mode .text-muted { color: #8a9bb0 !important; }
-        body.dark-mode footer { color: #8a9bb0 !important; }
-        body.dark-mode .alert-info { background: #1b3a52; color: #7ec8e3; border-color: #2d6a8a; }
-        body.dark-mode #promptDetail > div {
-            background: #1b2d3e !important;
-            border-color: #2d5a7a !important;
-        }
-        body.dark-mode #aiPrompt { color: #b0c8e0; }
-        body.dark-mode .validation-item { background: #253244; border-color: #3a5070; }
-        .dedup-banner {
-            background: #e8f5e9;
-            border: 1px solid #a5d6a7;
-            border-radius: 6px;
-            font-size: 0.8rem;
-        }
-        body.dark-mode .dedup-banner {
-            background: #193d2a;
-            border-color: #1f6640;
-            color: #6dd99e;
-        }
-        body.dark-mode .dedup-banner .text-muted { color: #4d9e6a !important; }
-
-        /* === Dark mode: Improvement for Step 2/3 === */
-        body.dark-mode .file-name { color: #e0e0e0; font-weight: 500; }
-        body.dark-mode .json-file-row { color: #e0e0e0; }
-        body.dark-mode .form-control::placeholder { color: #8a9bb0; }
-        
-        /* === Dark mode: Modal === */
-        body.dark-mode .modal-content {
-            background: #1e3049;
-            color: #e0e0e0;
-            border-color: #2d5080;
-        }
-        body.dark-mode .modal-header {
-            background: #17253a;
-            border-bottom-color: #2d5080;
-        }
-        body.dark-mode .modal-footer {
-            background: #17253a;
-            border-top-color: #2d5080;
-        }
-        body.dark-mode .modal-title { color: #e0e0e0; }
-        body.dark-mode .btn-close { filter: invert(1) brightness(1.5); }
-
-        /* === Dark mode: Dropdown === */
-        body.dark-mode .dropdown-menu {
-            background: #1e3049;
-            border-color: #2d5080;
-        }
-        body.dark-mode .dropdown-item { color: #d0dff0; }
-        body.dark-mode .dropdown-item:hover,
-        body.dark-mode .dropdown-item:focus {
-            background: #253c5a;
-            color: #fff;
-        }
-        body.dark-mode .dropdown-header { color: #8ab4d8; }
-        body.dark-mode .dropdown-divider { border-color: #2d5080; }
-
-        /* === Dark mode: List group (template list in modal) === */
-        body.dark-mode .list-group-item {
-            background: #1e3049;
-            color: #d0dff0;
-            border-color: #2d5080;
-        }
-        body.dark-mode .list-group-item:hover {
-            background: #253c5a;
-            color: #fff;
-        }
-        body.dark-mode .list-group-item.active {
-            background: #0d5c9e;
-            border-color: #1a7ac4;
-            color: #fff;
-        }
-        body.dark-mode .list-group-item-action { color: #d0dff0; }
-
-        /* === Dark mode: Alerts === */
-        body.dark-mode .alert-success {
-            background: #193d2a;
-            color: #6dd99e;
-            border-color: #1f6640;
-        }
-        body.dark-mode .alert-danger {
-            background: #3d1919;
-            color: #f08080;
-            border-color: #7a2020;
-        }
-        body.dark-mode .alert-warning {
-            background: #3d3019;
-            color: #f0c060;
-            border-color: #7a6020;
-        }
-        body.dark-mode .alert-secondary {
-            background: #253244;
-            color: #b0c4d8;
-            border-color: #3a5070;
-        }
-
-        /* === Dark mode: Typography & Labels === */
-        body.dark-mode label,
-        body.dark-mode .form-label { color: #ffffff; }
-        body.dark-mode code {
-            background: #172840;
-            color: #79d4f3;
-            border: 1px solid #2d5080;
-        }
-        body.dark-mode small { color: #a0b0c0; }
-        body.dark-mode strong { color: #ffffff; }
-        body.dark-mode p { color: #e0e0e0; }
-        body.dark-mode hr { border-color: #2d5080; opacity: 0.5; }
-
-        /* === Dark mode: Cards & function cards === */
-        body.dark-mode .card {
-            background: #1b2d3e;
-            border-color: #2d5080;
-            color: #d0e0f0;
-        }
-        body.dark-mode .card-header {
-            background: #17253a;
-            border-bottom-color: #2d5080;
-            color: #e0e0e0;
-        }
-        body.dark-mode .card-body { color: #d0e0f0; }
-
-        /* === Dark mode: Table === */
-        body.dark-mode .table {
-            color: #d0e0f0;
-            border-color: #2d5080;
-        }
-        body.dark-mode .table th,
-        body.dark-mode .table td { border-color: #2d5080; }
-        body.dark-mode .table-striped tbody tr:nth-of-type(odd) { background: #1b2d40; }
-
-        /* === Dark mode: Textarea === */
-        body.dark-mode textarea.form-control {
-            background: #172840;
-            color: #ffffff;
-            border-color: #3a6090;
-        }
-        body.dark-mode textarea.form-control:focus {
-            background: #1b3050;
-            border-color: #5090c8;
-            box-shadow: 0 0 0 0.2rem rgba(80,144,200,0.25);
-        }
-
-        /* === Dark mode: Tab border at bottom === */
-        body.dark-mode .nav-tabs { border-bottom-color: #2d5080; }
-        body.dark-mode .nav-tabs .nav-link:not(.active):hover {
-            background: #1b2d3e;
-            border-color: #2d5080 #2d5080 transparent;
-        }
-
-        body.dark-mode .glossary-upload-box {
-            background: #232b3b;
-            border-color: #4d6fae;
-        }
-
-        /* ===== COLOR FILTER PANEL ===== */
-        #colorFilterSection {
-            border: 1px solid #c8d8f0;
-            border-radius: 8px;
-            background: #f4f8ff;
-            padding: 10px 12px;
-            margin-bottom: 10px;
-        }
-        body.dark-mode #colorFilterSection {
-            background: #1b2d3e;
-            border-color: #2d5080;
-        }
-        .color-filter-item { cursor: pointer; user-select: none; }
-        .color-swatch {
-            display: inline-block;
-            width: 16px; height: 16px;
-            border: 1px solid #999;
-            border-radius: 3px;
-            flex-shrink: 0;
-        }
-        .color-swatch.white-swatch { border-color: #888; }
-        #colorFilterLoading { display: none; }
-
-        /* ===== IMAGE OVERLAY ===== */
-        .overlay-block {
-            box-sizing: border-box;
-            transition: outline 0.1s;
-        }
-        .overlay-block.selected {
-            outline: 2px solid #667eea !important;
-            z-index: 15 !important;
-        }
-        .overlay-block:hover { z-index: 14 !important; }
-        .overlay-translated {
-            display: block;
-            width: 100%;
-            text-align: left;
-            line-height: 1.2;
-            word-break: break-word;
-            overflow: hidden;
-        }
-        .overlay-original {
-            font-size: 0.6em;
-            opacity: 0.7;
-            text-align: center;
-        }
-        /* Resize handles */
-        .resize-handle {
-            position: absolute;
-            width: 10px;
-            height: 10px;
-            background: #667eea;
-            border: 1.5px solid #fff;
-            border-radius: 2px;
-            z-index: 40;
-            display: none;
-            box-shadow: 0 0 2px rgba(0,0,0,0.5);
-        }
-        .overlay-block:hover .resize-handle,
-        .overlay-block.selected .resize-handle { display: block; }
-        .rh-nw { top:-5px;  left:-5px;              cursor:nw-resize; }
-        .rh-n  { top:-5px;  left:calc(50% - 5px);   cursor:n-resize;  }
-        .rh-ne { top:-5px;  right:-5px;             cursor:ne-resize; }
-        .rh-e  { top:calc(50% - 5px); right:-5px;  cursor:e-resize;  }
-        .rh-se { bottom:-5px; right:-5px;           cursor:se-resize; }
-        .rh-s  { bottom:-5px; left:calc(50% - 5px); cursor:s-resize;  }
-        .rh-sw { bottom:-5px; left:-5px;            cursor:sw-resize; }
-        .rh-w  { top:calc(50% - 5px); left:-5px;   cursor:w-resize;  }
-        body.dark-mode .resize-handle { background:#5090d8; border-color:#1e3049; }
-
-        /* Smart Update — color swatch checkbox */
-        .su-color-item {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            padding: 3px 8px;
-            border: 1.5px solid #dee2e6;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.76rem;
-            background: #fff;
-            transition: border-color 0.15s, background 0.15s;
-            user-select: none;
-        }
-        .su-color-item:hover {
-            border-color: #667eea;
-            background: #f0f2ff;
-        }
-        .su-color-item.selected {
-            border-color: #667eea;
-            background: #eef0ff;
-        }
-        .su-color-swatch {
-            display: inline-block;
-            width: 14px;
-            height: 14px;
-            border-radius: 3px;
-            border: 1px solid rgba(0,0,0,0.15);
-            flex-shrink: 0;
-        }
-
-        .su-color-item { color: #000000; }
-    </style>
 </head>
 <body class="dark-mode">
     <div class="main-container">
@@ -2193,9 +1596,7 @@ Output yêu cầu:
                 }
                 const blob = await res.blob();
                 const cd   = res.headers.get('Content-Disposition') || '';
-                const m    = cd.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
-                let filename = 'batch_translated.zip';
-                if (m && m[1]) filename = decodeURIComponent(m[1].replace(/['"]/g, ''));
+                const filename = parseDownloadFilename(cd) || 'batch_translated.zip';
                 const url = URL.createObjectURL(blob);
                 const a   = document.createElement('a');
                 a.href = url; a.download = filename; a.click();
@@ -2300,10 +1701,8 @@ Output yêu cầu:
                 }
                 const blob = await res.blob();
                 const cd   = res.headers.get('Content-Disposition') || '';
-                const m    = cd.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
                 const ext  = sourceFilename.split('.').pop();
-                let filename = sourceFilename.replace(/\.[^.]+$/, '') + '_translated.' + ext;
-                if (m && m[1]) filename = decodeURIComponent(m[1].replace(/['"]/g, ''));
+                const filename = parseDownloadFilename(cd) || (sourceFilename.replace(/\.[^.]+$/, '') + '_translated.' + ext);
                 const url = URL.createObjectURL(blob);
                 const a   = document.createElement('a');
                 a.href = url; a.download = filename; a.click();
@@ -3004,6 +2403,17 @@ Output yêu cầu:
                     badge.innerHTML = '<span class="badge bg-danger"><i class="fas fa-times"></i> ' + escapeHtml(e.message) + '</span>';
                 }
             }
+            // Handle paste: insert plain text only (no inline styles that cause black text)
+            editable.addEventListener('paste', function(e) {
+                e.preventDefault();
+                const text = (e.clipboardData || e.originalEvent?.clipboardData)?.getData('text/plain') || '';
+                if (text) {
+                    document.execCommand('insertText', false, text);
+                    pasteJsonTextarea.value = editable.innerText;
+                    clearTimeout(_debounce);
+                    _debounce = setTimeout(function() { validateBadge(editable.innerText); }, 500);
+                }
+            });
             editable.addEventListener('input', function() {
                 pasteJsonTextarea.value = this.innerText;
                 clearTimeout(_debounce);
@@ -3179,8 +2589,7 @@ Output yêu cầu:
                         }
                     }
                     const cd  = response.headers.get('Content-Disposition') || '';
-                    const m   = cd.match(/filename[^;=\n]*=(['"]?)([^'"\n;]+)\1/);
-                    const fname = m ? decodeURIComponent(m[2]) : ('output_' + Date.now() + '.xlsx');
+                    const fname = parseDownloadFilename(cd) || ('output_' + Date.now() + '.xlsx');
                     const blob = await response.blob();
                     const url  = URL.createObjectURL(blob);
                     const a    = document.createElement('a');
@@ -5713,6 +5122,20 @@ Output yêu cầu:
                 }
             }
         }
+        // Handle paste: insert plain text only (no inline styles that cause black text)
+        editable.addEventListener('paste', function(e) {
+            e.preventDefault();
+            const text = (e.clipboardData || e.originalEvent?.clipboardData)?.getData('text/plain') || '';
+            if (text) {
+                document.execCommand('insertText', false, text);
+                hidden.value = editable.innerText;
+                clearTimeout(_debounce);
+                _debounce = setTimeout(function() {
+                    validateTermBadge(editable.innerText);
+                    if (window.previewTermInput) window.previewTermInput();
+                }, 500);
+            }
+        });
         editable.addEventListener('input', function() {
             hidden.value = this.innerText;
             clearTimeout(_debounce);

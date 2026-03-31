@@ -14,7 +14,7 @@ import csv
 import requests as _requests
 from datetime import datetime, timedelta
 from urllib.parse import quote
-from flask import Flask, render_template, request, send_file, jsonify, session, redirect, url_for, Response, stream_with_context
+from flask import Flask, render_template, request, send_file, send_from_directory, jsonify, session, redirect, url_for, Response, stream_with_context
 from werkzeug.utils import secure_filename
 from copy import deepcopy, copy
 from openpyxl import load_workbook
@@ -24,7 +24,7 @@ from functools import wraps
 from lxml import etree as _etree
 
 # Khởi tạo ứng dụng Flask
-app = Flask(__name__)
+app = Flask(__name__, static_folder='templates/static', static_url_path='/static')
 app.config['MAX_CONTENT_LENGTH'] = 900 * 1024 * 1024  # Giới hạn 900MB
 
 # DEBUG: enable debug-level logging for OCR coordinate diagnostics
