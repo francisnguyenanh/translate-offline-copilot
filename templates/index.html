@@ -1364,10 +1364,17 @@ Hãy kiểm tra các giá trị (values) trong file JSON dưới đây.
 
 Quy tắc bắt buộc:
 1. Giữ nguyên 100% các keys — không thay đổi dù 1 ký tự
-2. Nếu value không có lỗi → GIỮ NGUYÊN value đó (copy y hệt)
-3. Nếu value có lỗi ngữ pháp / chính tả / dùng từ → sửa và trả về value đã sửa
-4. KHÔNG thêm giải thích, ghi chú, hay văn bản nào khác
-5. Giữ nguyên format JSON chuẩn, encoding UTF-8
+2. CHỈ sửa phần văn bản tự nhiên (câu/chữ) có lỗi ngữ pháp / chính tả / dùng từ
+3. KHÔNG được sửa các chuỗi sau (giữ nguyên từng ký tự):
+    - URL, email, domain, đường dẫn file/folder
+    - Mã kỹ thuật, mã lỗi, ID, SKU, hash, token, UUID, key kỹ thuật
+    - Placeholder/biến như {name}, ${var}, %s, {{value}}, [TAG], HTML/XML/Markdown tags
+    - Số, ngày tháng năm, thời gian, phiên bản, đơn vị đo, tiền tệ, tỷ lệ phần trăm
+    - Ký hiệu, toán tử, dấu câu đặc biệt, emoji, ký tự kỹ thuật
+4. Nếu value không có lỗi hoặc chỉ chứa nội dung kỹ thuật ở trên → GIỮ NGUYÊN value đó (copy y hệt)
+5. KHÔNG dịch sang ngôn ngữ khác, chỉ sửa lỗi ngôn ngữ gốc
+6. KHÔNG thêm giải thích, ghi chú, hay văn bản nào khác
+7. Giữ nguyên format JSON chuẩn, encoding UTF-8
 
 Output yêu cầu:
 - Trả về ĐÚNG cấu trúc JSON gốc (cùng số lượng keys)
@@ -5718,6 +5725,7 @@ document.getElementById('proofFileRemove').addEventListener('click', function() 
 // Drag-and-drop support for #proofUploadArea
 (function() {
     const area = document.getElementById('proofUploadArea');
+    const pickBtn = area.querySelector('label[for="proofExcelFile"]');
     area.addEventListener('dragover', e => {
         e.preventDefault(); area.classList.add('drag-over');
     });
@@ -5725,10 +5733,23 @@ document.getElementById('proofFileRemove').addEventListener('click', function() 
     area.addEventListener('drop', e => {
         e.preventDefault(); area.classList.remove('drag-over');
         const inp = document.getElementById('proofExcelFile');
-        inp.files = e.dataTransfer.files;
+        const dt = new DataTransfer();
+        Array.from(e.dataTransfer.files)
+             .filter(f => /\.(xlsx|pptx|docx)$/i.test(f.name))
+             .forEach(f => dt.items.add(f));
+        inp.files = dt.files;
         inp.dispatchEvent(new Event('change'));
     });
-    area.addEventListener('click', () => document.getElementById('proofExcelFile').click());
+    if (pickBtn) {
+        pickBtn.addEventListener('click', function(e) {
+            // Prevent bubbling to area click handler to avoid double file-picker popup
+            e.stopPropagation();
+        });
+    }
+    area.addEventListener('click', (e) => {
+        if (e.target.closest('label[for="proofExcelFile"]')) return;
+        document.getElementById('proofExcelFile').click();
+    });
 })();
 
 // 2. Extract form submit
@@ -5748,25 +5769,56 @@ document.getElementById('proofExtractForm').addEventListener('submit', async fun
 
     try {
         const fd = new FormData();
-        files.forEach(f => fd.append('files', f));
+        fd.append('file', files[0]);
+        fd.append('proofread_mode', '1');
         const resp = await fetch('/extract', { method: 'POST', body: fd });
-        const data = await resp.json();
 
-        if (!resp.ok || data.error) {
-            alertEl.innerHTML =
-                `<div class="alert alert-danger mt-2">${data.error || 'Lỗi trích xuất'}</div>`;
-            return;
+        if (!resp.ok) {
+            const errData = await resp.json().catch(() => ({}));
+            throw new Error(errData.error || 'Lỗi trích xuất');
+        }
+
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let donePayload = null;
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const parts = buffer.split('\n\n');
+            buffer = parts.pop();
+
+            for (const part of parts) {
+                if (!part.startsWith('data: ')) continue;
+                let evt;
+                try { evt = JSON.parse(part.slice(6)); } catch { continue; }
+
+                if (evt.step === 'error') {
+                    throw new Error(evt.error || 'Lỗi trích xuất');
+                }
+
+                if (evt.step === 'done') {
+                    donePayload = evt.result || {};
+                }
+            }
+        }
+
+        const data = donePayload || {};
+        if (!data.files) {
+            throw new Error('Không nhận được dữ liệu trích xuất hợp lệ');
         }
 
         window.proofExtractedFiles = data.files || [];
-        window.proofDedupChunks   = data.dedup_chunks || [];
-        window.proofDedupData     = data.dedup_chunks || [];
+        window.proofDedupChunks   = data.dedup_files || [];
+        window.proofDedupData     = data.dedup_files || [];
 
         document.getElementById('proofExtractResult').style.display = 'block';
         document.getElementById('proofMapBtn').disabled = false;
 
-        if (data.dedup_stats && data.dedup_chunks && data.dedup_chunks.length) {
-            renderProofDedupPanel(data.dedup_chunks, data.dedup_stats);
+        if (data.dedup_stats && data.dedup_files && data.dedup_files.length) {
+            renderProofDedupPanel(data.dedup_files, data.dedup_stats);
         }
         renderProofJsonFileRows(data.files || []);
 

@@ -252,7 +252,7 @@ def expand_dedup_data(json_data, session_folder):
         return json_data
 
 
-def stream_extract(filepath, original_filename, glossary_ids, session_folder, color_filter=None):
+def stream_extract(filepath, original_filename, glossary_ids, session_folder, color_filter=None, proofread_mode=False):
     """
     Generator cho SSE progress events khi trích xuất file.
     Yields chuỗi SSE format: data: {json}\n\n
@@ -289,6 +289,9 @@ def stream_extract(filepath, original_filename, glossary_ids, session_folder, co
         else:
             yield _evt('error', 0, error=f'Không hỗ trợ định dạng .{original_ext}')
             return
+
+        if proofread_mode:
+            extracted_data = _filter_proofread_extract_data(extracted_data)
 
         yield _evt('chunking', 40, message='Đang áp dụng glossary...')
 
@@ -436,6 +439,45 @@ def _normalize_color_filter(color_list: list) -> set:
         if len(c) == 6:
             result.add(c)
     return result
+
+
+_PROOF_URL_RE = re.compile(r'^(?:https?://|ftp://|www\.)\S+$', re.IGNORECASE)
+_PROOF_EMAIL_RE = re.compile(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
+_PROOF_DATE_RE = re.compile(r'^\d{1,4}[\-/]\d{1,2}[\-/]\d{1,4}$')
+_PROOF_TIME_RE = re.compile(r'^\d{1,2}:\d{2}(?::\d{2})?$')
+_PROOF_NUMERIC_RE = re.compile(r'^[\d\s.,:+\-/%$€¥₫()]+$')
+_PROOF_TECH_TOKEN_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.:/\\#?=&%+~\-]*$')
+
+
+def _is_proofread_excluded_text(value: str) -> bool:
+    """True khi value không phải nội dung cần AI check ngữ pháp."""
+    s = str(value).strip()
+    if not s:
+        return True
+    if _PROOF_URL_RE.match(s) or _PROOF_EMAIL_RE.match(s):
+        return True
+    if _PROOF_DATE_RE.match(s) or _PROOF_TIME_RE.match(s):
+        return True
+    if _PROOF_NUMERIC_RE.match(s):
+        return True
+    if not any(ch.isalpha() for ch in s):
+        return True
+    if ' ' not in s and _PROOF_TECH_TOKEN_RE.match(s):
+        has_digit = any(ch.isdigit() for ch in s)
+        has_tech_sep = any(ch in '._-:/\\#?=&%+' for ch in s)
+        if has_digit or has_tech_sep:
+            return True
+    return False
+
+
+def _filter_proofread_extract_data(extracted_data: dict) -> dict:
+    """Lọc bỏ URL/chuỗi kỹ thuật/số-ngày-ký hiệu khỏi dữ liệu trích xuất cho Tab 5."""
+    filtered = {}
+    for key, value in extracted_data.items():
+        if isinstance(value, str) and _is_proofread_excluded_text(value):
+            continue
+        filtered[key] = value
+    return filtered
 
 
 def _pptx_shape_matches_color_filter(shape, color_filter: set) -> bool:
@@ -2160,6 +2202,7 @@ def extract():
     color_filter = _normalize_color_filter(color_list) if color_list else None
     glossary_ids_raw = request.form.get('glossary_ids', '')
     glossary_ids = [g.strip() for g in glossary_ids_raw.split(',') if g.strip()]
+    proofread_mode = request.form.get('proofread_mode', '').strip().lower() in ('1', 'true', 'yes', 'on')
 
     # Tạo session key để inject có thể tìm lại file nguồn (phải set TRƯỚC khi stream)
     session_key = f'sse_extract_{datetime.now().strftime("%Y%m%d_%H%M%S_%f")}'
@@ -2168,7 +2211,9 @@ def extract():
     session['tab1_from_smart_update'] = {'filepath': filepath, 'display_name': original_filename}
 
     resp = Response(
-        stream_with_context(stream_extract(filepath, original_filename, glossary_ids, session_folder, color_filter)),
+        stream_with_context(stream_extract(
+            filepath, original_filename, glossary_ids, session_folder, color_filter, proofread_mode=proofread_mode
+        )),
         mimetype='text/event-stream',
     )
     resp.headers['Cache-Control'] = 'no-cache'
@@ -2180,7 +2225,7 @@ def extract():
 
 # ==================== HELPER: raw extract (no chunking/zip) ====================
 
-def _extract_raw(filepath, original_filename, glossary_ids, session_folder, color_filter=None, selected_sheets=None):
+def _extract_raw(filepath, original_filename, glossary_ids, session_folder, color_filter=None, selected_sheets=None, proofread_mode=False):
     """
     Trích xuất raw text từ file, trả về dict {key: value}.
     Không tạo ZIP hay chunk - chỉ trích xuất data thô và áp glossary.
@@ -2210,6 +2255,9 @@ def _extract_raw(filepath, original_filename, glossary_ids, session_folder, colo
     else:
         raise ValueError(f'Không hỗ trợ định dạng .{original_ext}')
 
+    if proofread_mode:
+        extracted_data = _filter_proofread_extract_data(extracted_data)
+
     if glossary_ids:
         extracted_data = apply_glossary(extracted_data, glossary_ids)
 
@@ -2218,7 +2266,7 @@ def _extract_raw(filepath, original_filename, glossary_ids, session_folder, colo
 
 # ==================== HELPER: core extract logic ====================
 
-def _run_extract(filepath, original_filename, glossary_ids, session_folder, color_filter=None, selected_sheets=None):
+def _run_extract(filepath, original_filename, glossary_ids, session_folder, color_filter=None, selected_sheets=None, proofread_mode=False):
     """
     Chạy toàn bộ logic extract từ cột filepath.
     Trả về dict cho jsonify (cùng format như route /extract).
@@ -2252,6 +2300,9 @@ def _run_extract(filepath, original_filename, glossary_ids, session_folder, colo
         extracted_data = extract_text_from_docx(filepath, color_filter)
     else:
         raise ValueError(f'Không hỗ trợ định dạng .{original_ext}')
+
+    if proofread_mode:
+        extracted_data = _filter_proofread_extract_data(extracted_data)
 
     if glossary_ids:
         extracted_data = apply_glossary(extracted_data, glossary_ids)
@@ -2741,9 +2792,10 @@ def inject():
 def proof_map_xlsx(source_path, output_path, json_data, hex_color):
     """Write proof-read output for xlsx: original text + corrected text in hex_color."""
     from openpyxl.styles import Alignment as _Alignment
+    from openpyxl.cell.rich_text import CellRichText as _CellRichText, TextBlock as _TextBlock
+    from openpyxl.cell.text import InlineFont as _InlineFont
     wb = load_workbook(source_path)
     corr_argb = 'FF' + hex_color.lstrip('#').upper()
-    _ns = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
 
     for key, corrected_val in json_data.items():
         try:
@@ -2767,27 +2819,16 @@ def proof_map_xlsx(source_path, output_path, json_data, hex_color):
             except Exception:
                 orig_argb = 'FF000000'
 
-            # Build <is> inline-string element with two <r> runs via lxml
-            is_el = _etree.Element(f'{{{_ns}}}is')
+            # Use openpyxl rich text API so Excel renders text runs correctly.
+            try:
+                rich_text = _CellRichText()
+                rich_text.append(_TextBlock(_InlineFont(color=orig_argb), str(orig_val)))
+                rich_text.append(_TextBlock(_InlineFont(color=corr_argb), ' ' + str(corrected_val)))
+                cell.value = rich_text
+            except Exception:
+                # Safe fallback: keep content even if rich-text object is not supported.
+                cell.value = f"{orig_val} {corrected_val}"
 
-            r1 = _etree.SubElement(is_el, f'{{{_ns}}}r')
-            rpr1 = _etree.SubElement(r1, f'{{{_ns}}}rPr')
-            col1 = _etree.SubElement(rpr1, f'{{{_ns}}}color')
-            col1.set('rgb', orig_argb)
-            t1 = _etree.SubElement(r1, f'{{{_ns}}}t')
-            t1.text = str(orig_val)
-            t1.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
-
-            r2 = _etree.SubElement(is_el, f'{{{_ns}}}r')
-            rpr2 = _etree.SubElement(r2, f'{{{_ns}}}rPr')
-            col2 = _etree.SubElement(rpr2, f'{{{_ns}}}color')
-            col2.set('rgb', corr_argb)
-            t2 = _etree.SubElement(r2, f'{{{_ns}}}t')
-            t2.text = '\n' + str(corrected_val)
-            t2.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
-
-            cell.data_type = 'inlineStr'
-            cell._value = is_el
             cell.alignment = _Alignment(wrap_text=True)
         except Exception:
             continue
@@ -2809,6 +2850,18 @@ def _proof_navigate_pptx_shape(shape, shape_indices):
 def proof_map_pptx(source_path, output_path, json_data, hex_color):
     """Write proof-read output for pptx: appends colored correction paragraph."""
     from pptx.dml.color import RGBColor as _PptxRGB
+
+    def _pick_ref_run(text_frame):
+        """Pick a reference run to inherit font properties (name/size)."""
+        fallback_run = None
+        for para in text_frame.paragraphs:
+            for run in para.runs:
+                if fallback_run is None:
+                    fallback_run = run
+                if run.font and (run.font.name or run.font.size):
+                    return run
+        return fallback_run
+
     r_c = int(hex_color[1:3], 16)
     g_c = int(hex_color[3:5], 16)
     b_c = int(hex_color[5:7], 16)
@@ -2863,15 +2916,20 @@ def proof_map_pptx(source_path, output_path, json_data, hex_color):
             if orig_text.strip() == corrected_text.strip():
                 continue
 
-            # Add new paragraph with correction color
-            new_para = text_frame.add_paragraph()
-            new_run = new_para.add_run()
-            new_run.text = corrected_text
+            # Append correction run to last paragraph (same line, no new paragraph)
+            last_para = text_frame.paragraphs[-1]
+            new_run = last_para.add_run()
+            new_run.text = ' ' + corrected_text
             new_run.font.color.rgb = corr_rgb
+
+            # Keep font family and size consistent with original text.
             try:
-                first_run = text_frame.paragraphs[0].runs[0]
-                if first_run.font.size:
-                    new_run.font.size = first_run.font.size
+                ref_run = _pick_ref_run(text_frame)
+                if ref_run and ref_run.font:
+                    if ref_run.font.name:
+                        new_run.font.name = ref_run.font.name
+                    if ref_run.font.size:
+                        new_run.font.size = ref_run.font.size
             except Exception:
                 pass
         except Exception:
@@ -2882,28 +2940,33 @@ def proof_map_pptx(source_path, output_path, json_data, hex_color):
 
 def proof_map_docx(source_path, output_path, json_data, hex_color):
     """Write proof-read output for docx: inserts colored correction paragraph after original."""
-    from docx.oxml.ns import qn as _qn
-    from docx.oxml import OxmlElement as _OxmlElement
+    from docx.shared import RGBColor as _DocxRGB
     r_c = int(hex_color[1:3], 16)
     g_c = int(hex_color[3:5], 16)
     b_c = int(hex_color[5:7], 16)
-    color_val = f'{r_c:02X}{g_c:02X}{b_c:02X}'
+    corr_rgb = _DocxRGB(r_c, g_c, b_c)
     doc = Document(source_path)
 
     def _insert_correction(paragraph, corrected_text):
-        new_p = _OxmlElement('w:p')
-        new_r = _OxmlElement('w:r')
-        new_rpr = _OxmlElement('w:rPr')
-        new_color = _OxmlElement('w:color')
-        new_color.set(_qn('w:val'), color_val)
-        new_rpr.append(new_color)
-        new_t = _OxmlElement('w:t')
-        new_t.text = corrected_text
-        new_t.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
-        new_r.append(new_rpr)
-        new_r.append(new_t)
-        new_p.append(new_r)
-        paragraph._element.addnext(new_p)
+        # Append correction as a new run in the same paragraph and inherit font size/name.
+        new_run = paragraph.add_run(' ' + corrected_text)
+        new_run.font.color.rgb = corr_rgb
+
+        ref_run = None
+        for run in paragraph.runs:
+            if run is new_run:
+                continue
+            if ref_run is None:
+                ref_run = run
+            if run.font and (run.font.name or run.font.size):
+                ref_run = run
+                break
+
+        if ref_run and ref_run.font:
+            if ref_run.font.name:
+                new_run.font.name = ref_run.font.name
+            if ref_run.font.size:
+                new_run.font.size = ref_run.font.size
 
     for key, corrected_text in json_data.items():
         try:
