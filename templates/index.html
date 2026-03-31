@@ -840,14 +840,12 @@ Output yêu cầu:
 
                         <!-- Btn download ZIP -->
                         <div class="text-center mb-2">
-                            <a id="downloadZipBtn" href="/download-zip" class="btn btn-success btn-sm">
+                            <a id="downloadZipBtn" href="/download-zip" class="btn btn-success btn-sm" style="display:none;">
                                 <i class="fas fa-file-archive"></i> Tải ZIP
                             </a>
                             <span id="extractSummary" class="text-muted small ms-2"></span>
                         </div>
-                                                
-                        <!-- Duplicate warning -->
-                        
+                                            
 
                     </div>
                     
@@ -2447,8 +2445,8 @@ Output yêu cầu:
                             if (extractedDedupData && data.dedup_stats) renderDedupPanel(extractedDedupData, data.dedup_stats);
                             const ds = data.dedup_stats;
                             extractSummary.textContent = (ds && ds.saved > 0)
-                                ? `${data.total_files} file · ${data.total_items} keys (${ds.unique} unique)`
-                                : `${data.total_files} file · ${data.total_items} keys`;
+                                ? `${data.total_items} keys (${ds.unique} unique)`
+                                : `${data.total_items} keys`;
                             detectDuplicatesInFiles(data.files);
                             extractResult.style.display = 'block';
                         } else {
@@ -2508,36 +2506,15 @@ Output yêu cầu:
                 const jfl = document.getElementById('jsonFileList');
                 jfl.innerHTML = '';
                 if (data.dedup_chunks && data.dedup_chunks.length > 0) {
-                    const ds2 = data.dedup_stats || {};
-                    const hdr = document.createElement('div');
-                    hdr.className = 'd-flex align-items-center gap-2 mb-1 px-1';
-                    hdr.style.cssText = 'background:#e8f5e9;border-radius:4px;padding:4px 6px;';
-                    hdr.innerHTML =
-                        '<i class="fas fa-compress-alt text-success"></i>' +
-                        '<span class="small fw-bold flex-grow-1">' + data.total_files + ' file — cross-file dedup</span>' +
-                        '<span class="badge bg-success" style="font-size:0.65rem;">' + (ds2.unique||0) + ' unique' +
-                        (ds2.saved > 0 ? ' / ' + ds2.total + ' total' : '') + '</span>';
-                    jfl.appendChild(hdr);
-                    if (data.files && data.files.length > 1) {
-                        const perFileList = document.createElement('div');
-                        perFileList.style.cssText = 'font-size:0.72rem;color:#555;padding:2px 4px 4px 4px;';
-                        data.files.forEach(function(f) {
-                            const s = document.createElement('span');
-                            s.className = 'me-2';
-                            s.textContent = f.name + ' (' + f.items + ' keys)';
-                            perFileList.appendChild(s);
-                        });
-                        jfl.appendChild(perFileList);
-                    }
                     renderJsonFileRowsTo(data.dedup_chunks, jfl);
                 }
 
                 // Cập nhật summary
                 const ds = data.dedup_stats || {};
                 if (ds.saved > 0) {
-                    extractSummary.textContent = data.total_files + ' file · ' + data.total_items + ' keys (' + ds.unique + ' unique)';
+                    extractSummary.textContent = data.total_items + ' keys (' + ds.unique + ' unique)';
                 } else {
-                    extractSummary.textContent = data.total_files + ' file · ' + data.total_items + ' keys';
+                    extractSummary.textContent = data.total_items + ' keys';
                 }
                 extractResult.style.display = 'block';
 
