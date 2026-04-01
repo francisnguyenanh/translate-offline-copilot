@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
@@ -2782,8 +2782,16 @@ Output yêu cầu:
                 // Hiển thị trong danh sách
                 updatePastedJsonList();
                 
-                // Xóa textarea
+                // Xóa textarea và cả nội dung trong trình biên tập (editable div)
                 pasteJsonTextarea.value = '';
+                const editable = document.getElementById('pasteJsonEditable');
+                if (editable) {
+                    editable.innerText = '';
+                }
+                const badge = document.getElementById('pasteJsonBadge');
+                if (badge) {
+                    badge.innerHTML = '';
+                }
                 
                 // Hiển thị thông báo
                 showAlert(injectAlert, 'success', `Đã thêm JSON #${pastedJsonData.length} với ${Object.keys(parsedJson).length} cặp key-value.`);
